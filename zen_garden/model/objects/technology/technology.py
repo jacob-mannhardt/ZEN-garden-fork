@@ -1010,18 +1010,19 @@ class TechnologyRules(GenericRule):
         # we loop over technologies, capacity types and time steps, to accurately capture the conditions in the constraint
         # we vectorize over locations
         constraints = []
+
         for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            # skip if max diffusion rate = inf
+            if self.parameters.max_diffusion_rate.loc[tech, time] != np.inf and not (self.system["use_forecast_error"] and time != self.energy_system.set_time_steps_yearly[0]):
+                ### auxiliary calculations
+                # mask for the capacity types that are not considered
+                capacity_types = index.get_values([tech, slice(None), slice(None), time], "set_capacity_types", unique=True)
+                mask = xr.DataArray(np.nan, coords=[self.variables.coords["set_capacity_types"]], dims=["set_capacity_types"])
+                mask.loc[capacity_types] = 1
 
-            ### auxiliary calculations
-            # mask for the capacity types that are not considered
-            capacity_types = index.get_values([tech, slice(None), slice(None), time], "set_capacity_types", unique=True)
-            mask = xr.DataArray(np.nan, coords=[self.variables.coords["set_capacity_types"]], dims=["set_capacity_types"])
-            mask.loc[capacity_types] = 1
-
-            interval_between_years = self.system["interval_between_years"]
-            knowledge_depreciation_rate = self.system["knowledge_depreciation_rate"]
-            reference_carrier = self.sets["set_reference_carriers"][tech][0]
-            if self.parameters.max_diffusion_rate.loc[tech, time] != np.inf:
+                interval_between_years = self.system["interval_between_years"]
+                knowledge_depreciation_rate = self.system["knowledge_depreciation_rate"]
+                reference_carrier = self.sets["set_reference_carriers"][tech][0]
                 if tech in self.sets["set_transport_technologies"]:
                     set_locations = self.sets["set_edges"]
                     set_technology = self.sets["set_transport_technologies"]
@@ -1107,18 +1108,18 @@ class TechnologyRules(GenericRule):
         # we vectorize over locations
         constraints = []
         for tech, time in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            # skip if max diffusion rate = inf
+            if self.parameters.max_diffusion_rate.loc[tech, time] != np.inf and not (self.system["use_forecast_error"] and time != self.energy_system.set_time_steps_yearly[0]):
+                ### auxiliary calculations
+                # mask for the capacity types that are not considered
+                capacity_types = index.get_values([tech, slice(None), slice(None), time], "set_capacity_types", unique=True)
+                mask = xr.DataArray(np.nan, coords=[self.variables.coords["set_capacity_types"]], dims=["set_capacity_types"])
+                mask.loc[capacity_types] = 1
 
-            ### auxiliary calculations
-            # mask for the capacity types that are not considered
-            capacity_types = index.get_values([tech, slice(None), slice(None), time], "set_capacity_types", unique=True)
-            mask = xr.DataArray(np.nan, coords=[self.variables.coords["set_capacity_types"]], dims=["set_capacity_types"])
-            mask.loc[capacity_types] = 1
+                interval_between_years = self.system["interval_between_years"]
+                knowledge_depreciation_rate = self.system["knowledge_depreciation_rate"]
 
-            interval_between_years = self.system["interval_between_years"]
-            knowledge_depreciation_rate = self.system["knowledge_depreciation_rate"]
-
-            reference_carrier = self.sets["set_reference_carriers"][tech][0]
-            if self.parameters.max_diffusion_rate.loc[tech, time] != np.inf:
+                reference_carrier = self.sets["set_reference_carriers"][tech][0]
                 if tech in self.sets["set_transport_technologies"]:
                     set_locations = self.sets["set_edges"]
                     set_technology = self.sets["set_transport_technologies"]

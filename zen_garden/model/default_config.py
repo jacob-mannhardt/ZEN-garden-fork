@@ -152,6 +152,8 @@ class Config(object):
         self.system["knowledge_depreciation_rate"] = 0.1
         # enforce selfish behavior
         self.system["enforce_selfish_behavior"] = False
+        # enable forecast error (currently only for technology diffusion rate)
+        self.system["use_forecast_error"] = False
 
         ## Solver - Items assignment
         # solver selection (find more solver options for gurobi here: https://www.gurobi.com/documentation/9.1/refman/parameters.html)

@@ -63,6 +63,8 @@ class EnergySystem:
                                     energy_system=self, unit_handling=self.unit_handling)
         # initialize empty set_carriers list
         self.set_carriers = []
+        # empty dict for foresight error parameters
+        self.foresight_error_parameters = dict()
 
     def store_input_data(self):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """

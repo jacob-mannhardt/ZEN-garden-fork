@@ -243,13 +243,14 @@ class OptimizationSetup(object):
             return None
 
     def get_attribute_of_all_elements(self, cls, attribute_name: str, capacity_types=False,
-                                      return_attribute_is_series=False):
+                                      return_attribute_is_series=False,index_names=None):
         """ get attribute values of all elements in a class
 
         :param cls: class of the elements to return
         :param attribute_name: str name of attribute
         :param capacity_types: boolean if attributes extracted for all capacity types
         :param return_attribute_is_series: boolean if information on attribute type is returned
+        :param index_names: names of indizes
         :return dict_of_attributes: returns dict of attribute values
         :return attribute_is_series: return information on attribute type """
 
@@ -259,6 +260,7 @@ class OptimizationSetup(object):
         for element in class_elements:
             if not capacity_types:
                 dict_of_attributes, attribute_is_series_temp = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes)
+                dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name, dict_of_attributes,cls,index_names)
                 if attribute_is_series_temp:
                     attribute_is_series = attribute_is_series_temp
             # if extracted for both capacity types
@@ -267,6 +269,7 @@ class OptimizationSetup(object):
                     # append energy only for storage technologies
                     if capacity_type == self.system["set_capacity_types"][0] or element.name in self.system["set_storage_technologies"]:
                         dict_of_attributes, attribute_is_series_temp = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes, capacity_type)
+                        dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,dict_of_attributes,cls,index_names,capacity_type)
                         if attribute_is_series_temp:
                             attribute_is_series = attribute_is_series_temp
         if return_attribute_is_series:
@@ -329,6 +332,41 @@ class OptimizationSetup(object):
             else:
                 dict_of_attributes[element.name] = attribute
         return dict_of_attributes, attribute_is_series
+
+    def get_foresight_error_attribute(self,element, attribute_name, dict_of_attributes,cls,index_names,capacity_type=None):
+        """
+        overwrite attribute value with foresight error attribute if it exists
+        :param element: element of class
+        :param attribute_name: str name of attribute
+        :param dict_of_attributes: dict of attribute values
+        :param cls: class of the elements to return
+        :param index_names: names of indizes
+        :param capacity_type: type of capacity
+        :return: dict_of_attributes
+        """
+        if self.system["use_foresight_error"]:
+            if attribute_name in element.foresight_error_parameters:
+                if "set_time_steps_yearly" not in index_names:
+                    raise NotImplementedError("Foresight error only implemented for yearly parameters")
+                attribute_foresight_error = element.foresight_error_parameters[attribute_name]
+                if capacity_type:
+                    attribute_noerror = dict_of_attributes[(element.name, capacity_type)]
+                else:
+                    attribute_noerror = dict_of_attributes[element.name]
+                first_values = attribute_foresight_error.index.get_level_values("year") == self.energy_system.set_time_steps_yearly[0]
+                attribute_foresight_error[first_values] = attribute_noerror[first_values]
+                if capacity_type:
+                    dict_of_attributes[(element.name, capacity_type)] = attribute_foresight_error
+                else:
+                    dict_of_attributes[element.name] = attribute_foresight_error
+
+                # elif "set_time_steps_operation" in index_names:
+                #     # overwrite for operation parameter
+                #     idx_time = idx.get_level_values("set_time_steps_operation").unique()
+                # elif "set_time_steps_storage" in index_names:
+                #     # overwrite for storage parameter (no such parameter exists yet)
+                #     pass
+        return dict_of_attributes
 
     def get_attribute_of_specific_element(self, cls, element_name: str, attribute_name: str):
         """ get attribute of specific element in class
@@ -625,20 +663,16 @@ class OptimizationSetup(object):
             else:
                 component_data = component.squeeze()
         else:
-            component_data, attribute_is_series = self.get_attribute_of_all_elements(calling_class, component_name, capacity_types=capacity_types, return_attribute_is_series=True)
-            index_list = []
-            if index_names:
-                custom_set, index_list = calling_class.create_custom_set(index_names, self)
-                if np.size(custom_set):
-                    if attribute_is_series:
-                        component_data = pd.concat(component_data, keys=component_data.keys())
-                    else:
-                        component_data = pd.Series(component_data)
-                    component_data = self.check_for_subindex(component_data, custom_set)
-            elif attribute_is_series:
-                component_data = pd.concat(component_data, keys=component_data.keys())
-            if not index_names:
-                logging.warning(f"Initializing a parameter ({component_name}) without the specifying the index names will be deprecated!")
+            if index_names is None:
+                raise ValueError(f"Index names for {component_name} not specified")
+            custom_set, index_list = calling_class.create_custom_set(index_names, self)
+            component_data, attribute_is_series = self.get_attribute_of_all_elements(calling_class, component_name, capacity_types=capacity_types, return_attribute_is_series=True,index_names=index_names)
+            if np.size(custom_set):
+                if attribute_is_series:
+                    component_data = pd.concat(component_data, keys=component_data.keys())
+                else:
+                    component_data = pd.Series(component_data)
+                component_data = self.check_for_subindex(component_data, custom_set)
         if isinstance(component_data,pd.Series) and not isinstance(component_data.index,pd.MultiIndex):
             component_data.index = pd.MultiIndex.from_product([component_data.index.to_list()])
         return component_data, index_list

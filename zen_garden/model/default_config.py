@@ -149,8 +149,10 @@ class Config(object):
         self.system["clean_sub_scenarios"] = False
         # total hours per year
         self.system["total_hours_per_year"] = 8760
-        # enable forecast error
-        self.system["use_forecast_error"] = False
+        # rate at which the knowledge stock of existing capacities is depreciated annually
+        self.system["knowledge_depreciation_rate"] = 0.1
+        # enable foresight error
+        self.system["use_foresight_error"] = False
 
         ## Solver - Items assignment
         # solver selection (find more solver options for gurobi here: https://www.gurobi.com/documentation/9.1/refman/parameters.html)

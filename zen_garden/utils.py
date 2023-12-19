@@ -11,42 +11,26 @@ import logging
 import os
 import sys
 import warnings
-from collections import UserDict
+import importlib.util
+from collections import UserDict,defaultdict
 from contextlib import contextmanager
 from datetime import datetime
 from ordered_set import OrderedSet
-
 import h5py
 import linopy as lp
-from linopy.config import options
 import numpy as np
 import pandas as pd
 import xarray as xr
 import yaml
+import shutil
 from numpy import string_
 from copy import deepcopy
-from collections import defaultdict
+from pathlib import Path
 
-
-
-
-def setup_logger(log_path=None, level=logging.INFO):
-    # SETUP LOGGER
-    log_format = '%(asctime)s %(filename)s: %(message)s'
-
-    if log_path is None:
-        log_path = os.path.join('outputs', 'logs')
-        os.makedirs(log_path, exist_ok=True)
-    logging.basicConfig(filename=os.path.join(log_path, 'valueChain.log'), level=level, format=log_format,
-                        datefmt='%Y-%m-%d %H:%M:%S')
+def setup_logger(level=logging.INFO):
+    """ set up logger"""
+    logging.basicConfig(level=level,format="%(message)s",datefmt='%Y-%m-%d %H:%M:%S')
     logging.captureWarnings(True)
-    # we don't want to add this multiple times
-    if not any([handle.name == "STDOUT" for handle in logging.getLogger().handlers]):
-        handler = logging.StreamHandler(sys.stdout)
-        handler.set_name("STDOUT")
-        handler.setLevel(level)
-        logging.getLogger().addHandler(handler)
-
 
 def get_inheritors(klass):
     """
@@ -66,43 +50,41 @@ def get_inheritors(klass):
                 work.append(child)
     return subclasses
 
-
 # This redirects output streams to files
 # --------------------------------------
-
-class RedirectStdStreams(object):
-    """
-    A context manager that redirects the output to a file
-    """
-
-    def __init__(self, stdout=None, stderr=None):
-        """
-        Initializes the context manager
-
-        :param stdout: Stream for stdout
-        :param stderr: Stream for stderr
-        """
-        self._stdout = stdout or sys.stdout
-        self._stderr = stderr or sys.stderr
-
-    def __enter__(self):
-        self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
-        self.old_stdout.flush()
-        self.old_stderr.flush()
-        sys.stdout, sys.stderr = self._stdout, self._stderr
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """
-        The exit function of the context manager
-
-        :param exc_type: Type of the exit
-        :param exc_value: Value of the exit
-        :param traceback:  traceback of the error
-        """
-        self._stdout.flush()
-        self._stderr.flush()
-        sys.stdout = self.old_stdout
-        sys.stderr = self.old_stderr
+# class RedirectStdStreams(object):
+#     """
+#     A context manager that redirects the output to a file
+#     """
+#
+#     def __init__(self, stdout=None, stderr=None):
+#         """
+#         Initializes the context manager
+#
+#         :param stdout: Stream for stdout
+#         :param stderr: Stream for stderr
+#         """
+#         self._stdout = stdout or sys.stdout
+#         self._stderr = stderr or sys.stderr
+#
+#     def __enter__(self):
+#         self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
+#         self.old_stdout.flush()
+#         self.old_stderr.flush()
+#         sys.stdout, sys.stderr = self._stdout, self._stderr
+#
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         """
+#         The exit function of the context manager
+#
+#         :param exc_type: Type of the exit
+#         :param exc_value: Value of the exit
+#         :param traceback:  traceback of the error
+#         """
+#         self._stdout.flush()
+#         self._stderr.flush()
+#         sys.stdout = self.old_stdout
+#         sys.stderr = self.old_stderr
 
 
 # This functionality is for the IIS constraints
@@ -126,7 +108,7 @@ class IISConstraintParser(object):
 
         self.labels = self.read_labels()
 
-    def write_parsed_output(self, outfile=None, manual_display_max_terms = 100):
+    def write_parsed_output(self, outfile=None, manual_display_max_terms=100):
         """
         Writes the parsed output to a file
         :param outfile: The file to write to
@@ -244,7 +226,7 @@ class ScenarioDict(dict):
     _param_dict_keys = {"file", "file_op", "default", "default_op"}
     _special_elements = ["system", "analysis", "base_scenario", "sub_folder", "param_map"]
 
-    def __init__(self, init_dict, system, analysis):
+    def __init__(self, init_dict, system, analysis, paths):
         """
         Initializes the dictionary from a normal dictionary
         :param init_dict: The dictionary to initialize from
@@ -259,6 +241,7 @@ class ScenarioDict(dict):
         self.system = system
         self.analysis = analysis
         self.init_dict = init_dict
+        self.paths = paths
         expanded_dict = self.expand_subsets(init_dict)
         self.validate_dict(expanded_dict)
         self.dict = expanded_dict
@@ -268,6 +251,8 @@ class ScenarioDict(dict):
 
         # finally we update the analysis and system
         self.update_analysis_system()
+
+
 
     def update_analysis_system(self):
         """
@@ -279,12 +264,26 @@ class ScenarioDict(dict):
                 if type(self.analysis[key]) == type(value):
                     self.analysis[key] = value
                 else:
-                    raise ValueError(f"Trying to update analysis with key {key} and value {value} of type {type(value)}, "
-                                     f"but the analysis has already a value of type {type(self.analysis[key])}")
+                    raise ValueError(
+                        f"Trying to update analysis with key {key} and value {value} of type {type(value)}, "
+                        f"but the analysis has already a value of type {type(self.analysis[key])}")
         if "system" in self.dict:
             for key, value in self.dict["system"].items():
                 if type(self.system[key]) == type(value):
-                    self.system[key] = value
+                    # check if key is a subset
+                    stack = [self.analysis["subsets"]]
+                    set_name_list = []
+                    while stack:
+                        cur_dict = stack.pop()
+                        for set_name, subsets in cur_dict.items():
+                            if (isinstance(subsets, dict) and key in subsets.keys()) or (isinstance(subsets, list) and key in subsets):
+                                # remove old subset values from higher level sets and add new values
+                                for _name in [set_name] + set_name_list:
+                                    self.system[_name] = [val for val in self.system[set_name] if not val in self.system[key]]
+                                    self.system[_name].extend(value)
+                            elif isinstance(subsets, dict):
+                                stack.append(subsets)
+                                set_name_list.append(set_name)
                 else:
                     raise ValueError(f"Trying to update system with key {key} and value {value} of type {type(value)}, "
                                      f"but the system has already a value of type {type(self.system[key])}")
@@ -364,7 +363,6 @@ class ScenarioDict(dict):
                                 # we need to increment the param for the next expansion
                                 param_up = 1
 
-
                             # set the sub_folder
                             if new_scenario["sub_folder"] == "":
                                 new_scenario["sub_folder"] = name
@@ -383,7 +381,8 @@ class ScenarioDict(dict):
                             new_scenario["param_map"] = param_map
 
                             # expand this scenario as well
-                            expanded_scenarios.extend(ScenarioDict._expand_scenario(new_scenario, param_map, counter + param_up))
+                            expanded_scenarios.extend(
+                                ScenarioDict._expand_scenario(new_scenario, param_map, counter + param_up))
 
                         # expansion done
                         return expanded_scenarios
@@ -417,7 +416,7 @@ class ScenarioDict(dict):
                         exclude_list = []
 
                     # expand the sets
-                    for element in self.system.get(current_set, []):
+                    for element in self.system[current_set]:
                         if element not in exclude_list:
                             # create dicts if necessary
                             if element not in new_dict:
@@ -444,7 +443,8 @@ class ScenarioDict(dict):
 
             for param, param_dict in element_dict.items():
                 if len(diff := (set(param_dict.keys()) - self._param_dict_keys)) > 0:
-                    raise ValueError(f"The entry for element {element} and param {param} contains invalid entries: {diff}!")
+                    raise ValueError(
+                        f"The entry for element {element} and param {param} contains invalid entries: {diff}!")
 
     @staticmethod
     def validate_file_name(fname):
@@ -570,10 +570,12 @@ def xr_like(fill_value, dtype, other, dims):
         coords[dim] = other.coords[dim]
 
     # create the data array
-    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords, dims=dims)
+    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords,
+                      dims=dims)
 
     # return
     return da
+
 
 # This is to lazy load h5 file most of it is taken from the hdfdict package
 ###########################################################################
@@ -729,6 +731,7 @@ def fill_dict(hdfobject, datadict, lazy=True, unpacker=unpack_dataset):
 
     return datadict
 
+
 def load(hdf, lazy=True, unpacker=unpack_dataset, *args, **kwargs):
     """
     Returns a dictionary containing the groups as keys and the datasets as values from given hdf file.
@@ -843,7 +846,7 @@ class LazyEntry(object):
         self.store = store
         self.value = value
 
-    def desarialize(self):
+    def deserialize(self):
         """
         Deserializes the data from the store.
 
@@ -865,7 +868,7 @@ class LazyEntry(object):
         elif self.dtype == "vector" or self.dtype == "matrix":
             return df.values
         else:
-            raise TypeError(f"Unkon type {self.dtype}")
+            raise TypeError(f"Unknown type {self.dtype}")
 
 
 class LazyDict(dict):
@@ -884,7 +887,7 @@ class LazyDict(dict):
         value = super().__getitem__(item)
 
         if isinstance(value, LazyEntry):
-            value = value.desarialize()
+            value = value.deserialize()
             super().__setitem__(item, value)
 
         return value
@@ -953,7 +956,7 @@ class HDFPandasSerializer(LazyDict):
                 if self._lazy:
                     current_dict[leave_key] = entry
                 else:
-                    current_dict[leave_key] = entry.desarialize()
+                    current_dict[leave_key] = entry.deserialize()
 
         # no need to keep the file open
         if not self._lazy:
@@ -1015,3 +1018,343 @@ class HDFPandasSerializer(LazyDict):
 
         with pd.HDFStore(file_name, mode='w', complevel=4) as store:
             cls._recurse(store, dictionary)
+
+
+class InputDataChecks:
+    """
+    This class checks if the input data (folder/file structure, system.py settings, element definitions, etc.) is defined correctly
+    """
+
+    def __init__(self, config, optimization_setup):
+        """
+        Initialize the class
+
+        :param config: config object used to extract the analysis, system and solver dictionaries
+        :param optimization_setup: OptimizationSetup instance
+        """
+        self.system = config.system
+        self.analysis = config.analysis
+        self.optimization_setup = optimization_setup
+
+    def check_technology_selections(self):
+        """
+        Checks selection of different technologies in system.py file
+        """
+        # Checks if at least one technology is selected in the system.py file
+        assert len(self.system["set_conversion_technologies"] + self.system["set_transport_technologies"] + self.system["set_storage_technologies"]) > 0, f"No technology selected in system.py"
+        # Checks if identical technologies are selected multiple times in system.py file and removes possible duplicates
+        for tech_list in ["set_conversion_technologies", "set_transport_technologies", "set_storage_technologies"]:
+            techs_selected = self.system[tech_list]
+            unique_elements = list(np.unique(techs_selected))
+            self.system[tech_list] = unique_elements
+
+    def check_year_definitions(self):
+        """
+        Check if year-related parameters are defined correctly
+        """
+        # assert that number of optimized years is a positive integer
+        assert isinstance(self.system["optimized_years"], int) and self.system["optimized_years"] > 0, f"Number of optimized years must be a positive integer, however it is {self.system['optimized_years']}"
+        # assert that interval between years is a positive integer
+        assert isinstance(self.system["interval_between_years"], int) and self.system["interval_between_years"] > 0, f"Interval between years must be a positive integer, however it is {self.system['interval_between_years']}"
+        assert isinstance(self.system["reference_year"], int) and self.system["reference_year"] >= self.analysis["earliest_year_of_data"], f"Reference year must be an integer and larger than the defined earliest_year_of_data: {self.analysis['earliest_year_of_data']}"
+        # check if the number of years in the rolling horizon isn't larger than the number of optimized years
+        if self.system["years_in_rolling_horizon"] > self.system["optimized_years"] and self.system["use_rolling_horizon"]:
+            warnings.warn(f"The chosen number of years in the rolling horizon step is larger than the total number of years optimized!")
+
+    def check_primary_folder_structure(self):
+        """
+        Checks if the primary folder structure (set_conversion_technology, set_transport_technology, ..., energy_system) is provided correctly
+
+        :param analysis: dictionary defining the analysis framework
+        """
+
+        for set_name, subsets in self.analysis["subsets"].items():
+            if not os.path.exists(os.path.join(self.analysis["dataset"], set_name)):
+                raise AssertionError(f"Folder {set_name} does not exist!")
+            if isinstance(subsets, dict):
+                for subset_name, subset in subsets.items():
+                    if not os.path.exists(os.path.join(self.analysis["dataset"], set_name, subset_name)):
+                        raise AssertionError(f"Folder {subset_name} does not exist!")
+                else:
+                    for subset_name in subsets:
+                        if not os.path.exists(os.path.join(self.analysis["dataset"], set_name, subset_name)):
+                            raise AssertionError(f"Folder {subset_name} does not exist!")
+
+        for file_name in ["attributes.json", "base_units.csv", "set_edges.csv", "set_nodes.csv", "unit_definitions.txt"]:
+            if file_name not in os.listdir(os.path.join(self.analysis["dataset"], "energy_system")):
+                raise FileNotFoundError(f"File {file_name} is missing in the energy_system directory")
+
+    def check_existing_technology_data(self):
+        """
+        This method checks the existing technology input data and only regards those technology elements for which folders containing the attributes.csv file exist.
+        """
+        for set_name, subsets in self.optimization_setup.analysis["subsets"]["set_technologies"].items():
+            for technology in self.optimization_setup.system[set_name]:
+                if technology not in self.optimization_setup.paths[set_name].keys():
+                    # raise error if technology is not in input data
+                    raise FileNotFoundError(f"Technology {technology} selected in config does not exist in input data")
+                elif "attributes.json" not in self.optimization_setup.paths[set_name][technology]:
+                    raise FileNotFoundError(f"The file attributes.json does not exist for the technology {technology}")
+            self.optimization_setup.system["set_technologies"].extend(self.optimization_setup.system[set_name])
+            # check subsets of technology_subset
+            assert isinstance(subsets, list), f"Subsets of {set_name} must be a list, dict not implemented"
+            for subset in subsets:
+                for technology in self.optimization_setup.system[subset]:
+                    if technology not in self.optimization_setup.paths[subset].keys():
+                        # raise error if technology is not in input data
+                        raise FileNotFoundError(f"Technology {technology} selected in config does not exist in input data")
+                    elif "attributes.json" not in self.optimization_setup.paths[subset][technology]:
+                        raise FileNotFoundError(f"The file attributes.json does not exist for the technology {technology}")
+                    self.optimization_setup.system[set_name].extend(self.optimization_setup.system[subset])
+                    self.optimization_setup.system["set_technologies"].extend(self.optimization_setup.system[subset])
+
+    def check_existing_carrier_data(self):
+        """
+        Checks the existing carrier data and only regards those carriers for which folders exist
+        """
+        # check if carriers exist
+        for carrier in self.optimization_setup.system["set_carriers"]:
+            if carrier not in self.optimization_setup.paths["set_carriers"].keys():
+                # raise error if carrier is not in input data
+                raise FileNotFoundError(f"Carrier {carrier} selected in config does not exist in input data")
+            elif "attributes.json" not in self.optimization_setup.paths["set_carriers"][carrier]:
+                raise FileNotFoundError(f"The file attributes.json does not exist for the carrier {carrier}")
+
+    def check_dataset(self):
+        """
+        Ensures that the dataset chosen in the config does exist and contains a system.py file
+        """
+        dataset = os.path.basename(self.analysis["dataset"])
+        dirname = os.path.dirname(self.analysis["dataset"])
+        assert os.path.exists(dirname),f"Requested folder {dirname} is not a valid path"
+        assert os.path.exists(self.analysis["dataset"]),f"The chosen dataset {dataset} does not exist at {self.analysis['dataset']} as it is specified in the config"
+        # check if chosen dataset contains a system.py file
+        if not os.path.exists(os.path.join(self.analysis['dataset'], "system.py")):
+            raise FileNotFoundError(f"system.py not found in dataset: {self.analysis['dataset']}")
+
+    def check_single_directed_edges(self, set_edges_input):
+        """
+        Checks if single-directed edges exist in the dataset (e.g. CH-DE exists, DE-CH doesn't) and raises a warning
+
+        :param set_edges_input: DataFrame containing set of edges defined in set_edges.csv
+        """
+        for edge in set_edges_input.values:
+            reversed_edge = edge[2] + "-" + edge[1]
+            if reversed_edge not in [edge_string[0] for edge_string in set_edges_input.values] and edge[1] in self.system["set_nodes"] and edge[2] in self.system["set_nodes"]:
+                warnings.warn(f"The edge {edge[0]} is single-directed, i.e., the edge {reversed_edge} doesn't exist!")
+
+    @staticmethod
+    def check_carrier_configuration(input_carrier, output_carrier, reference_carrier, name):
+        """
+        Checks if the chosen input/output and reference carrier combination is reasonable
+
+        :param input_carrier: input carrier of conversion technology
+        :param output_carrier: output carrier of conversion technology
+        :param reference_carrier: reference carrier of technology
+        :param name: name of conversion technology
+        """
+        # assert that conversion technology has at least an input or an output carrier
+        assert len(input_carrier+output_carrier) > 0, f"Conversion technology {name} has neither an input nor an output carrier!"
+        # check if reference carrier in input and output carriers and set technology to correspondent carrier
+        assert reference_carrier[0] in (input_carrier + output_carrier), f"reference carrier {reference_carrier} of technology {name} not in input and output carriers {input_carrier + output_carrier}"
+        set_input_carrier = set(input_carrier)
+        set_output_carrier = set(output_carrier)
+        # assert that input and output carrier of conversion tech are different
+        assert not set_input_carrier & set_output_carrier, f"The conversion technology {name} has the same input ({input_carrier[0]}) and output ({output_carrier[0]}) carrier!"
+
+    @staticmethod
+    def check_duplicate_indices(df_input, file_name, folder_path):
+        """
+        Checks if df_input contains any duplicate indices and either removes them if they are of identical value or raises an error otherwise
+
+        :param df_input: raw input dataframe
+        :param folder_path: the path of the folder containing the selected file
+        :param file_name: name of selected file
+        :return: df_input without duplicate indices
+        """
+        unique_elements, counts = np.unique(df_input.index, return_counts=True)
+        duplicates = unique_elements[counts > 1]
+
+        if len(duplicates) != 0:
+            for duplicate in duplicates:
+                values = df_input.loc[duplicate]
+                # check if all the duplicates are of the same value
+                if values.nunique() == 1:
+                    logging.warning(f"The input data file {file_name + '.csv'} at {folder_path} contains duplicate indices with identical values: {df_input.loc[duplicates]}.")
+                else:
+                    raise AssertionError(f"The input data file {file_name + '.csv'} at {folder_path} contains duplicate indices with different values: {df_input.loc[duplicates]}.")
+            # remove duplicates
+            duplicate_mask = df_input.index.duplicated(keep='first')
+            df_input = df_input[~duplicate_mask]
+
+        return df_input
+
+class StringUtils:
+    """
+    This class handles some strings for logging and filenames to tidy up scripts
+    """
+    def __init__(self):
+        """ Initializes the class """
+        pass
+
+    @classmethod
+    def print_optimization_progress(cls,scenario, steps_horizon,step):
+        """ prints the current optimization progress
+
+        :param scenario: string of scenario name
+        :param steps_horizon: all steps of horizon
+        :param step: current step of horizon """
+        scenario_string = ScenarioUtils.scenario_string(scenario)
+        if len(steps_horizon) == 1:
+            logging.info(f"\n--- Conduct optimization for perfect foresight {scenario_string}--- \n")
+        else:
+            logging.info(
+                f"\n--- Conduct optimization for rolling horizon step {step} of {max(steps_horizon)} {scenario_string}--- \n")
+
+    @classmethod
+    def generate_folder_path(cls,config,scenario,scenario_dict,steps_horizon, step):
+        """ generates the folder path for the results
+        :param config: config of optimization
+        :param scenario: name of scenario
+        :param scenario_dict: current scenario dict
+        :param steps_horizon: all steps of horizon
+        :param step: current step of horizon
+        :return: scenario name in folder
+        :return: subfolder in results file
+        :return: mapping of parameters
+        """
+        subfolder = Path("")
+        scenario_name = None
+        param_map = None
+        if config.system["conduct_scenario_analysis"]:
+            # handle scenarios
+            scenario_name = f"scenario_{scenario}"
+            subfolder = Path(f"scenario_{scenario_dict['base_scenario']}")
+
+            # set the scenarios
+            if scenario_dict["sub_folder"] != "":
+                # get the param map
+                param_map = scenario_dict["param_map"]
+
+                # get the output scenarios
+                subfolder = subfolder.joinpath(f"scenario_{scenario_dict['sub_folder']}")
+                scenario_name = f"scenario_{scenario_dict['sub_folder']}"
+
+        # handle myopic foresight
+        if len(steps_horizon) > 1:
+            mf_f_string = f"MF_{step}"
+            # handle combination of MF and scenario analysis
+            if config.system["conduct_scenario_analysis"]:
+                subfolder = Path(subfolder), Path(mf_f_string)
+            else:
+                subfolder = Path(mf_f_string)
+
+        return scenario_name,subfolder,param_map
+
+    @staticmethod
+    def get_model_name(config):
+        """
+        return model name while conducting some tests
+        :param config: config of optimziation
+        :return: model name
+        :return: output folder
+        """
+        model_name = os.path.basename(config.analysis["dataset"])
+        if os.path.exists(out_folder := os.path.join(config.analysis["folder_output"], model_name)):
+            logging.warning(f"The output folder '{out_folder}' already exists")
+            if config.analysis["overwrite_output"]:
+                logging.warning("Existing files will be overwritten!")
+        return model_name,out_folder
+
+class ScenarioUtils:
+    """
+    This class handles some stuff for scenarios to tidy up scripts
+    """
+
+    def __init__(self):
+        """ Initializes the class """
+        pass
+
+    @staticmethod
+    def scenario_string(scenario):
+        """ creates additional scenario string
+        :param scenario: scenario name
+        :return: scenario string """
+        if scenario != "":
+            scenario_string = f"for scenario {scenario} "
+        else:
+            scenario_string = ""
+        return scenario_string
+
+    @staticmethod
+    def clean_scenario_folder(config, out_folder):
+        """ cleans scenario dict when overwritten
+        :param config: config of optimization
+        :param out_folder: output folder"""
+        # compare to existing sub-scenarios
+        if config.system["conduct_scenario_analysis"] and config.system["clean_sub_scenarios"]:
+            # collect all paths that are in the scenario dict
+            folder_dict = defaultdict(list)
+            for key, value in config.scenarios.items():
+                if value["sub_folder"] != "":
+                    folder_dict[f"scenario_{value['base_scenario']}"].append(f"scenario_{value['sub_folder']}")
+                    folder_dict[f"scenario_{value['base_scenario']}"].append(
+                        f"dict_all_sequence_time_steps_{value['sub_folder']}.h5")
+            for scenario_name, sub_folders in folder_dict.items():
+                scenario_path = os.path.join(out_folder, scenario_name)
+                if os.path.exists(scenario_path) and os.path.isdir(scenario_path):
+                    existing_sub_folder = os.listdir(scenario_path)
+                    for sub_folder in existing_sub_folder:
+                        # delete the scenario subfolder
+                        sub_folder_path = os.path.join(scenario_path, sub_folder)
+                        if os.path.isdir(sub_folder_path) and sub_folder not in sub_folders:
+                            logging.info(f"Removing sub-scenario {sub_folder}")
+                            shutil.rmtree(sub_folder_path, ignore_errors=True)
+                        # the time steps dict
+                        if sub_folder.startswith("dict_all_sequence_time_steps") and sub_folder not in sub_folders:
+                            logging.info(f"Removing time steps dict {sub_folder}")
+                            os.remove(sub_folder_path)
+
+    @staticmethod
+    def get_scenarios(config,job_index):
+        """ retrieves and overwrites the scenario dicts
+        :param config: config of optimization
+        :param job_index: index of current job, if passed
+        :return: scenarios of optimization
+        :return: elements in scenario
+        """
+        if config.system["conduct_scenario_analysis"]:
+            scenarios_path = os.path.abspath(os.path.join(config.analysis['dataset'], "scenarios.py"))
+            if not os.path.exists(scenarios_path):
+                raise FileNotFoundError(f"scenarios.py not found in dataset: {config.analysis['dataset']}")
+            spec = importlib.util.spec_from_file_location("module", scenarios_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            scenarios = module.scenarios
+            config.scenarios.update(scenarios)
+            # remove the default scenario if necessary
+            if not config.system["run_default_scenario"] and "" in config.scenarios:
+                del config.scenarios[""]
+
+            # expand the scenarios
+            config.scenarios = ScenarioDict.expand_lists(config.scenarios)
+
+            # deal with the job array
+            if job_index is not None:
+                if isinstance(job_index, int):
+                    job_index = [job_index]
+                else:
+                    job_index = list(job_index)
+                logging.info(f"Running scenarios with job indices: {job_index}")
+                # reduce the scenario and element to a single one
+                scenarios = [list(config.scenarios.keys())[jx] for jx in job_index]
+                elements = [list(config.scenarios.values())[jx] for jx in job_index]
+            else:
+                logging.info(f"Running all scenarios sequentially")
+                scenarios = config.scenarios.keys()
+                elements = config.scenarios.values()
+        # Nothing to do with the scenarios
+        else:
+            scenarios = [""]
+            elements = [{}]
+        return scenarios,elements

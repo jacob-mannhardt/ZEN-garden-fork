@@ -14,20 +14,24 @@ import os
 from pathlib import Path
 import sys
 import zlib
-
+from tables import NaturalNameWarning
+import warnings
 import pandas as pd
 import xarray as xr
 from filelock import FileLock
 import yaml
 
 from ..utils import HDFPandasSerializer
+from ..model.optimization_setup import OptimizationSetup
 
+# Warnings
+warnings.filterwarnings('ignore', category=NaturalNameWarning)
 
 class Postprocess:
     """
     Class is defining the postprocessing of the results
     """
-    def __init__(self, model, scenarios, model_name, subfolder=None, scenario_name=None, param_map=None):
+    def __init__(self, model: OptimizationSetup, scenarios, model_name, subfolder=None, scenario_name=None, param_map=None, include_year2operation=True):
         """postprocessing of the results of the optimization
 
         :param model: optimization model
@@ -35,8 +39,9 @@ class Postprocess:
         :param subfolder: The subfolder used for the results
         :param scenario_name: The name of the current scenario
         :param param_map: A dictionary mapping the parameters to the scenario names
+        :param include_year2operation: Specify if the year2operation dict should be included in the results file
         """
-        logging.info("Postprocess results")
+        logging.info("--- Postprocess results ---")
         # get the necessary stuff from the model
         self.model = model.model
         self.scenarios = scenarios
@@ -57,8 +62,15 @@ class Postprocess:
         # deal with the subfolder
         self.subfolder = subfolder
         # here we make use of the fact that None and "" both evaluate to False but any non-empty string doesn't
-        if self.subfolder != Path(""):
-            self.name_dir = self.name_dir.joinpath(self.subfolder)
+        if subfolder != Path(""):
+            #check if mf within scenario analysis
+            if isinstance(self.subfolder, tuple):
+                scenario_dir = self.name_dir.joinpath(self.subfolder[0])
+                os.makedirs(scenario_dir, exist_ok=True)
+                mf_in_scenario_dir = self.subfolder[0].joinpath(self.subfolder[1])
+                self.name_dir = self.name_dir.joinpath(mf_in_scenario_dir)
+            else:
+                self.name_dir = self.name_dir.joinpath(self.subfolder)
         # create the output directory
         os.makedirs(self.name_dir, exist_ok=True)
 
@@ -80,6 +92,11 @@ class Postprocess:
 
         # extract and save sequence time steps, we transform the arrays to lists
         self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict())
+
+        if include_year2operation:
+            self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
+            self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
+
         self.save_sequence_time_steps(scenario=scenario_name)
 
         # case where we should run the post-process as normal
@@ -145,6 +162,9 @@ class Postprocess:
             f_name = f"{name}.h5"
             with FileLock(f_name + ".lock").acquire(timeout=300):
                 HDFPandasSerializer.serialize_dict(file_name=f_name, dictionary=dictionary, overwrite=self.overwrite)
+
+        else:
+            raise AssertionError(f"The specified output format {format}, chosen in the config, is not supported")
 
     def save_sets(self):
         """ Saves the Set values to a json file which can then be
@@ -281,9 +301,7 @@ class Postprocess:
         """
         Saves the system dict as json
         """
-
-        # This we only need to save once
-        if self.subfolder != Path(""):
+        if self.system["use_rolling_horizon"]:
             fname = self.name_dir.parent.joinpath('system')
         else:
             fname = self.name_dir.joinpath('system')
@@ -293,9 +311,7 @@ class Postprocess:
         """
         Saves the analysis dict as json
         """
-
-        # This we only need to save once
-        if self.subfolder != Path(""):
+        if self.system["use_rolling_horizon"]:
             fname = self.name_dir.parent.joinpath('analysis')
         else:
             fname = self.name_dir.joinpath('analysis')
@@ -307,8 +323,18 @@ class Postprocess:
         """
 
         # This we only need to save once
-        if self.subfolder != Path(""):
+        #check if MF within scenario analysis
+        if isinstance(self.subfolder, tuple):
+            #check if there are sub_scenarios (parent must then be the name of the parent scenario)
+            if not self.subfolder[0].parent == Path("."):
+                fname = self.name_dir.parent.parent.parent.joinpath('scenarios')
+            else:
+                #MF with in scenario analysis without sub-scenarios
+                fname = self.name_dir.parent.parent.joinpath('scenarios')
+        #only MF or only scenario analysis
+        elif self.subfolder != Path(""):
             fname = self.name_dir.parent.joinpath('scenarios')
+        #neither MF nor scenario analysis
         else:
             fname = self.name_dir.joinpath('scenarios')
         self.write_file(fname, self.scenarios, format="json")
@@ -319,7 +345,7 @@ class Postprocess:
         """
 
         # This we only need to save once
-        if self.subfolder != Path(""):
+        if self.system["use_rolling_horizon"]:
             fname = self.name_dir.parent.joinpath('solver')
         else:
             fname = self.name_dir.joinpath('solver')
@@ -332,7 +358,9 @@ class Postprocess:
 
         if self.param_map is not None:
             # This we only need to save once
-            if self.subfolder != Path(""):
+            if self.system["use_rolling_horizon"] and self.system["conduct_scenario_analysis"]:
+                fname = self.name_dir.parent.parent.joinpath('param_map')
+            elif self.subfolder != Path(""):
                 fname = self.name_dir.parent.joinpath('param_map')
             else:
                 fname = self.name_dir.joinpath('param_map')
@@ -350,11 +378,10 @@ class Postprocess:
             add_on = ""
 
             # This we only need to save once
-        if self.subfolder != Path(""):
+        if self.system["use_rolling_horizon"]:
             fname = self.name_dir.parent.joinpath(f'dict_all_sequence_time_steps{add_on}')
         else:
             fname = self.name_dir.joinpath(f'dict_all_sequence_time_steps{add_on}')
-
         self.write_file(fname, self.dict_sequence_time_steps)
 
     def _transform_df(self, df, doc):
@@ -417,3 +444,17 @@ class Postprocess:
             if index in self.analysis["header_data_inputs"].keys():
                 index_list_final.append(self.analysis["header_data_inputs"][index])  # else:  #     pass  #     # index_list_final.append(index)
         return index_list_final
+
+    def get_time_steps_year2operation(self):
+        """ Returns a HDF5-Serializable version of the dict_time_steps_year2operation dictionary."""
+        ans = {}
+        for year, time_steps in self.energy_system.time_steps.time_steps_year2operation.items():
+            ans[str(year)] = time_steps
+        return ans
+
+    def get_time_steps_year2storage(self):
+        """ Returns a HDF5-Serializable version of the dict_time_steps_year2storage dictionary."""
+        ans = {}
+        for year, time_steps in self.energy_system.time_steps.time_steps_year2storage.items():
+            ans[str(year)] = time_steps
+        return ans

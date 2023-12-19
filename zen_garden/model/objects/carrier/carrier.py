@@ -31,28 +31,24 @@ class Carrier(Element):
 
         :param carrier: carrier that is added to the model
         :param optimization_setup: The OptimizationSetup the element is part of """
-
-        logging.info(f'Initialize carrier {carrier}')
         super().__init__(carrier, optimization_setup)
-        # store input data
-        self.store_input_data()
 
     def store_input_data(self):
         """ retrieves and stores input data for element as attributes. Each Child class overwrites method to store different attributes """
-        set_base_time_steps_yearly = self.energy_system.set_base_time_steps_yearly
-        set_time_steps_yearly = self.energy_system.set_time_steps_yearly
+        # store scenario dict
+        super().store_scenario_dict()
         # set attributes of carrier
         # raw import
         self.raw_time_series = {}
-        self.raw_time_series["demand"] = self.data_input.extract_input_data("demand", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["availability_import"] = self.data_input.extract_input_data("availability_import", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["availability_export"] = self.data_input.extract_input_data("availability_export", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["price_export"] = self.data_input.extract_input_data("price_export", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
-        self.raw_time_series["price_import"] = self.data_input.extract_input_data("price_import", index_sets=["set_nodes", "set_time_steps"], time_steps=set_base_time_steps_yearly)
+        self.raw_time_series["demand"] = self.data_input.extract_input_data("demand", index_sets=["set_nodes", "set_time_steps"], time_steps="set_base_time_steps_yearly")
+        self.raw_time_series["availability_import"] = self.data_input.extract_input_data("availability_import", index_sets=["set_nodes", "set_time_steps"], time_steps="set_base_time_steps_yearly")
+        self.raw_time_series["availability_export"] = self.data_input.extract_input_data("availability_export", index_sets=["set_nodes", "set_time_steps"], time_steps="set_base_time_steps_yearly")
+        self.raw_time_series["price_export"] = self.data_input.extract_input_data("price_export", index_sets=["set_nodes", "set_time_steps"], time_steps="set_base_time_steps_yearly")
+        self.raw_time_series["price_import"] = self.data_input.extract_input_data("price_import", index_sets=["set_nodes", "set_time_steps"], time_steps="set_base_time_steps_yearly")
         # non-time series input data
-        self.availability_import_yearly = self.data_input.extract_input_data("availability_import_yearly", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
-        self.availability_export_yearly = self.data_input.extract_input_data("availability_export_yearly", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
-        self.carbon_intensity_carrier = self.data_input.extract_input_data("carbon_intensity", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps=set_time_steps_yearly)
+        self.availability_import_yearly = self.data_input.extract_input_data("availability_import_yearly", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly")
+        self.availability_export_yearly = self.data_input.extract_input_data("availability_export_yearly", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly")
+        self.carbon_intensity_carrier = self.data_input.extract_input_data("carbon_intensity", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly")
         self.price_shed_demand = self.data_input.extract_input_data("price_shed_demand", index_sets=[])
 
     def overwrite_time_steps(self, base_time_steps):
@@ -60,7 +56,7 @@ class Carrier(Element):
 
         :param base_time_steps: #TODO describe parameter/return
         """
-        set_time_steps_operation = self.energy_system.time_steps.encode_time_step(self.name, base_time_steps=base_time_steps, time_step_type="operation", yearly=True)
+        set_time_steps_operation = self.energy_system.time_steps.encode_time_step(base_time_steps=base_time_steps, time_step_type="operation")
         setattr(self, "set_time_steps_operation", set_time_steps_operation.squeeze().tolist())
 
     ### --- classmethods to construct sets, parameters, variables, and constraints, that correspond to Carrier --- ###
@@ -201,6 +197,7 @@ class Carrier(Element):
         constraints.add_constraint_block(model, name="constraint_nodal_energy_balance",
                                          constraint=rules.constraint_nodal_energy_balance_block(),
                                          doc='node- and time-dependent energy balance for each carrier', )
+
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
             if len(optimization_setup.system[subclass.label]) > 0:
@@ -247,9 +244,9 @@ class CarrierRules(GenericRule):
         terms = []
         # This vectorizes over times and locations
         for carrier in self.sets["set_carriers"]:
-            times = self.energy_system.time_steps.get_time_steps_year2operation(carrier, year)
+            times = self.energy_system.time_steps.get_time_steps_year2operation(year)
             expr = (self.variables["cost_carrier"].loc[carrier, :, times]
-                    + self.variables["cost_shed_demand"].loc[carrier, :, times]) * self.parameters.time_steps_operation_duration.loc[carrier, times]
+                    + self.variables["cost_shed_demand"].loc[carrier, :, times]) * self.parameters.time_steps_operation_duration.loc[times]
             terms.append(expr.sum())
         term_summed_carrier_shed_demand_costs = lp_sum(terms)
 
@@ -284,8 +281,8 @@ class CarrierRules(GenericRule):
         terms = []
         # This vectorizes over times and locations
         for carrier in self.sets["set_carriers"]:
-            times = self.energy_system.time_steps.get_time_steps_year2operation(carrier, year)
-            expr = self.variables["carbon_emissions_carrier"].loc[carrier, :, times] * self.parameters.time_steps_operation_duration.loc[carrier, times]
+            times = self.energy_system.time_steps.get_time_steps_year2operation(year)
+            expr = self.variables["carbon_emissions_carrier"].loc[carrier, :, times] * self.parameters.time_steps_operation_duration.loc[times]
             terms.append(expr.sum())
         term_summed_carbon_emissions_carrier = lp_sum(terms)
 
@@ -381,9 +378,9 @@ class CarrierRules(GenericRule):
         constraints = []
         for carrier, year in index.get_unique(levels=["set_carriers", "set_time_steps_yearly"]):
             ### auxiliary calculations
-            operational_time_steps = self.time_steps.get_time_steps_year2operation(carrier, year)
+            operational_time_steps = self.time_steps.get_time_steps_year2operation(year)
             term_summed_import_flow = (self.variables["flow_import"].loc[carrier, :, operational_time_steps]
-                                       * self.parameters.time_steps_operation_duration.loc[carrier, operational_time_steps]).sum("set_time_steps_operation")
+                                       * self.parameters.time_steps_operation_duration.loc[operational_time_steps]).sum("set_time_steps_operation")
 
             ### formulate constraint
             lhs = term_summed_import_flow
@@ -419,9 +416,9 @@ class CarrierRules(GenericRule):
         constraints = []
         for carrier, year in index.get_unique(levels=["set_carriers", "set_time_steps_yearly"]):
             ### auxiliary calculations
-            operational_time_steps = self.time_steps.get_time_steps_year2operation(carrier, year)
+            operational_time_steps = self.time_steps.get_time_steps_year2operation(year)
             term_summed_export_flow = (self.variables["flow_export"].loc[carrier, :, operational_time_steps]
-                                       * self.parameters.time_steps_operation_duration.loc[carrier, operational_time_steps]).sum("set_time_steps_operation")
+                                       * self.parameters.time_steps_operation_duration.loc[operational_time_steps]).sum("set_time_steps_operation")
 
             ### formulate constraint
             lhs = term_summed_export_flow
@@ -560,7 +557,7 @@ class CarrierRules(GenericRule):
         constraints = []
         for carrier in index.get_unique(["set_carriers"]):
             ### auxiliary calculations
-            yearly_time_steps = [self.time_steps.convert_time_step_operation2year(carrier, t) for t in times]
+            yearly_time_steps = [self.time_steps.convert_time_step_operation2year(t) for t in times]
 
             # get the time-dependent factor
             mask = (self.parameters.availability_import.loc[carrier, :, times] != 0) | (self.parameters.availability_export.loc[carrier, :, times] != 0)

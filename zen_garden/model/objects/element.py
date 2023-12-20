@@ -17,7 +17,7 @@ import psutil
 import time
 from pathlib import Path
 from zen_garden.preprocess.extract_input_data import DataInput
-
+import cProfile
 class Element:
     """
     Class defining a standard Element
@@ -87,7 +87,11 @@ class Element:
         logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2} MB")
         # construct pe.Params
         t0 = time.perf_counter()
+        cp = cProfile.Profile()
+        cp.enable()
         cls.construct_params(optimization_setup)
+        cp.disable()
+        cp.print_stats(sort='cumtime')
         t1 = time.perf_counter()
         logging.info(f"Time to construct pe.Params: {t1 - t0:0.4f} seconds")
         logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2} MB")

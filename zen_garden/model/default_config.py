@@ -139,6 +139,8 @@ class Config(object):
         self.system["use_rolling_horizon"] = False
         # toggle to use time_series_aggregation
         self.system["conduct_time_series_aggregation"] = False
+        # unaggregated time steps per year
+        self.system["unaggregated_time_steps_per_year"] = 8760
         # toggle to exclude parameters from TSA, specified in system_specification/exclude_parameter_from_TSA
         self.system["exclude_parameters_from_TSA"] = True
         # toggle to perform analysis for multiple scenarios
@@ -173,6 +175,7 @@ class Config(object):
         self.solver["recommend_base_units"] = False
         self.solver["immutable_unit"] = []
         self.solver["range_unit_exponents"]    = {"min": -3, "max": 3}
+        self.solver["check_unit_consistency"] = True
         # assumes "ton" to be metric ton, not imperial ton
         self.solver["define_ton_as_metric_ton"] = True
         # round down to number of decimal points, for new capacity and unit multipliers

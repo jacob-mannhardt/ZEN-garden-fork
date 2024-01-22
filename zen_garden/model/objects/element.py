@@ -47,6 +47,8 @@ class Element:
                                     energy_system=self.energy_system, unit_handling=self.energy_system.unit_handling)
         # empty dict for foresight error parameters
         self.foresight_error_parameters = dict()
+        #dict to save the parameter units element-wise (and save them in the results later on)
+        self.units = {}
 
     def get_input_path(self):
         """ get input path where input data is stored input_path"""

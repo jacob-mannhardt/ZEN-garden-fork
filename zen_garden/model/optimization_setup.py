@@ -26,7 +26,8 @@ from .objects.energy_system import EnergySystem
 from .objects.technology.technology import Technology
 from zen_garden.preprocess.time_series_aggregation import TimeSeriesAggregation
 
-from ..utils import ScenarioDict, IISConstraintParser
+from ..utils import ScenarioDict, IISConstraintParser, StringUtils
+
 
 class OptimizationSetup(object):
     """setup optimization setup """
@@ -53,7 +54,7 @@ class OptimizationSetup(object):
         self.input_data_checks.check_existing_technology_data()
         # empty dict of elements (will be filled with class_name: instance_list)
         self.dict_elements = defaultdict(list)
-        # pe.ConcreteModel
+        # optimization model
         self.model = None
         # the components
         self.variables = None
@@ -122,7 +123,11 @@ class OptimizationSetup(object):
                             self.add_folder_paths(element, self.paths[element]["folder"])
 
     def add_folder_paths(self, set_name, path, subsets=[]):
-        """ add file paths of element to paths dictionary"""
+        """ add file paths of element to paths dictionary
+        :param set_name: name of set
+        :param path: path to folder
+        :param subsets: list of subsets
+        """
         for element in next(os.walk(path))[1]:
             if element not in subsets:
                 self.paths[set_name][element] = dict()
@@ -141,10 +146,10 @@ class OptimizationSetup(object):
     def _find_parent_set(self,dictionary,subset,path=None):
         """
         This method finds the parent sets of a subset
-        :param dictionary:
-        :param subset:
-        :param path:
-        :return:
+        :param dictionary: dictionary of subsets
+        :param subset: subset to find parent sets of
+        :param path: path to subset
+        :return: list of parent sets
         """
         if path is None:
             path = []
@@ -281,10 +286,11 @@ class OptimizationSetup(object):
 
         class_elements = self.get_all_elements(cls=cls)
         dict_of_attributes = {}
+        dict_of_units = {}
         attribute_is_series = False
         for element in class_elements:
             if not capacity_types:
-                dict_of_attributes, attribute_is_series_temp = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes)
+                dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes)
                 dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name, dict_of_attributes,cls,index_names)
                 if attribute_is_series_temp:
                     attribute_is_series = attribute_is_series_temp
@@ -293,16 +299,16 @@ class OptimizationSetup(object):
                 for capacity_type in self.system["set_capacity_types"]:
                     # append energy only for storage technologies
                     if capacity_type == self.system["set_capacity_types"][0] or element.name in self.system["set_storage_technologies"]:
-                        dict_of_attributes, attribute_is_series_temp = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes, capacity_type)
+                        dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes, capacity_type)
                         dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,dict_of_attributes,cls,index_names,capacity_type)
                         if attribute_is_series_temp:
                             attribute_is_series = attribute_is_series_temp
         if return_attribute_is_series:
-            return dict_of_attributes, attribute_is_series
+            return dict_of_attributes, dict_of_units, attribute_is_series
         else:
             return dict_of_attributes
 
-    def append_attribute_of_element_to_dict(self, element, attribute_name, dict_of_attributes, capacity_type=None):
+    def append_attribute_of_element_to_dict(self, element, attribute_name, dict_of_attributes, dict_of_units, capacity_type=None):
         """ get attribute values of all elements in this class
 
         :param element: element of class
@@ -319,14 +325,14 @@ class OptimizationSetup(object):
         if not hasattr(element, attribute_name):
             # if attribute is time series that does not exist
             if attribute_name in element.raw_time_series and element.raw_time_series[attribute_name] is None:
-                return dict_of_attributes, None
+                return dict_of_attributes, None, dict_of_units
             else:
                 raise AssertionError(f"Element {element.name} does not have attribute {attribute_name}")
         attribute = getattr(element, attribute_name)
         assert not isinstance(attribute, pd.DataFrame), f"Not yet implemented for pd.DataFrames. Wrong format for element {element.name}"
         # add attribute to dict_of_attributes
         if attribute is None:
-            return dict_of_attributes, False
+            return dict_of_attributes, False, dict_of_units
         elif isinstance(attribute, dict):
             dict_of_attributes.update({(element.name,) + (key,): val for key, val in attribute.items()})
         elif isinstance(attribute, pd.Series) and "pwa" not in attribute_name:
@@ -334,6 +340,22 @@ class OptimizationSetup(object):
                 combined_key = (element.name, capacity_type)
             else:
                 combined_key = element.name
+            if attribute_name in element.units:
+                if attribute_name in ["conversion_factor", "retrofit_flow_coupling_factor"]:
+                    dict_of_units[combined_key] = element.units[attribute_name]
+                else:
+                    dict_of_units[combined_key] = element.units[attribute_name]["unit_in_base_units"].units
+            else:
+                #needed since these
+                if attribute_name == "capex_capacity_existing":
+                    dict_of_units[combined_key] = element.units["opex_specific_fixed"]["unit_in_base_units"].units
+                elif attribute_name == "capex_capacity_existing_energy":
+                    dict_of_units[combined_key] = element.units["opex_specific_fixed_energy"]["unit_in_base_units"].units
+                elif attribute_name == "capex_specific_transport":
+                    dict_of_units[combined_key] = element.units["opex_specific_fixed"]["unit_in_base_units"].units
+                elif attribute_name == "capex_per_distance_transport":
+                    length_base_unit = [key for key, value in self.energy_system.unit_handling.base_units.items() if value == "[length]"][0]
+                    dict_of_units[combined_key] = element.units["opex_specific_fixed"]["unit_in_base_units"].units / self.energy_system.unit_handling.ureg(length_base_unit)
             if len(attribute) > 1:
                 dict_of_attributes[combined_key] = attribute
                 attribute_is_series = True
@@ -356,7 +378,7 @@ class OptimizationSetup(object):
                 dict_of_attributes[(element.name, capacity_type)] = attribute
             else:
                 dict_of_attributes[element.name] = attribute
-        return dict_of_attributes, attribute_is_series
+        return dict_of_attributes, attribute_is_series, dict_of_units
 
     def get_foresight_error_attribute(self,element, attribute_name, dict_of_attributes,cls,index_names,capacity_type=None):
         """
@@ -416,8 +438,8 @@ class OptimizationSetup(object):
         self.model = lp.Model(solver_dir=self.solver["solver_dir"])
         # we need to reset the components to not carry them over
         self.sets = IndexSet()
-        self.variables = Variable(self.sets)
-        self.parameters = Parameter(self.sets)
+        self.variables = Variable(self)
+        self.parameters = Parameter(self)
         self.constraints = Constraint(self.sets)
         # define and construct components of self.model
         Element.construct_model_components(self)
@@ -555,7 +577,7 @@ class OptimizationSetup(object):
         """Create model instance by assigning parameter values and instantiating the sets """
         solver_name = self.solver["name"]
         # remove options that are None
-        solver_options = {key: self.solver["solver_options"][key] for key in self.solver["solver_options"] if self.solver["solver_options"][key] is not None}
+        solver_options = {key: self.solver.solver_options[key] for key in self.solver.solver_options if self.solver.solver_options[key] is not None}
 
         logging.info(f"\n--- Solve model instance using {solver_name} ---\n")
         # disable logger temporarily
@@ -585,16 +607,16 @@ class OptimizationSetup(object):
             self.optimality = False
 
     def write_IIS(self):
-        """ write an ILP file to print the IIS if infeasible. Only possible for gurobi """
+        """ write an ILP file to print the IIS if infeasible. Only possible for gurobi
+        """
         if self.model.termination_condition == 'infeasible' and self.solver["name"] == "gurobi":
             logging.info("The optimization is infeasible")
             # ilp_file = f"{os.path.dirname(solver['solver_options']['logfile'])}//infeasible_model_IIS.ilp"
-            ilp_file = f"//infeasible_model_IIS.ilp"
+            output_folder = StringUtils.get_output_folder(self.analysis,self.system)
+            ilp_file = os.path.join(output_folder,"infeasible_model_IIS.ilp")
+            logging.info(f"Writing parsed IIS to {ilp_file}")
             parser = IISConstraintParser(ilp_file, self.model)
-            fname, _ = os.path.splitext(ilp_file)
-            outfile = fname + "_linopy.ilp"
-            logging.info(f"Writing parsed IIS to {outfile}")
-            parser.write_parsed_output(outfile)
+            parser.write_parsed_output()
 
     def add_results_of_optimization_step(self, step_horizon):
         """ adds the new capacity additions and the cumulative carbon emissions for next
@@ -612,7 +634,10 @@ class OptimizationSetup(object):
                 capacity_addition = self.model.solution["capacity_addition"].to_series().dropna()
                 invest_capacity = self.model.solution["capacity_investment"].to_series().dropna()
                 cost_capex = self.model.solution["cost_capex"].to_series().dropna()
-                rounding_value = 10 ** (-self.solver["rounding_decimal_points"])
+                if self.solver["round_parameters"]:
+                    rounding_value = 10 ** (-self.solver["rounding_decimal_points_capacity"])
+                else:
+                    rounding_value = 0
                 capacity_addition[capacity_addition <= rounding_value] = 0
                 invest_capacity[invest_capacity <= rounding_value] = 0
                 cost_capex[cost_capex <= rounding_value] = 0
@@ -675,6 +700,9 @@ class OptimizationSetup(object):
         # if calling class is EnergySystem
         if calling_class == EnergySystem:
             component = getattr(self.energy_system, component_name)
+            dict_of_units = {}
+            if component_name in self.energy_system.units:
+                dict_of_units = self.energy_system.units[component_name]
             if index_names is not None:
                 index_list = index_names
             elif set_time_steps is not None:
@@ -691,7 +719,7 @@ class OptimizationSetup(object):
             if index_names is None:
                 raise ValueError(f"Index names for {component_name} not specified")
             custom_set, index_list = calling_class.create_custom_set(index_names, self)
-            component_data, attribute_is_series = self.get_attribute_of_all_elements(calling_class, component_name, capacity_types=capacity_types, return_attribute_is_series=True)
+            component_data, dict_of_units, attribute_is_series = self.get_attribute_of_all_elements(calling_class, component_name, capacity_types=capacity_types, return_attribute_is_series=True)
             if np.size(custom_set):
                 if attribute_is_series:
                     component_data = pd.concat(component_data, keys=component_data.keys())
@@ -700,7 +728,7 @@ class OptimizationSetup(object):
                 component_data = self.check_for_subindex(component_data, custom_set)
         if isinstance(component_data,pd.Series) and not isinstance(component_data.index,pd.MultiIndex):
             component_data.index = pd.MultiIndex.from_product([component_data.index.to_list()])
-        return component_data, index_list
+        return component_data, index_list, dict_of_units
 
     def check_for_subindex(self, component_data, custom_set):
         """ this method checks if the custom_set can be a subindex of component_data and returns subindexed component_data

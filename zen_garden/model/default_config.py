@@ -141,7 +141,7 @@ class System(Subscriptable):
     use_rolling_horizon: bool = False
     years_in_rolling_horizon: int = 5
     use_capacities_existing: bool = True
-    use_foresight_error:bool = False
+    use_foresight_error: bool = False
 
 
 class SolverOptions(Subscriptable):

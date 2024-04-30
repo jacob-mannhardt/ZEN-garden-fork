@@ -93,7 +93,7 @@ class DataInput:
         self.save_values_of_attribute(df_output=df_output, file_name=file_name)
         # extract foresight error data
         if self.system.use_foresight_error:
-            self.extract_foresight_error_data(file_name, index_sets, time_steps)
+            self.extract_foresight_error_data(file_name, index_sets, unit_category,time_steps)
         # finally apply the scenario_factor
         return df_output*scenario_factor
 
@@ -554,7 +554,7 @@ class DataInput:
                 has_unit = True
         return df_input, has_unit
 
-    def extract_foresight_error_data(self, file_name, index_sets, time_steps):
+    def extract_foresight_error_data(self, file_name, index_sets, unit_category,time_steps):
         """
         Extract the foresight error data for a parameter
         :param file_name: name of selected file.
@@ -565,7 +565,7 @@ class DataInput:
         suffix = "_foresight_error"
         file_name_foresight_error = file_name + suffix
         if file_name_foresight_error in self.attribute_dict:
-            output = self.extract_input_data(file_name_foresight_error, index_sets, time_steps)
+            output = self.extract_input_data(file_name_foresight_error, index_sets, unit_category,time_steps)
             self.element.foresight_error_parameters[file_name] = output
 
     def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None, manual_default_value=None, subelement=None):

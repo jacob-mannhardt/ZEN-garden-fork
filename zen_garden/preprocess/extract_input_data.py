@@ -92,7 +92,7 @@ class DataInput:
         # save parameter values for analysis of numerics
         self.save_values_of_attribute(df_output=df_output, file_name=file_name)
         # extract foresight error data
-        if self.system["use_foresight_error"]:
+        if self.system.use_foresight_error:
             self.extract_foresight_error_data(file_name, index_sets, time_steps)
         # finally apply the scenario_factor
         return df_output*scenario_factor

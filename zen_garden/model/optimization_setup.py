@@ -290,8 +290,8 @@ class OptimizationSetup(object):
         attribute_is_series = False
         for element in class_elements:
             if not capacity_types:
-                dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes)
-                dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name, dict_of_attributes,cls,index_names)
+                dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes,dict_of_units)
+                dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name, dict_of_attributes,index_names)
                 if attribute_is_series_temp:
                     attribute_is_series = attribute_is_series_temp
             # if extracted for both capacity types
@@ -299,8 +299,8 @@ class OptimizationSetup(object):
                 for capacity_type in self.system["set_capacity_types"]:
                     # append energy only for storage technologies
                     if capacity_type == self.system["set_capacity_types"][0] or element.name in self.system["set_storage_technologies"]:
-                        dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes, capacity_type)
-                        dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,dict_of_attributes,cls,index_names,capacity_type)
+                        dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes,dict_of_units, capacity_type)
+                        dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,dict_of_attributes,index_names,capacity_type)
                         if attribute_is_series_temp:
                             attribute_is_series = attribute_is_series_temp
         if return_attribute_is_series:
@@ -380,7 +380,7 @@ class OptimizationSetup(object):
                 dict_of_attributes[element.name] = attribute
         return dict_of_attributes, attribute_is_series, dict_of_units
 
-    def get_foresight_error_attribute(self,element, attribute_name, dict_of_attributes,cls,index_names,capacity_type=None):
+    def get_foresight_error_attribute(self,element, attribute_name, dict_of_attributes,index_names,capacity_type=None):
         """
         overwrite attribute value with foresight error attribute if it exists
         :param element: element of class
@@ -391,7 +391,7 @@ class OptimizationSetup(object):
         :param capacity_type: type of capacity
         :return: dict_of_attributes
         """
-        if self.system["use_foresight_error"]:
+        if self.system.use_foresight_error:
             if attribute_name in element.foresight_error_parameters:
                 if "set_time_steps_yearly" not in index_names:
                     raise NotImplementedError("Foresight error only implemented for yearly parameters")
@@ -407,12 +407,6 @@ class OptimizationSetup(object):
                 else:
                     dict_of_attributes[element.name] = attribute_foresight_error
 
-                # elif "set_time_steps_operation" in index_names:
-                #     # overwrite for operation parameter
-                #     idx_time = idx.get_level_values("set_time_steps_operation").unique()
-                # elif "set_time_steps_storage" in index_names:
-                #     # overwrite for storage parameter (no such parameter exists yet)
-                #     pass
         return dict_of_attributes
 
     def get_attribute_of_specific_element(self, cls, element_name: str, attribute_name: str):

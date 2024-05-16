@@ -141,7 +141,6 @@ class Solver(Subscriptable):
     round_parameters: bool = True
     rounding_decimal_points_capacity: int = 4
     analyze_numerics: bool = False
-    use_symbolic_labels: bool = False
 
 
 class TimeSeriesAggregation(Subscriptable):

@@ -506,6 +506,8 @@ class OptimizationSetup(object):
     def analyze_numerics(self):
         """ get largest and smallest matrix coefficients and RHS """
         if self.solver["analyze_numerics"]:
+            logging.warning("Analyzing numerics is currently disabled due to performance reasons")
+            return
             largest_rhs = [None, 0]
             smallest_rhs = [None, np.inf]
             largest_coeff = [None, 0]
@@ -545,6 +547,7 @@ class OptimizationSetup(object):
                 coords_idx_max = np.where((variables == var_max) & (coeffs == coeff_max))
                 coords_max = [cons.lhs.coords.indexes[dim][idx[0]] for dim, idx in zip(cons.lhs.coords.dims, coords_idx_max[:-1])]
                 if 0.0 < coeff_min < smallest_coeff[1]:
+                    # version_tuple is a method in linopy>=0.3.9 and a tuple before
                     if lp.version.version_tuple[1] <= 1: # check if linopy version is lower than 0.2.0
                         smallest_coeff[0] = (f"{cons.name}{coords_min}", lp.constraints.print_single_expression([coeff_min], [var_min], self.model))
                     else:

@@ -142,7 +142,6 @@ class Solver(Subscriptable):
     rounding_decimal_points_capacity: int = 4
     analyze_numerics: bool = False
 
-
 class TimeSeriesAggregation(Subscriptable):
     slv: Solver = Solver()
     clusterMethod: str = "hierarchical"

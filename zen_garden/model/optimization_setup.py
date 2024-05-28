@@ -448,7 +448,7 @@ class OptimizationSetup(object):
         # define and construct components of self.model
         Element.construct_model_components(self)
         # find smallest and largest coefficient and RHS
-        self.analyze_numerics() # TODO slow!
+        self.analyze_numerics()
 
     def get_optimization_horizon(self):
         """ returns list of optimization horizon steps """
@@ -687,7 +687,7 @@ class OptimizationSetup(object):
     def analyze_numerics(self):
         """ get largest and smallest matrix coefficients and RHS """
         if self.solver["analyze_numerics"]:
-            logging.info("\n--- Analyze Matrix Ranges ---\n")
+            logging.info("\n--- Analyze matrix ranges ---\n")
             flat = self.model.constraints.flat
             # coeffs
             coeffs = flat["coeffs"].abs()

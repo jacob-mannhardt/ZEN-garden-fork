@@ -896,10 +896,6 @@ class TechnologyRules(GenericRule):
         rhs_an = self.align_and_mask(rhs_an, mask_inf_tdr)
         lhs_sn = self.align_and_mask(lhs_sn, mask_inf_tdr_sum)
         rhs_sn = self.align_and_mask(rhs_sn, mask_inf_tdr_sum)
-        # lhs_an = lhs_an.where(mask_inf_tdr)
-        # rhs_an = rhs_an.where(mask_inf_tdr)
-        # lhs_sn = lhs_sn.where(mask_inf_tdr_sum)
-        # rhs_sn = rhs_sn.where(mask_inf_tdr_sum)
         # combine
         constraints_sn = lhs_sn <= rhs_sn
         constraints_an = lhs_an <= rhs_an

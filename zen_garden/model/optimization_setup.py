@@ -63,7 +63,6 @@ class OptimizationSetup(object):
         self.constraints = None
         self.sets = None
 
-
         # sorted list of class names
         element_classes = self.dict_element_classes.keys()
         carrier_classes = [element_name for element_name in element_classes if "Carrier" in element_name]
@@ -96,11 +95,6 @@ class OptimizationSetup(object):
 
         # initialize Scaling object
         self.scaling = Scaling(self.model, self.solver['scaling_iterations'], self.solver['scaling_algorithm'])
-
-
-
-
-
 
     def create_paths(self):
         """

@@ -717,7 +717,7 @@ class Scaling:
     This class scales the optimization model before solving it and rescales the solution
     """
     def __init__(self, model, iterations=3, algorithm="geom"):
-        #optimization model to perform scaling on
+        # optimization model to perform scaling on
         self.model = model
         self.iterations = iterations
         self.algorithm = algorithm

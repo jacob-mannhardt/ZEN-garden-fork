@@ -987,7 +987,3 @@ class Scaling:
                 # A_abs = np.abs(self.A_matrix[self.A_matrix != 0])
                 # print(f"After iteration {i}: min {A_abs.min()}, max {A_abs.max()}")
                 self.print_numerics(i)
-
-
-
-

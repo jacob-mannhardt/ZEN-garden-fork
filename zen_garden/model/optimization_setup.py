@@ -497,6 +497,7 @@ class OptimizationSetup(object):
         :param step_horizon: step of the rolling horizon """
 
         if self.system["use_rolling_horizon"]:
+            self.step_horizon = step_horizon
             time_steps_yearly_horizon = self.steps_horizon[step_horizon]
             base_time_steps_horizon = self.energy_system.time_steps.decode_yearly_time_steps(time_steps_yearly_horizon)
             # overwrite aggregated time steps - operation

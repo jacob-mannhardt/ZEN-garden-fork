@@ -479,8 +479,11 @@ class OptimizationSetup(object):
 
         :param step_horizon: step of the rolling horizon
         :return decision_horizon: list of time steps in the decision horizon """
-        next_optimization_step = self.optimized_time_steps[self.optimized_time_steps.index(step_horizon) + 1]
-        decision_horizon = list(range(step_horizon, next_optimization_step))
+        if step_horizon == self.optimized_time_steps[-1]:
+            decision_horizon = [step_horizon]
+        else:
+            next_optimization_step = self.optimized_time_steps[self.optimized_time_steps.index(step_horizon) + 1]
+            decision_horizon = list(range(step_horizon, next_optimization_step))
         return decision_horizon
 
     def set_base_configuration(self, scenario="", elements={}):

@@ -547,13 +547,9 @@ class OptimizationSetup(object):
         if self.model.termination_condition == 'optimal':
             self.optimality = True
         elif self.model.termination_condition == "suboptimal":
-            logging.info("The optimization is suboptimal")
+            logging.warning("The optimization is suboptimal")
             self.optimality = True
-        elif self.model.termination_condition == "infeasible":
-            logging.info("The optimization is infeasible")
-            self.optimality = False
         else:
-            logging.info("The optimization is infeasible or unbounded, or finished with an error")
             self.optimality = False
 
     def write_IIS(self):

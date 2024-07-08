@@ -22,7 +22,7 @@ from pathlib import Path
 from zen_garden.model.objects.technology.technology import Technology
 from zen_garden.model.objects.carrier.carrier import Carrier
 
-import bisect
+import time
 
 
 # enable Deprecation Warnings
@@ -721,23 +721,21 @@ class Scaling:
     """
     This class scales the optimization model before solving it and rescales the solution
     """
-    def __init__(self, model, iterations=3, algorithm="geom", include_rhs = True):
-        # optimization model to perform scaling on
+    def __init__(self, model, algorithm=["geom"], include_rhs = True):
+        #optimization model to perform scaling on
         self.model = model
-        self.iterations = iterations
         self.algorithm = algorithm
         self.include_rhs = include_rhs
 
     def initiate_A_matrix(self):
         self.A_matrix = self.model.constraints.to_matrix(filter_missings=False)
-        self.A_matrix_copy = self.A_matrix.copy()
+        self.A_matrix_copy = self.A_matrix.copy() #necessary for printing of numerics
         self.D_r_inv = np.ones(self.A_matrix.get_shape()[0])
         self.D_c_inv = np.ones(self.A_matrix.get_shape()[1])
         self.rhs = []
         for name in self.model.constraints:
             constraint = self.model.constraints[name]
             labels = constraint.labels.data
-            #mask = np.where(labels != -2) #some arbitrary value to get all entries
             mask = np.atleast_1d(labels != -2).nonzero()
             try:
                 self.rhs += constraint.rhs.data[mask].tolist()
@@ -745,7 +743,7 @@ class Scaling:
                 self.rhs += [constraint.rhs.data]
         self.rhs = np.array(self.rhs) #np.abs(np.array(self.rhs)) -> could get rid of all the other np.ads in iter_sclaing() etc. but then print numerics only includes absolute values
         self.rhs[self.rhs == np.inf] = 0
-        self.rhs_copy = self.rhs.copy()
+        self.rhs_copy = self.rhs.copy() #necessary for printing of numerics
 
     def re_scale(self):
         model = self.model
@@ -754,12 +752,21 @@ class Scaling:
             mask = np.where(var.labels.data != -1)
             var.solution.data[mask] = var.solution.data[mask] * (self.D_c_inv[var.labels.data[mask]])
 
+    def analyze_numerics(self):
+        #print numerics if no scaling is activated
+        self.initiate_A_matrix()
+        self.print_numerics(0,True)
+
     def run_scaling(self):
         #cp = cProfile.Profile()
         #cp.enable()
+        logging.info(f"\n--- Start Scaling ---\n")
+        t0 = time.perf_counter()
         self.initiate_A_matrix()
         self.iter_scaling()
         self.overwrite_problem()
+        t1 = time.perf_counter()
+        logging.info(f"\nTime to Scale Problem: {t1 - t0:0.1f} seconds\n")
         #cp.disable()
         #cp.print_stats("cumtime")
 
@@ -771,7 +778,6 @@ class Scaling:
         mask_variables = constraint.vars.data
         rhs = constraint.rhs.data
         # Find the indices where constraint_mask is not equal to -1
-        #indices = np.where(mask_skip_constraints != -1)
         indices = np.atleast_1d(mask_skip_constraints != -1).nonzero()
         if indices[0].size > 0:
             # Update rhs
@@ -816,14 +822,10 @@ class Scaling:
         self.D_r_inv[self.D_r_inv == np.inf] = 1
         self.D_c_inv = np.nan_to_num(self.D_c_inv, nan=1)
         self.D_r_inv = np.nan_to_num(self.D_r_inv, nan=1)
-        # adjust column scaling factors to be of the power of two -> otherwise numerical errors -> this now done during iter_scaling
-        #self.D_c_inv = np.power(2, np.round(np.emath.logn(2, self.D_c_inv)))
-        #self.D_r_inv = np.power(2, np.round(np.emath.logn(2, self.D_r_inv)))
         #pre-check rows -> otherwise inconsistency in scaling
         for name_con in self.model.constraints:
             if self.model.constraints[name_con].coeffs.dtype == int:
                 self.adjust_scaling_factors_of_skipped_rows(name_con)
-        #ToDo Print Numerics of Last Iteration here -> maybe multiply with Copy of A matrix -> then use print numerics
         self.print_numerics_of_last_iteration()
         #Include adjust upper/lower bounds of variables that are scaled
         self.adjust_upper_lower_bounds_variables()
@@ -872,10 +874,21 @@ class Scaling:
     def print_numerics_of_last_iteration(self):
         self.A_matrix =  sp.sparse.diags(self.D_r_inv, 0, format='csr').dot(self.A_matrix_copy).dot(sp.sparse.diags(self.D_c_inv, 0, format='csr'))
         self.rhs = self.rhs_copy * self.D_r_inv
-        self.print_numerics(self.iterations)
+        self.print_numerics(len(self.algorithm))
 
-    #ToDO so far rhs values only positive due to np.abs(rhs) definition in initiate_A_matrix -> now fixed but therefore more np.abs() calls
-    def print_numerics(self,i):
+    def generate_numerics_string(self,label,index=None,A_matrix=None,var=None, is_rhs=False):
+        if is_rhs:
+            cons_str = self.model.constraints.get_label_position(label)
+            cons_str = cons_str[0] + str(list(cons_str[1].values()))
+            return f"{self.rhs[label]} in {cons_str}"
+        else:
+            cons_str = self.model.constraints.get_label_position(label)
+            cons_str = cons_str[0] + str(list(cons_str[1].values()))
+            var_str = self.model.variables.get_label_position(var)
+            var_str = var_str[0] + str(list(var_str[1].values()))
+            return f"{A_matrix[index]} {var_str} in {cons_str}"
+
+    def print_numerics(self,i,no_scaling = False):
         data_coo = self.A_matrix.tocoo()
         A_abs = np.abs(data_coo.data)
         index_max = np.argmax(A_abs)
@@ -884,36 +897,27 @@ class Scaling:
         col_max = data_coo.col[index_max]
         row_min = data_coo.row[index_min]
         col_min = data_coo.col[index_min]
-        #Max Matrix String
-        cons_str = self.model.constraints.get_label_position(row_max)
-        cons_str = cons_str[0] + str(list(cons_str[1].values()))
-        var_str = self.model.variables.get_label_position(col_max)
-        var_str = var_str[0] + str(list(var_str[1].values()))
-        cons_str_max = f"{A_abs[index_max]} {var_str} in {cons_str}"
-        #Min Matrix String
-        cons_str = self.model.constraints.get_label_position(row_min)
-        cons_str = cons_str[0] + str(list(cons_str[1].values()))
-        var_str = self.model.variables.get_label_position(col_min)
-        var_str = var_str[0] + str(list(var_str[1].values()))
-        cons_str_min = f"{A_abs[index_min]} {var_str} in {cons_str}"
-        #RHS values
         rhs_max_index = np.where(np.abs(self.rhs) == np.max(np.abs(self.rhs)[self.rhs != np.inf]))[0][0]
         rhs_min_index = np.where(np.abs(self.rhs) == np.min(np.abs(self.rhs)[np.abs(self.rhs) > 0]))[0][0]
-        cons_str_rhs_max = self.model.constraints.get_label_position(rhs_max_index)
-        cons_str_rhs_max = cons_str_rhs_max[0] + str(list(cons_str_rhs_max[1].values()))
-        cons_rhs_max = f"{self.rhs[rhs_max_index]} in {cons_str_rhs_max}"
-        cons_str_rhs_min = self.model.constraints.get_label_position(rhs_min_index)
-        cons_str_rhs_min = cons_str_rhs_min[0] + str(list(cons_str_rhs_min[1].values()))
-        cons_rhs_min = f"{self.rhs[rhs_min_index]} in {cons_str_rhs_min}"
+        #Max Matrix String
+        cons_str_max = self.generate_numerics_string(row_max, index=index_max,A_matrix=data_coo.data,var=col_max)
+        #Min Matrix String
+        cons_str_min = self.generate_numerics_string(row_min, index=index_min,A_matrix=data_coo.data,var=col_min)
+        #RHS values
+        cons_rhs_max = self.generate_numerics_string(rhs_max_index, is_rhs=True)
+        cons_rhs_min = self.generate_numerics_string(rhs_min_index, is_rhs=True)
         #Prints
-        logging.info(f"\n--- Numerics at iteration {i} ---\n")
+        if no_scaling:
+            logging.info(f"\n--- Analyze Numerics ---\n")
+        else:
+            logging.info(f"\n--- Numerics at iteration {i} ---\n")
         print("Max value of A matrix: " + cons_str_max)
         print("Min value of A matrix: " + cons_str_min)
         print("Max value of RHS: " + cons_rhs_max)
         print("Min value of RHS: " + cons_rhs_min)
         print("Numerical Range:")
         print("LHS : {}".format([format(A_abs[index_min],".1e"),format(A_abs[index_max],".1e")]))
-        print("RHS : {}".format([format(self.rhs[rhs_min_index],".1e"),format(self.rhs[rhs_max_index],".1e")]))
+        print("RHS : {}".format([format(np.abs(self.rhs[rhs_min_index]),".1e"),format(np.abs(self.rhs[rhs_max_index]),".1e")]))
 
 
 
@@ -924,45 +928,49 @@ class Scaling:
         #initiate iteration counter
         i = 0
         self.print_numerics(i)
-        while i<self.iterations:
+        for algo in self.algorithm:
             i+=1
             #update row scaling vector
-            if self.algorithm == "infnorm":
+            if algo == "infnorm":
                 #update row scaling vector
                 max_rows = sp.sparse.linalg.norm(self.A_matrix, ord=np.inf, axis=1)
                 if self.include_rhs:
                     max_rows = np.maximum(max_rows, np.abs(self.rhs), out=max_rows, where=self.rhs != np.inf)
+                max_rows[max_rows == 0] = 1 #to avoid warning outputs
                 r_vector = 1 / max_rows
                 r_vector = np.power(2, np.round(np.emath.logn(2, r_vector)))
                 #update A and row scaling matrix
                 self.update_A(r_vector,1)
                 #update column scaling vector
                 max_cols = sp.sparse.linalg.norm(self.A_matrix, ord=np.inf, axis=0)
+                max_cols[max_cols == 0] = 1 #to avoid warning outputs
                 c_vector = 1/max_cols
                 c_vector = np.power(2, np.round(np.emath.logn(2, c_vector)))
                 #update A and column scaling matrix
                 self.update_A(c_vector,0)
                 # Print Numerics
-                if i < self.iterations:
+                if i < len(self.algorithm):
                     self.print_numerics(i)
 
             #ToDo add rhs to row scaling
-            elif self.algorithm == "full_geom":
+            elif algo == "full_geom":
                 #update row scaling vector
                 geom = self.get_full_geom(self.A_matrix, 0)
                 r_vector = 1 / geom
+                r_vector = np.power(2, np.round(np.emath.logn(2, r_vector)))
                 #update A and row scaling matrix
                 self.update_A(r_vector,1)
                 #update column scaling vector
                 geom = self.get_full_geom(self.A_matrix.tocsc(), 1)
                 c_vector = 1 / geom
+                c_vector = np.power(2, np.round(np.emath.logn(2, c_vector)))
                 #update A and column scaling matrix
                 self.update_A(c_vector,0)
                 # Print Numerics
-                if i < self.iterations:
+                if i < len(self.algorithm):
                     self.print_numerics(i)
 
-            elif self.algorithm == "geom":
+            elif algo == "geom":
                 # update row scaling vector
                 max_rows = sp.sparse.linalg.norm(self.A_matrix, ord=np.inf, axis=1)
                 min_rows = self.get_min(self.A_matrix)
@@ -985,10 +993,10 @@ class Scaling:
                 # update A and column scaling matrix
                 self.update_A(c_vector,0)
                 #Print Numerics
-                if i<self.iterations:
+                if i < len(self.algorithm):
                     self.print_numerics(i)
 
-            elif self.algorithm == "arithm":
+            elif algo == "arithm":
                 #update row scaling vector
                 mean_rows = sp.sparse.linalg.norm(self.A_matrix, ord=1, axis=1)/(np.diff(self.A_matrix.indptr)+np.ones(self.A_matrix.get_shape()[0]))
                 if self.include_rhs:
@@ -1004,5 +1012,5 @@ class Scaling:
                 #update A and column scaling matrix
                 self.update_A(r_vector,0)
                 # Print Numerics
-                if i < self.iterations:
+                if i < len(self.algorithm):
                     self.print_numerics(i)

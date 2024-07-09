@@ -8,7 +8,7 @@ Default configuration. Changes from the default values are specified in config.p
 """
 
 from pydantic import BaseModel, ConfigDict
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 
 class Subscriptable(BaseModel, extra="allow"):
@@ -82,9 +82,6 @@ class HeaderDataInputs(Subscriptable):
     set_technologies_existing: str = "technology_existing"
     set_capacity_types: str = "capacity_type"
 
-
-
-
 class System(Subscriptable):
     model_config = ConfigDict(extra="allow")
     set_carriers: list[str] = []
@@ -119,7 +116,6 @@ class System(Subscriptable):
 class SolverOptions(Subscriptable):
     pass
 
-
 class Solver(Subscriptable):
     name: str = "highs"
     solver_options: SolverOptions = SolverOptions()
@@ -143,7 +139,7 @@ class Solver(Subscriptable):
     analyze_numerics: bool = True
     use_scaling: bool = True
     scaling_include_rhs: bool = False
-    scaling_algorithm: list[str] = ["geom","geom","geom"]
+    scaling_algorithm: Union[list[str],str] = ["geom","geom","geom"]
 
 
 
@@ -158,7 +154,6 @@ class TimeSeriesAggregation(Subscriptable):
     resolution: int = 1
     segmentation: bool = False
     noSegments: int = 12
-
 
 class Analysis(Subscriptable):
     dataset: str = ""
@@ -177,13 +172,8 @@ class Analysis(Subscriptable):
     earliest_year_of_data: int = 1900
 
 class Config(Subscriptable):
-    # analysis: dict = Analysis().model_dump()
     analysis: Analysis = Analysis()
-
-    # solver: dict = Solver().model_dump()
     solver: Solver = Solver()
-
     system: System = System()
-    # system: System = System()
 
     scenarios: dict[str, Any] = {"": {}}

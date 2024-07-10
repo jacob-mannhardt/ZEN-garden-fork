@@ -721,8 +721,13 @@ class Scaling:
     """
     This class scales the optimization model before solving it and rescales the solution
     """
-    def __init__(self, model, algorithm=["geom"], include_rhs = True):
-        #optimization model to perform scaling on
+    def __init__(self, model, algorithm=None, include_rhs = True):
+        # optimization model to perform scaling on
+        if algorithm is None:
+            algorithm = ["geom"]
+        elif type(algorithm) == str:
+            logging.warning("Please provide a list of scaling algorithms, not a single string.")
+            algorithm = [algorithm]
         self.model = model
         self.algorithm = algorithm
         self.include_rhs = include_rhs

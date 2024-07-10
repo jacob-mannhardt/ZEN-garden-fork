@@ -896,8 +896,9 @@ class Scaling:
     def print_numerics(self,i,no_scaling = False):
         data_coo = self.A_matrix.tocoo()
         A_abs = np.abs(data_coo.data)
-        index_max = np.argmax(A_abs)
-        index_min = np.argmin(A_abs)
+        A_abs_nonzero = np.ma.masked_equal(A_abs,0.0,copy=False)
+        index_max = np.argmax(A_abs_nonzero)
+        index_min = np.argmin(A_abs_nonzero)
         row_max = data_coo.row[index_max]
         col_max = data_coo.col[index_max]
         row_min = data_coo.row[index_min]

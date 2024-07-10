@@ -93,8 +93,6 @@ class OptimizationSetup(object):
         # conduct time series aggregation
         self.time_series_aggregation = TimeSeriesAggregation(energy_system=self.energy_system)
 
-        # initialize Scaling object
-        self.scaling = Scaling(self.model, self.solver['scaling_algorithm'], self.solver['scaling_include_rhs'])
 
     def create_paths(self):
         """

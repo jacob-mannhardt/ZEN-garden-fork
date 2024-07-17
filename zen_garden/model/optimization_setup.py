@@ -405,15 +405,22 @@ class OptimizationSetup(object):
         """
         if self.system.use_foresight_error:
             if attribute_name in element.foresight_error_parameters:
-                if "set_time_steps_yearly" not in index_names:
-                    raise NotImplementedError("Foresight error only implemented for yearly parameters")
-                attribute_foresight_error = element.foresight_error_parameters[attribute_name]
+                decision_horizon = self.get_decision_horizon(self.step_horizon)
+                if "set_time_steps_yearly" in index_names:
+                    attribute_foresight_error = element.foresight_error_parameters[attribute_name]
+                    first_values = attribute_foresight_error.index.get_level_values("year").isin(decision_horizon)
+                elif "set_time_steps_operation" in index_names:
+                    # get aggregated time series
+                    attribute_foresight_error = getattr(element,attribute_name + "_foresight_error")
+                    # get time steps corresponding to decision horizon
+                    first_values = np.sort(np.concatenate([self.energy_system.time_steps.get_time_steps_year2operation(dh) for dh in decision_horizon]))
+                    first_values = attribute_foresight_error.index.get_level_values("time").isin(first_values)
+                else:
+                    raise AssertionError(f"Foresight only implemented for yearly or operational time steps. Wrong format for element {element.name}")
                 if capacity_type:
                     attribute_noerror = dict_of_attributes[(element.name, capacity_type)]
                 else:
                     attribute_noerror = dict_of_attributes[element.name]
-                decision_horizon = self.get_decision_horizon(self.step_horizon)
-                first_values = attribute_foresight_error.index.get_level_values("year").isin(decision_horizon)
                 attribute_foresight_error[first_values] = attribute_noerror[first_values]
                 if capacity_type:
                     dict_of_attributes[(element.name, capacity_type)] = attribute_foresight_error

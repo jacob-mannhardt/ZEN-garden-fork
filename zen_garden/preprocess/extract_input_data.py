@@ -571,7 +571,11 @@ class DataInput:
         file_name_foresight_error = file_name + suffix
         if file_name_foresight_error in self.attribute_dict:
             output = self.extract_input_data(file_name_foresight_error, index_sets, unit_category,time_steps)
-            self.element.foresight_error_parameters[file_name] = output
+            if time_steps == "set_time_steps_yearly":
+                self.element.foresight_error_parameters[file_name] = output
+            elif time_steps == "set_base_time_steps_yearly":
+                self.element.foresight_error_parameters[file_name] = output
+                self.element.raw_time_series[file_name_foresight_error] = output
 
     def create_default_output(self, index_sets, unit_category, file_name=None, time_steps=None, manual_default_value=None, subelement=None):
         """ creates default output dataframe

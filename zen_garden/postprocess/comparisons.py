@@ -251,16 +251,32 @@ def compare_component_values(
         if not val_0.index.equals(val_1.index):
             mismatched_index = True
 
+    comparison_df_index = None
     if mismatched_index:
         logging.info(
             f"Component {component_name} does not have matching index or columns"
         )
-        comparison_df = pd.concat([val_0, val_1], keys=result_names, axis=1)
-        comparison_df = comparison_df.sort_index(axis=1, level=1)
-        return comparison_df
+        common_index = val_0.index.intersection(val_1.index)
+        different_index = val_0.index.symmetric_difference(val_1.index)
+        comparison_df_index = pd.concat(
+            [val_0, val_1],
+            keys=result_names,
+            axis=1,
+        ).loc[different_index]
+        comparison_df_index = comparison_df_index.sort_index(axis=1, level=1)
+        val_0 = val_0.loc[common_index]
+        val_1 = val_1.loc[common_index]
+        # if the shape is still not the same, return the full comparison_df
+        if val_1.shape != val_0.shape:
+            mismatched_shape = True
+        else:
+            mismatched_shape = False
     # if not mismatched_shape:
     if not mismatched_shape:
-        return _get_different_vals(val_0, val_1, result_names, rtol)
+        comparison_df = _get_different_vals(val_0, val_1, result_names, rtol)
+        if comparison_df_index is not None:
+            comparison_df = pd.concat([comparison_df, comparison_df_index], axis=0)
+        return comparison_df
     else:
         # check if the dataframe has only constant values along axis 1
         if isinstance(val_0, pd.DataFrame) and (val_0.nunique(axis=1) == 1).all():
@@ -271,8 +287,13 @@ def compare_component_values(
             logging.info(f"Component {component_name} has different values")
             comparison_df = pd.concat([val_0, val_1], keys=result_names, axis=1)
             comparison_df = comparison_df.sort_index(axis=1, level=1)
+            if comparison_df_index is not None:
+                comparison_df = pd.concat([comparison_df, comparison_df_index], axis=0)
             return comparison_df
-        return _get_different_vals(val_0, val_1, result_names, rtol)
+        comparison_df = _get_different_vals(val_0, val_1, result_names, rtol)
+        if comparison_df_index is not None:
+            comparison_df = pd.concat([comparison_df, comparison_df_index], axis=0)
+        return comparison_df
 
 
 def compare_model_values(

@@ -465,10 +465,14 @@ class ConversionTechnologyRules(GenericRule):
         capex_specific_conversion = capex_specific_conversion.rename({old: new for old, new in zip(list(capex_specific_conversion.dims),
             ["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"])})
         capex_specific_conversion = capex_specific_conversion.broadcast_like(self.variables["capacity_approximation"].lower)
+        techs = self.sets["set_conversion_technologies"]
+        nodes = self.sets["set_nodes"]
+        capacity_addition_scrapped = self.variables["capacity_addition_scrapped"].loc[techs, "power", nodes].rename(
+            {"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
         mask = ~np.isnan(capex_specific_conversion)
         lhs = lp.merge(
             [1 * self.variables["capex_approximation"],
-            - capex_specific_conversion * (self.variables["capacity_approximation"] + self.parameters.capex_share_scrapping*self.variables["capacity_addition_scrapped"])],
+            - capex_specific_conversion * (self.variables["capacity_approximation"] + self.parameters.capex_share_scrapping*capacity_addition_scrapped)],
             compat="broadcast_equals")
         lhs = self.align_and_mask(lhs, mask)
         rhs = 0

@@ -468,7 +468,7 @@ class ConversionTechnologyRules(GenericRule):
         mask = ~np.isnan(capex_specific_conversion)
         lhs = lp.merge(
             [1 * self.variables["capex_approximation"],
-            - capex_specific_conversion * self.variables["capacity_approximation"]],
+            - capex_specific_conversion * (self.variables["capacity_approximation"] + self.parameters.capex_share_scrapping*self.variables["capacity_addition_scrapped"])],
             compat="broadcast_equals")
         lhs = self.align_and_mask(lhs, mask)
         rhs = 0

@@ -20,11 +20,6 @@ dependencies:
   - gurobi
   - pytables
   - pydantic
-
-  # additional packages for dev
-  - build
-  - twine
-
   - pip:
       - tsam
       - h5py
@@ -35,6 +30,9 @@ dependencies:
       - linopy<=0.3.10
       - sphinx
       - myst-parser
+      # additional packages for dev
+      - build
+      - twine
       - -e .
 
 # conda env create -f zen_garden_env_dev.yml

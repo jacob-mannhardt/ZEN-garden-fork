@@ -64,10 +64,12 @@ jobs:
 
     - name: Build distribution
       run: |
+        conda activate zen-garden-dev
         python -m build
 
     - name: Publish to TestPyPI
       run: |
+        conda activate zen-garden-dev
         python -m twine upload --repository testpypi dist/*
       env:
         TWINE_USERNAME: __token__

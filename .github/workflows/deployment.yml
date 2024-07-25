@@ -22,7 +22,7 @@ jobs:
         uses: tj-actions/changed-files@v41
         with:
           files: |
-            zen_garden_env.yml
+            zen_garden_env_dev.yml
 
       - name: Set Env
         # trigger if env file change or on schedule
@@ -40,7 +40,7 @@ jobs:
       with:
         miniforge-variant: Mambaforge
         miniforge-version: latest
-        activate-environment: zen-garden
+        activate-environment: zen-garden-dev
         use-mamba: true
       # date for the cache
     - name: Set cache date

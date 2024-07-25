@@ -1,0 +1,41 @@
+name: zen-garden-dev
+channels:
+  - conda-forge
+  - gurobi
+dependencies:
+  - python=3.11
+  - xarray
+  - cython
+  - pytest
+  - pip
+  - numpy
+  - pandas
+  - geopandas
+  - scipy
+  - coverage
+  - glpk
+  - pint
+  - matplotlib
+  - entsoe-py
+  - gurobi
+  - pytables
+  - pydantic
+
+  # additional packages for dev
+  - build
+  - twine
+
+  - pip:
+      - tsam
+      - h5py
+      - filelock
+      - ordered-set
+      - pyogrio
+      - psutil
+      - linopy<=0.3.10
+      - sphinx
+      - myst-parser
+      - -e .
+
+# conda env create -f zen_garden_env_dev.yml
+# conda remove --name zen-garden_dev --all

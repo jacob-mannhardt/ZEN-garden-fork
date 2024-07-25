@@ -50,12 +50,12 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: "/usr/share/miniconda3/envs/zen-garden"
-        key: linux-64-conda-${{ hashFiles('zen_garden_env.yml') }}-${{ env.DATE }}-${{ env.CACHE_NUMBER }}
+        key: linux-64-conda-${{ hashFiles('zen_garden_env_dev.yml') }}-${{ env.DATE }}-${{ env.CACHE_NUMBER }}
       id: cache
 
       # This step is cached in case the env file was not changed
     - name: Update environment
-      run: mamba env update -f zen_garden_env.yml
+      run: mamba env update -f zen_garden_env_dev.yml
       if: steps.cache.outputs.cache-hit != 'true'
 
     - name: Install package

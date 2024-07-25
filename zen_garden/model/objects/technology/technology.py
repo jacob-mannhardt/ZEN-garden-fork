@@ -891,7 +891,7 @@ class TechnologyRules(GenericRule):
         lifetime_existing = self.parameters.lifetime_existing
         lifetime = self.parameters.lifetime
         kdr_existing = (1 - knowledge_depreciation_rate) ** (delta_years + lifetime - lifetime_existing)
-        capacity_existing_total = capacity_existing + spillover_rate * (capacity_existing.sum("set_location") - capacity_existing).where(mask_technology_type, 0)
+
         capacity_existing_total_nosr = capacity_existing
         # build constraints for all nodes summed ("sn")
         lhs_sn = lp.merge(1*capacity_addition,-1*term_knowledge_no_spillover,-1*term_unbounded_addition, compat="broadcast_equals").sum("set_location")
@@ -905,6 +905,8 @@ class TechnologyRules(GenericRule):
         self.constraints.add_constraint("constraint_technology_diffusion_limit_total", constraints_sn)
         # build constraints for all nodes ("an") if spillover rate is not inf
         if spillover_rate != np.inf:
+            # existing capacities
+            capacity_existing_total = capacity_existing + spillover_rate * (capacity_existing.sum("set_location") - capacity_existing).where(mask_technology_type, 0)
             lhs_an = lp.merge(1*capacity_addition,-1*term_knowledge,-1*term_unbounded_addition, compat="broadcast_equals")
             rhs_an = tdr * (capacity_existing_total * kdr_existing).sum("set_technologies_existing") + self.parameters.capacity_addition_unbounded
             rhs_an = rhs_an.broadcast_like(lhs_an.const)

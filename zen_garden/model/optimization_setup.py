@@ -73,6 +73,12 @@ class OptimizationSetup(object):
         # step of optimization horizon
         self.step_horizon = 0
 
+        # foresight horizon type
+        self.fs_type_dependent_horizon = None
+
+        # foresight type
+        self.fs_type_operation = None
+
         # Init the energy system
         self.energy_system = EnergySystem(optimization_setup=self)
 
@@ -423,16 +429,32 @@ class OptimizationSetup(object):
         # find smallest and largest coefficient and RHS
         #self.analyze_numerics() -> Replaced through scaling
 
+    def set_fs_type(self, fs_type="Investment"):
+        # good practice TODO
+        """"""
+        # in nothing specified: use "Investment"
+        if fs_type == "Investment":
+            self.fs_type_operation = False
+            self.fs_type_dependent_horizon = self.system["years_in_rolling_horizon"]
+        elif fs_type == "Operation":
+            self.fs_type_operation = True
+            if self.system["years_in_rolling_horizon"] >= self.system["years_in_rolling_horizon_operation"]:
+                self.fs_type_dependent_horizon = self.system["years_in_rolling_horizon_operation"]
+            else:
+                raise Exception("Operation Horizon was set to be larger than the Investment Horizon")
+        else:
+            raise ValueError(f"Invalid type: {fs_type}. Expected 'Investment' or 'Operation'")
+
     def get_optimization_horizon(self):
         """ returns list of optimization horizon steps """
         # if using rolling horizon
         if self.system.use_rolling_horizon:
             assert self.system.years_in_rolling_horizon >= self.system.interval_between_optimizations, f"There must be more years in the rolling horizon than the interval between optimizations. years_in_rolling_horizon ({self.system.years_in_rolling_horizon}) < interval_between_optimizations ({self.system.interval_between_optimizations})"
-            self.years_in_horizon = self.system.years_in_rolling_horizon
-            time_steps_yearly = self.energy_system.set_time_steps_yearly
+            self.years_in_horizon = self.fs_type_dependent_horizon
+            time_steps_yearly = self.energy_system.set_time_steps_yearly_entire_horizon
             # skip interval_between_optimizations years
             self.optimized_time_steps = [year for year in time_steps_yearly if (year % self.system.interval_between_optimizations == 0 or year == time_steps_yearly[-1])]
-            self.steps_horizon = {year: list(range(year, min(year + self.years_in_horizon, max(time_steps_yearly) + 1))) for year in self.optimized_time_steps}
+            self.steps_horizon = {year: list(range(year, min(year + self.years_in_horizon, max(time_steps_yearly) + 1))) for year in time_steps_yearly}
         # if no rolling horizon
         else:
             self.years_in_horizon = len(self.energy_system.set_time_steps_yearly)
@@ -518,13 +540,16 @@ class OptimizationSetup(object):
         else:
             self.optimality = False
 
-    def write_IIS(self):
+    def write_IIS(self, scenario=None):
         """ write an ILP file to print the IIS if infeasible. Only possible for gurobi
         """
         if self.model.termination_condition == 'infeasible' and self.solver["name"] == "gurobi":
 
             output_folder = StringUtils.get_output_folder(self.analysis,self.system)
-            ilp_file = os.path.join(output_folder,"infeasible_model_IIS.ilp")
+            if scenario is not None:
+                ilp_file = os.path.join(output_folder,"scenario_" + scenario, "infeasible_model_IIS.ilp")
+            else:
+                ilp_file = os.path.join(output_folder,"infeasible_model_IIS.ilp")
             logging.info(f"Writing parsed IIS to {ilp_file}")
             parser = IISConstraintParser(ilp_file, self.model)
             parser.write_parsed_output()
@@ -584,6 +609,28 @@ class OptimizationSetup(object):
                             "capacity_investment_existing_energy", index_sets=["set_nodes", "set_time_steps_yearly"],
                             time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
                         tech.capex_capacity_existing_energy = tech.calculate_capex_of_capacities_existing(storage_energy=True)
+
+    def fix_new_capacity_addition_for_operation(self, step_horizon):
+        """ adds the newly built capacity to the existing capacity
+        :param step_horizon: step of the rolling horizon """
+        if self.system["use_rolling_horizon"]:
+            capacity_addition = self.model.solution["capacity_addition"].to_series().dropna()
+            invest_capacity = self.model.solution["capacity_investment"].to_series().dropna()
+
+            # get rid of this? =====================================================================================
+            rounding_value = 10 ** (-self.solver["rounding_decimal_points_capacity"])
+            capacity_addition[capacity_addition <= rounding_value] = 0
+            invest_capacity[invest_capacity <= rounding_value] = 0
+            # ======================================================================================================
+
+            time_steps_yearly_operation = self.energy_system.set_time_steps_yearly
+            # base_time_steps = self.energy_system.time_steps.decode_yearly_time_steps([step_horizon])
+            for tech in self.get_all_elements(Technology):
+                # new capacity
+                capacity_addition_tech = capacity_addition.loc[tech.name].unstack()
+                capacity_investment = invest_capacity.loc[tech.name].unstack()
+                tech.fix_new_capacity_addition_for_operation_tech(capacity_addition_tech, time_steps_yearly_operation)
+                tech.fix_new_capacity_investment_for_operation_tech(capacity_investment, time_steps_yearly_operation)
 
     def add_carbon_emission_cumulative(self, step_horizon):
         """ overwrite previous carbon emissions with cumulative carbon emissions

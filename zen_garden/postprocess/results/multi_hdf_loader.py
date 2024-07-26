@@ -290,15 +290,25 @@ class MultiHdfLoader(AbstractLoader):
         if self.has_rh:
             # If solution has rolling horizon, load the values for all the foresight
             # steps and combine them.
-            pattern = re.compile(r'^MF_\d+$')
+            if keep_raw is True:
+                pattern = re.compile(r'^MF_\d+(_investment_opt)?$')
+            else:
+                pattern = re.compile(r'^MF_\d+$')
             subfolder_names = list(filter(lambda x: pattern.match(x), os.listdir(scenario.path)))
             pd_series_dict = {}
 
             for subfolder_name in subfolder_names:
-                mf_idx = int(subfolder_name.replace("MF_", ""))
-                file_path = os.path.join(
-                    scenario.path, subfolder_name, component.file_name
-                )
+                # Check if the folder name ends with '_investment_opt'
+                if subfolder_name.endswith("_investment_opt"):
+                    # Remove 'MF_' prefix and '_investment_opt' suffix, then add '_inv' to the identifier
+                    mf_idx = subfolder_name.replace("MF_", "").replace("_investment_opt", "") + "_inv"
+                else:
+                    # For folders without the '_investment_opt' suffix, just remove the 'MF_' prefix
+                    mf_idx = subfolder_name.replace("MF_", "")
+
+                # Construct the file path
+                file_path = os.path.join(scenario.path, subfolder_name, component.file_name)
+                # Assuming get_df_from_path is a function that reads the file and returns a pandas DataFrame
                 pd_series_dict[mf_idx] = get_df_from_path(
                     file_path, component.name, data_type
                 )

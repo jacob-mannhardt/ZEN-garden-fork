@@ -1281,7 +1281,7 @@ class StringUtils:
                 f"\n--- Conduct optimization for rolling horizon step for {corresponding_year} ({steps_horizon.index(step) + 1} of {len(steps_horizon)}) {scenario_string}--- \n")
 
     @classmethod
-    def generate_folder_path(cls,config,scenario,scenario_dict,steps_horizon, step):
+    def generate_folder_path(cls,config,scenario,scenario_dict,steps_horizon, step, operation=False):
         """ generates the folder path for the results
         :param config: config of optimization
         :param scenario: name of scenario
@@ -1311,12 +1311,29 @@ class StringUtils:
 
         # handle myopic foresight
         if len(steps_horizon) > 1:
-            mf_f_string = f"MF_{step}"
-            # handle combination of MF and scenario analysis
-            if config.system["conduct_scenario_analysis"]:
-                subfolder = Path(subfolder), Path(mf_f_string)
+            if config.system["myopic_operation"] and config.system["years_in_rolling_horizon"] != \
+                config.system["years_in_rolling_horizon_operation"]:
+                if operation: # .fs_type_operation
+                    mf_f_string = f"MF_{step}"
+                    # handle combination of MF and scenario analysis
+                    if config.system["conduct_scenario_analysis"]:
+                        subfolder = Path(subfolder), Path(mf_f_string)
+                    else:
+                        subfolder = Path(mf_f_string)
+                else:
+                    mf_f_string = f"MF_{step}_investment_opt"
+                    # handle combination of MF and scenario analysis
+                    if config.system["conduct_scenario_analysis"]:
+                        subfolder = Path(subfolder), Path(mf_f_string)
+                    else:
+                        subfolder = Path(mf_f_string)
             else:
-                subfolder = Path(mf_f_string)
+                mf_f_string = f"MF_{step}"
+                # handle combination of MF and scenario analysis
+                if config.system["conduct_scenario_analysis"]:
+                    subfolder = Path(subfolder), Path(mf_f_string)
+                else:
+                    subfolder = Path(mf_f_string)
 
         return scenario_name,subfolder,param_map
 

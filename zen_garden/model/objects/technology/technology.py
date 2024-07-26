@@ -878,7 +878,7 @@ class TechnologyRules(GenericRule):
                 # annual knowledge addition
                 term_knowledge = capacity_addition_years + sr * term_spillover
                 term_knowledge = tdr*(term_knowledge * kdr).sum("set_time_steps_yearly_prev")
-        # unbounded market share --> only for same technology class
+        # unbounded market share --> only for same technology class and reference carrier
         capacity_previous = self.variables["capacity_previous"]
         market_share_unbounded = {
             (t,ot): self.parameters.market_share_unbounded if self.sets["set_reference_carriers"][t][0] == self.sets["set_reference_carriers"][ot][0] else 0

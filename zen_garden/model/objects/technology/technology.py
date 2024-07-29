@@ -547,8 +547,14 @@ class Technology(Element):
         # lifetime
         rules.constraint_technology_lifetime()
 
-        # limit diffusion rate
-        rules.constraint_technology_diffusion_limit()
+        if not optimization_setup.fs_type_operation:
+            # limit diffusion rate
+            rules.constraint_technology_diffusion_limit()
+
+            # max building time
+            constraints.add_constraint_block(model, name="constraint_technology_max_building_time_block",
+                                             constraint=rules.constraint_technology_max_building_time_block(),
+                                             doc='preventing the optimiser from investing past its foresight horizon')
 
         # annual capex of having capacity
         rules.constraint_capex_yearly()
@@ -565,6 +571,15 @@ class Technology(Element):
         # total carbon emissions of technologies
         rules.constraint_carbon_emissions_technology_total()
 
+        # only if myopic operation
+        if optimization_setup.fs_type_operation:
+            # fixing capacity additions to investment values
+            constraints.add_constraint_block(model, name="constraint_capacity_addition_from_investment",
+                                         constraint=rules.constraint_capacity_addition_from_investment_block(),
+                                         doc="fix capacity additions to values found by investment opt")
+            constraints.add_constraint_block(model, name="constraint_capacity_innvestment_from_investment",
+                                             constraint=rules.constraint_capacity_investment_from_investment_block(),
+                                             doc="fix capacity investments to values found by investment opt")
         # disjunct if technology is on
         # the disjunction variables
         variables = optimization_setup.variables
@@ -878,6 +893,40 @@ class TechnologyRules(GenericRule):
         self.constraints.add_constraint("constraint_technology_construction_time",constraints)
         self.constraints.add_constraint("constraint_technology_construction_time_outside",constraints_outside)
 
+    def constraint_technology_max_building_time_block(self):
+        """ Prevents investments with construction times exceeding foresight horizon
+        (prevents optimiser from making investments that seem "free of charge")
+        """
+
+        ### index sets
+        index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], self.optimization_setup)
+        index = ZenIndex(index_values, index_names)
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # we loop over technologies and years, because the conditions depend on the year and the technology
+        # we vectorize over capacity types and locations
+        constraints = []
+        for tech, year in index.get_unique(["set_technologies", "set_time_steps_yearly"]):
+            ### auxiliary calculations
+            building_time = Technology.get_building_time_step(self.optimization_setup, tech, year)
+            ### formulate constraint
+            if building_time not in self.sets["set_time_steps_yearly"]:
+                lhs = self.variables["capacity_investment"].loc[tech, :, :, year]
+                rhs = 0
+                constraints.append(lhs == rhs)
+            else:
+                # a dummy
+                constraints.append(np.nan*self.variables["capacity_investment"].loc[tech, :, :, year].where(False) == np.nan)
+
+        ### return
+        return self.constraints.return_contraints(constraints,
+                                                  model=self.model,
+                                                  index_values=index.get_unique(["set_technologies", "set_time_steps_yearly"]),
+                                                  index_names=["set_technologies", "set_time_steps_yearly"])
+
     def constraint_technology_lifetime(self):
         """ limited lifetime of the technologies. calculates 'capacity', i.e., the capacity at the end of the year and
         'capacity_previous', i.e., the capacity at the beginning of the year
@@ -1097,3 +1146,45 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_carbon_emissions_technology_total",constraints)
+
+    def constraint_capacity_addition_from_investment_block(self):
+        ### index sets
+        # not necessary
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # not necessary
+
+        ### auxiliary calculations
+        # not necessary
+
+        ### formulate constraint
+        lhs = self.variables["capacity_addition"]
+        rhs = self.parameters.capacity_addition_fixed
+        constraints = lhs == rhs
+
+        ### return
+        return self.constraints.return_contraints(constraints)
+
+    def constraint_capacity_investment_from_investment_block(self):
+        ### index sets
+        # not necessary
+
+        ### masks
+        # not necessary
+
+        ### index loop
+        # not necessary
+
+        ### auxiliary calculations
+        # not necessary
+
+        ### formulate constraint
+        lhs = self.variables["capacity_investment"]
+        rhs = self.parameters.capacity_investment_fixed
+        constraints = lhs == rhs
+
+        ### return
+        return self.constraints.return_contraints(constraints)

@@ -541,13 +541,13 @@ class Technology(Element):
         # maximum capacity
         rules.constraint_technology_max_capacity_addition()
 
-        # construction period
-        rules.constraint_technology_construction_time()
-
         # lifetime
         rules.constraint_technology_lifetime()
 
         if not optimization_setup.fs_type_operation:
+            # construction period
+            rules.constraint_technology_construction_time()
+
             # limit diffusion rate
             rules.constraint_technology_diffusion_limit()
 
@@ -922,7 +922,7 @@ class TechnologyRules(GenericRule):
                 constraints.append(np.nan*self.variables["capacity_investment"].loc[tech, :, :, year].where(False) == np.nan)
 
         ### return
-        return self.constraints.return_contraints(constraints,
+        return self.constraints.return_constraints(constraints,
                                                   model=self.model,
                                                   index_values=index.get_unique(["set_technologies", "set_time_steps_yearly"]),
                                                   index_names=["set_technologies", "set_time_steps_yearly"])
@@ -1166,7 +1166,7 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         ### return
-        return self.constraints.return_contraints(constraints)
+        return self.constraints.return_constraints(constraints)
 
     def constraint_capacity_investment_from_investment_block(self):
         ### index sets
@@ -1187,4 +1187,4 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         ### return
-        return self.constraints.return_contraints(constraints)
+        return self.constraints.return_constraints(constraints)

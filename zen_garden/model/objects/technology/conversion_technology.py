@@ -276,6 +276,8 @@ class ConversionTechnology(Technology):
         rules.constraint_opex_emissions_technology_conversion()
         # conversion factor
         rules.constraint_carrier_conversion()
+        # renewable capacity target
+        rules.constraint_renewable_capacity_target()
 
         # capex
         set_pwa_capex = cls.create_custom_set(["set_conversion_technologies", "set_capex_pwa", "set_nodes", "set_time_steps_yearly"], optimization_setup)
@@ -550,6 +552,44 @@ class ConversionTechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_carrier_conversion",constraints)
+
+    def constraint_renewable_capacity_target(self):
+        """ constraint for renewable capacity target """
+        renewable_technologies = ["heat_pump", "photovoltaics"]
+        capacity = self.variables["capacity"]
+        target = 0.6
+        renewable_technologies_carrier = {
+            (c, t): 1 if t in renewable_technologies else 0
+            for t in self.sets["set_conversion_technologies"]
+            for c in self.sets["set_reference_carriers"][t]
+        }
+        technologies_carrier = {
+            (c, t): target
+            for t in self.sets["set_conversion_technologies"]
+            for c in self.sets["set_reference_carriers"][t]
+        }
+        renewable_technologies_carrier = pd.Series(renewable_technologies_carrier)
+        renewable_technologies_carrier.index.names = ["set_carriers", "set_technologies"]
+        renewable_technologies_carrier = renewable_technologies_carrier.to_xarray().broadcast_like(
+            capacity.lower).fillna(0)
+        mask_renewable_technologies = renewable_technologies_carrier != 0
+        technologies_carrier = pd.Series(technologies_carrier)
+        technologies_carrier.index.names = ["set_carriers", "set_technologies"]
+        technologies_carrier = technologies_carrier.to_xarray().broadcast_like(capacity.lower).fillna(0)
+        mask_technologies = technologies_carrier != 0
+        # sum over all technologies, locations (if for each node, then don't sum over location) and capacity types (capacity types are irrelevant here, because only conversion techs anyway)
+        term_renewable_capacity = (renewable_technologies_carrier * capacity).where(mask_renewable_technologies).sum(
+            ["set_technologies", "set_capacity_types", "set_location"])
+        term_capacity = (technologies_carrier * capacity).where(mask_technologies).sum(
+            ["set_technologies", "set_capacity_types", "set_location"])
+        lhs = term_renewable_capacity - term_capacity
+        rhs = 0
+        constraints = lhs >= rhs
+        self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
+
+    def constraint_renewable_generation_target(self):
+        """ constraint for renewable generation target """
+        pass
 
     def get_flow_expression_conversion(self,techs,nodes,factor=None, rename =False):
         """ return the flow expression for conversion technologies """

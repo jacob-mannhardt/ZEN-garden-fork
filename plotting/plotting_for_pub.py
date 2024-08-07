@@ -42,10 +42,10 @@ def read_in_results(model_name):
 
 # read in results
 def read_in_special_results(model_name):
-    # data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden/data/"
-    # outputs_path = data_path + "outputs"
-    data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
-    outputs_path = data_path + "/outputs"
+    data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
+    outputs_path = data_path + "outputs"
+    # data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
+    # outputs_path = data_path + "/outputs"
     try:
         spec = importlib.util.spec_from_file_location("module", data_path + "config.py")
         module = importlib.util.module_from_spec(spec)
@@ -3824,6 +3824,15 @@ if __name__ == "__main__":
     if False:
         run_unused_plots()
 
+    if True:
+        # model_name = "PI_small_drastic_coal_production_phaseout"
+        # model_name = ("PI_small")
+        # model_name = ("PI_small_drastic_coal_capacity_phaseout")
+        model_name = ("PI_small_test_cap_constraint")
+
+        r, config = read_in_special_results(model_name)
+        print("read in")
+
     # costs plot: comparison of scenarios
     if False:
         # model_name = ["cons_nolead_init", "cons_nolead_init_2"]
@@ -3854,7 +3863,7 @@ if __name__ == "__main__":
         utilization_rate_plot()
 
     # feedback to investent plot_
-    if True:
+    if False:
         if True:
             model_name =  "post_changes_to_model/cons_lead_15"
         else:

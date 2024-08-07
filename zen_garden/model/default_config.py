@@ -136,7 +136,7 @@ class Solver(Subscriptable):
     round_parameters: bool = True
     rounding_decimal_points_capacity: int = 4
     analyze_numerics: bool = True
-    use_scaling: bool = True
+    use_scaling: bool = False
     scaling_include_rhs: bool = False
     scaling_algorithm: Union[list[str],str] = ["geom","geom","geom"]
 

@@ -278,6 +278,8 @@ class ConversionTechnology(Technology):
         rules.constraint_carrier_conversion()
         # renewable capacity target
         rules.constraint_renewable_capacity_target()
+        # renewable production target
+        rules.constraint_renewable_generation_target()
 
         # capex
         set_pwa_capex = cls.create_custom_set(["set_conversion_technologies", "set_capex_pwa", "set_nodes", "set_time_steps_yearly"], optimization_setup)
@@ -554,30 +556,48 @@ class ConversionTechnologyRules(GenericRule):
         self.constraints.add_constraint("constraint_carrier_conversion",constraints)
 
     def constraint_renewable_capacity_target(self):
+        # sum over all timesteps for production constraint
         """ constraint for renewable capacity target """
-        renewable_technologies = ["heat_pump", "photovoltaics"]
+        # get renewable conversion technologies and their reference carriers
+        renewable_technologies = self.sets["set_renewable_technologies"].items
+        renewables_reference_carriers = []
+        for t in renewable_technologies:
+            renewables_reference_carriers.append(self.sets["set_reference_carriers"][t].items[0])
+        renewables_reference_carriers = set(renewables_reference_carriers)
+
+        # define the renewable capacity percentage and the year by which it must hold
         capacity = self.variables["capacity"]
-        target = 0.6
+        target = self.system.renewables_cap_target
+        assert (self.system.renewables_cap_target_year - self.system.reference_year) % self.system.interval_between_years == 0, "division didnt result in a full number"
+        renewable_target_year = int((self.system.renewables_cap_target_year-self.system.reference_year)/self.system.interval_between_years)
+        renewable_years = self.sets["set_time_steps_yearly"].items
+        renewable_years = [year for year in renewable_years if year >= renewable_target_year]
+
         renewable_technologies_carrier = {
-            (c, t): 1 if t in renewable_technologies else 0
+            (c, t, y): 1 if (t in renewable_technologies and y in renewable_years) else 0
             for t in self.sets["set_conversion_technologies"]
             for c in self.sets["set_reference_carriers"][t]
+            for y in self.sets["set_time_steps_yearly"].items
         }
         technologies_carrier = {
-            (c, t): target
+            (c, t, y): target if (y in renewable_years and self.sets["set_reference_carriers"][t].items[0] in renewables_reference_carriers) else 0
             for t in self.sets["set_conversion_technologies"]
             for c in self.sets["set_reference_carriers"][t]
+            for y in self.sets["set_time_steps_yearly"].items
         }
         renewable_technologies_carrier = pd.Series(renewable_technologies_carrier)
-        renewable_technologies_carrier.index.names = ["set_carriers", "set_technologies"]
+        renewable_technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_yearly"]
         renewable_technologies_carrier = renewable_technologies_carrier.to_xarray().broadcast_like(
             capacity.lower).fillna(0)
         mask_renewable_technologies = renewable_technologies_carrier != 0
         technologies_carrier = pd.Series(technologies_carrier)
-        technologies_carrier.index.names = ["set_carriers", "set_technologies"]
+        technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_yearly"]
         technologies_carrier = technologies_carrier.to_xarray().broadcast_like(capacity.lower).fillna(0)
         mask_technologies = technologies_carrier != 0
-        # sum over all technologies, locations (if for each node, then don't sum over location) and capacity types (capacity types are irrelevant here, because only conversion techs anyway)
+
+        # sum over all technologies, locations (if for each node, then don't sum over location) and
+        # capacity types (capacity types are irrelevant here, because only conversion techs anyway)
+        # TODO .. try to simpify this here: term_renewable_capacity = capacity.where(mask_renewable_technologies).sum(
         term_renewable_capacity = (renewable_technologies_carrier * capacity).where(mask_renewable_technologies).sum(
             ["set_technologies", "set_capacity_types", "set_location"])
         term_capacity = (technologies_carrier * capacity).where(mask_technologies).sum(
@@ -589,6 +609,81 @@ class ConversionTechnologyRules(GenericRule):
 
     def constraint_renewable_generation_target(self):
         """ constraint for renewable generation target """
+
+        renewable_technologies = self.sets["set_renewable_technologies"].items
+        renewables_reference_carriers = []
+        for t in renewable_technologies:
+            renewables_reference_carriers.append(self.sets["set_reference_carriers"][t].items[0])
+        renewables_reference_carriers = set(renewables_reference_carriers)
+
+        # define the renewable capacity percentage and the year by which it must hold
+        capacity = self.variables["capacity"]
+        flow_conversion_output = self.variables["flow_conversion_output"]
+        target = self.system.renewables_gen_target
+
+        assert (self.system.renewables_gen_target_year - self.system.reference_year) % self.system.interval_between_years == 0, "division didnt result in a full number"
+        renewable_target_year = int((self.system.renewables_gen_target_year - self.system.reference_year) / self.system.interval_between_years)
+        start_hour = self.sets["set_time_steps_yearly"].items[0] * self.system.aggregated_time_steps_per_year
+        end_hour = len(self.sets["set_time_steps_yearly"]) * self.system.aggregated_time_steps_per_year
+        renewable_hours = list(range(start_hour, end_hour))
+        renewable_hours = [hour for hour in renewable_hours if
+                           hour >= renewable_target_year * self.system.aggregated_time_steps_per_year]
+
+
+        renewable_technologies_carrier = {
+            (c, t, h): 1 if (t in renewable_technologies and h in renewable_hours) else 0
+            for t in self.sets["set_conversion_technologies"]
+            for c in self.sets["set_reference_carriers"][t]
+            for h in self.sets["set_time_steps_operation"].items
+        }
+        technologies_carrier = {
+            (c, t, h): target if (h in renewable_hours and self.sets["set_reference_carriers"][t].items[
+                0] in renewables_reference_carriers) else 0
+            for t in self.sets["set_conversion_technologies"]
+            for c in self.sets["set_reference_carriers"][t]
+            for h in self.sets["set_time_steps_operation"].items
+        }
+        renewable_technologies_carrier = pd.Series(renewable_technologies_carrier)
+        renewable_technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_operation"]
+        renewable_technologies_carrier = renewable_technologies_carrier.to_xarray().broadcast_like(
+            capacity.lower).fillna(0)
+        mask_renewable_technologies = renewable_technologies_carrier != 0
+        technologies_carrier = pd.Series(technologies_carrier)
+        technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_operation"]
+        technologies_carrier = technologies_carrier.to_xarray().broadcast_like(capacity.lower).fillna(0)
+        mask_technologies = technologies_carrier != 0
+
+        # sum over all technologies, locations (if for each node, then don't sum over location) and
+        # capacity types (capacity types are irrelevant here, because only conversion techs anyway)
+        # TODO .. try to simpify this here: term_renewable_capacity = capacity.where(mask_renewable_technologies).sum(
+        term_renewable_capacity = (renewable_technologies_carrier * capacity).where(mask_renewable_technologies).sum(
+            ["set_technologies", "set_capacity_types", "set_location"])
+        term_capacity = (technologies_carrier * capacity).where(mask_technologies).sum(
+            ["set_technologies", "set_capacity_types", "set_location"])
+        lhs = term_renewable_capacity - term_capacity
+        rhs = 0
+        constraints = lhs >= rhs
+        self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
+
+
+
+
+        # The constraint is only constrained if the availability is finite
+        mask_imp = self.parameters.availability_import_yearly != np.inf
+        mask_exp = self.parameters.availability_export_yearly != np.inf
+
+        # import
+        lhs_imp = (self.variables["flow_import"] * self.get_year_time_step_duration_array()).sum("set_time_steps_operation").where(mask_imp)
+        rhs_imp = self.parameters.availability_import_yearly.where(mask_imp)
+        constraints_imp = lhs_imp <= rhs_imp
+
+        # export
+        lhs_exp = (self.variables["flow_export"] * self.get_year_time_step_duration_array()).sum("set_time_steps_operation").where(mask_exp)
+        rhs_exp = self.parameters.availability_export_yearly.where(mask_exp)
+        constraints_exp = lhs_exp <= rhs_exp
+
+        self.constraints.add_constraint("constraint_availability_import_yearly",constraints_imp)
+        self.constraints.add_constraint("constraint_availability_export_yearly",constraints_exp)
         pass
 
     def get_flow_expression_conversion(self,techs,nodes,factor=None, rename =False):

@@ -382,16 +382,16 @@ class Results:
 
     def get_dual(
         self,
-        constraint: str,
+        component_name: str,
         scenario_name: Optional[str] = None,
         element_name: Optional[str] = None,
         year: Optional[int] = None,
         discount_to_first_step: bool = True,
         keep_raw: Optional[bool] = False,
     ) -> Optional["pd.DataFrame | pd.Series[Any]"]:
-        """extracts the dual variables of a constraint
+        """extracts the dual variables of a component
 
-        :param constraint: Name of dal
+        :param component: Name of dal
         :param scenario_name: Scenario Name
         :param element_name: Name of Element
         :param year: Year
@@ -402,20 +402,20 @@ class Results:
             logging.warning("Duals are not calculated. Skip.")
             return None
 
-        component = self.solution_loader.components[constraint]
+        component = self.solution_loader.components[component_name]
         assert (
             component.component_type is ComponentType.dual
-        ), "Given constraint name is not of type Dual."
+        ), f"Given component {component} is not of type Dual."
 
-        _duals = self.get_full_ts(
-            component_name=constraint,
+        duals = self.get_full_ts(
+            component_name=component_name,
             scenario_name=scenario_name,
             element_name=element_name,
             year=year,
             discount_to_first_step=discount_to_first_step,
             keep_raw=keep_raw,
         )
-        return _duals
+        return duals
 
     def get_unit(
         self,
@@ -440,8 +440,13 @@ class Results:
         units = res[scenario_name]
         if droplevel:
             # TODO make more flexible
-            loc_idx = ["node", "location", "edge"]
-            time_idx = ["year", "time_operation", "time_storage_level"]
+            loc_idx = ["node", "location", "edge", "set_location", "set_nodes"]
+            time_idx = [
+                "year",
+                "time_operation",
+                "time_storage_level",
+                "set_time_steps_operation",
+            ]
             drop_idx = pd.Index(loc_idx + time_idx).intersection(units.index.names)
             units.index = units.index.droplevel(drop_idx.to_list())
             units = units[~units.index.duplicated()]
@@ -648,7 +653,6 @@ class Results:
                 full_ts = self.get_full_ts(
                     component, scenario_name=scenario_name, year=year
                 )
-
             carrier_df = self.extract_carrier(full_ts, carrier, scenario_name)
             if carrier_df is not None:
                 if "node" in carrier_df.index.names:

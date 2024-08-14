@@ -225,13 +225,17 @@ class MultiHdfLoader(AbstractLoader):
         """
         series_to_concat = []
         optimized_years = sorted(pd_dict.keys())
+        # (new quick fix: string to int)  Convert the keys to integers and sort them
+        optimized_years = sorted(int(key) for key in pd_dict.keys())
+
         for year in optimized_years:
             if year != optimized_years[-1]:
                 next_year = optimized_years[optimized_years.index(year) + 1]
             else:
                 next_year = year + 1
             decision_horizon = tuple(range(year, next_year))
-            current_mf = pd_dict[year]
+            # (new quick fix: int to string):
+            current_mf = pd_dict[str(year)]
             if component.timestep_type is TimestepType.yearly:
                 year_series = current_mf[
                     current_mf.index.get_level_values("year").isin(decision_horizon)

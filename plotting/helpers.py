@@ -24,10 +24,10 @@ from zen_garden.model.default_config import Config,Analysis,Solver,System
 
 # read in results
 def read_in_results(model_name):
-    data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
-    outputs_path = data_path + "outputs"
-    # data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
-    # outputs_path = data_path + "/outputs"
+    # data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
+    # outputs_path = data_path + "outputs"
+    data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Paper/Model_Outputs/"
+    outputs_path = data_path + "/outputs"
     try:
         spec = importlib.util.spec_from_file_location("module", data_path + "config.py")
         module = importlib.util.module_from_spec(spec)
@@ -45,10 +45,10 @@ def read_in_results(model_name):
 
 # read in results
 def read_in_special_results(model_name):
-    data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
-    outputs_path = data_path + "outputs"
-    # data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
-    # outputs_path = data_path + "/outputs"
+    # data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
+    # outputs_path = data_path + "outputs"
+    data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
+    outputs_path = data_path + "/outputs"
     try:
         spec = importlib.util.spec_from_file_location("module", data_path + "config.py")
         module = importlib.util.module_from_spec(spec)

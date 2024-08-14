@@ -56,20 +56,20 @@ def cumulative_emissions_plot():
             df = df.loc[desired_scenarios]
     df_T = df.T
 
-    index_years = np.arange(15)
-    data = {
-        "15_1": np.cumsum(np.random.normal(500, 100, size=15)) + 1000,
-        "15_3": np.cumsum(np.random.normal(520, 150, size=15)) + 1200,
-        "15_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-        "10_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
-        "10_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
-        "10_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-        "5_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
-        "5_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
-        "5_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-    }
+    # index_years = np.arange(15)
+    # data = {
+    #     "15_1": np.cumsum(np.random.normal(500, 100, size=15)) + 1000,
+    #     "15_3": np.cumsum(np.random.normal(520, 150, size=15)) + 1200,
+    #     "15_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
+    #     "10_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
+    #     "10_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
+    #     "10_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
+    #     "5_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
+    #     "5_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
+    #     "5_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
+    # }
 
-    df_T = pd.DataFrame(data, index=index_years)
+    # df_T = pd.DataFrame(data, index=index_years)
 
 
     df_T.index = 2022 + (df_T.index * 2)
@@ -83,10 +83,24 @@ def cumulative_emissions_plot():
         if prefix not in investment_foresight_dfs:
             investment_foresight_dfs[prefix] = df_T.filter(regex=f'^{prefix}_')
 
+    # Dictionary to store dataframes
+    operation_foresight_dfs = {}
+    # Extract unique prefixes and create individual dataframes
+    for col in df_T.columns:
+        second_prefix = col.split('_')[1]
+        if second_prefix not in operation_foresight_dfs:
+            operation_foresight_dfs[second_prefix] = df_T.filter(regex=f'^{second_prefix}_')
+
+
+
+    foresight_dfs = investment_foresight_dfs
+    # foresight_dfs = operation_foresight_dfs
+
+
     # New dictionary to store min/max series
     min_max_series = {}
     # Calculate min and max for each dataframe across all columns row-wise
-    for key, df in investment_foresight_dfs.items():
+    for key, df in foresight_dfs.items():
         min_series = df.min(axis=1)
         max_series = df.max(axis=1)
         combined_series = pd.concat([min_series, max_series], axis=1)
@@ -102,7 +116,7 @@ def cumulative_emissions_plot():
     j = 0  # Color index
 
     # Base color
-    base_color = 'purple'
+    base_color = 'orange'
     # Mapping base colors to matplotlib colormaps
     color_maps = {
         'blue': 'Blues',
@@ -152,11 +166,17 @@ def cumulative_emissions_plot():
     tick_positions = np.linspace(start=df_T.index.min(), stop=df_T.index.max(), num=len(df_T.index))
     plt.xticks(ticks=tick_positions, labels=[str(int(x)) for x in tick_positions])
 
+    if foresight_dfs == investment_foresight_dfs:
+        legend_title = "Investment foresight horizon"
+    elif foresight_dfs == operation_foresight_dfs:
+        legend_title = "Operation foresight horizon"
+
+
     # Adding titles and labels
-    plt.title('Base Scenario')
+    plt.title('ETS 1 only Policy')  # 'Base Scenario', 'Renewable Capacity Policy', 'Renewable Generation Policy'
     plt.xlabel('Year')
     plt.ylabel('Cumulative Emissions [Gt CO2]')
-    plt.legend(title="Investment foresight horizon")
+    plt.legend(title=legend_title)
 
     # Show the plot
     plt.show()
@@ -196,11 +216,20 @@ def cumulative_emissions_plot():
 
 
 if __name__ == "__main__":
-    model_name = "PI_small_drastic_coal_capacity_phaseout"
+    # model_name = "PI_small_drastic_coal_capacity_phaseout"
+    # model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
+    # model_name = "PC_ct_vartdr_w_pass_tra_ren_cap"
+
+    model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
+
+    # model_name = "PC_ct_vartdr_w_pass_tra_ETS1"
+
+
+
     # model_name = ["cons_nolead_1to4", "cons_nolead_init", "cons_lead_1to4",
     #               "cons_lead_init", "lesscons_lead_1to4", "lesscons_lead_init",
     #               "varcons_lead_1to4", "varcons_lead_init"]
 
     desired_scenarios = ['15_1', '15_3', '15_5', '10_1', '10_3', '10_1', '5_1', '5_3', '5_1']
-    desired_scenarios = "dont_index"
+    # desired_scenarios = "dont_index"
     cumulative_emissions_plot()

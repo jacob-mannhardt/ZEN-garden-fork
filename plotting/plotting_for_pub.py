@@ -3814,6 +3814,8 @@ def feedback_plot_progression_with_techs_heat():
     ax1.set_xticklabels(new_labels)
     ax1.xaxis.set_minor_locator(AutoMinorLocator(2))
 
+    # test commit changes
+
     plt.show(block=True)
     return
 

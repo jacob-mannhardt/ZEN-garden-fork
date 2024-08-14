@@ -466,7 +466,7 @@ class OptimizationSetup(object):
         """ returns list of optimization horizon steps """
         # if using rolling horizon
         if self.system.use_rolling_horizon:
-            assert self.system.years_in_rolling_horizon >= self.system.years_in_decision_horizon, f"There must be more years in the rolling horizon than the interval between optimizations. years_in_rolling_horizon ({self.system.years_in_rolling_horizon}) < years_in_decision_horizon ({self.system.years_in_decision_horizon})"
+            assert self.system.years_in_rolling_horizon >= self.system.years_in_decision_horizon, f"There must be at least the same number of years in the rolling horizon as the decision horizon. years_in_rolling_horizon ({self.system.years_in_rolling_horizon}) < years_in_decision_horizon ({self.system.years_in_decision_horizon})"
             self.years_in_horizon = self.system.years_in_rolling_horizon
             time_steps_yearly = self.energy_system.set_time_steps_yearly
             # skip years_in_decision_horizon years

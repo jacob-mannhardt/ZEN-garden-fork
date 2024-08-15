@@ -94,7 +94,7 @@ def cumulative_emissions_plot():
 
 
     foresight_dfs = investment_foresight_dfs
-    # foresight_dfs = operation_foresight_dfs
+    foresight_dfs = operation_foresight_dfs
 
 
     # New dictionary to store min/max series
@@ -113,10 +113,13 @@ def cumulative_emissions_plot():
     plt.figure(figsize=(10, 6))
 
     carbon_budget = 16.58
+    carbon_budget = 12.23
+
+
     j = 0  # Color index
 
     # Base color
-    base_color = 'orange'
+    base_color = 'blue'
     # Mapping base colors to matplotlib colormaps
     color_maps = {
         'blue': 'Blues',
@@ -173,7 +176,7 @@ def cumulative_emissions_plot():
 
 
     # Adding titles and labels
-    plt.title('ETS 1 only Policy')  # 'Base Scenario', 'Renewable Capacity Policy', 'Renewable Generation Policy'
+    plt.title('Base model without Transport sector')  # 'Base Scenario', 'Renewable Capacity Policy', 'Renewable Generation Policy', 'ETS 1 only Policy'
     plt.xlabel('Year')
     plt.ylabel('Cumulative Emissions [Gt CO2]')
     plt.legend(title=legend_title)
@@ -220,7 +223,7 @@ if __name__ == "__main__":
     # model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
     # model_name = "PC_ct_vartdr_w_pass_tra_ren_cap"
 
-    model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
+    model_name = "PC_ct_base"
 
     # model_name = "PC_ct_vartdr_w_pass_tra_ETS1"
 

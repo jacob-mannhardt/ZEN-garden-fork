@@ -69,7 +69,7 @@ def indexmapping(df, special_model_name=None):
     if special_model_name is not None:
         model_name = special_model_name
 
-    if model_name.startswith('PC_ct_vartdr_w_pass_tra_'):
+    if model_name.startswith('PC_ct_vartdr_w_pass_tra_') or model_name.startswith('PC_ct_base'):
         # Define a dictionary mapping the current index values to the desired ones
         # PC_ct_vartdr_w_pass_tra_ETS1and2
         index_mapping = {

@@ -566,7 +566,7 @@ class OptimizationSetup(object):
         """
         if self.model.termination_condition == 'infeasible' and self.solver["name"] == "gurobi":
 
-            output_folder = StringUtils.get_output_folder(self.analysis,self.system)
+            output_folder = StringUtils.get_output_folder(self.analysis)
             if scenario is not None:
                 ilp_file = os.path.join(output_folder,"scenario_" + scenario, "infeasible_model_IIS.ilp")
             else:

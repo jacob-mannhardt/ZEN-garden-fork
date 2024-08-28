@@ -615,42 +615,6 @@ class ConversionTechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
 
-        # ================================================================================================
-
-        renewable_technologies_carrier = {
-            (c, t, y): 1 if (t in renewable_technologies and y in renewable_years) else 0
-            for t in self.sets["set_conversion_technologies"]
-            for c in self.sets["set_reference_carriers"][t]
-            for y in self.sets["set_time_steps_yearly"].items
-        }
-        technologies_carrier = {
-            (c, t, y): target if (y in renewable_years and self.sets["set_reference_carriers"][t].items[0] in renewables_reference_carriers) else 0
-            for t in self.sets["set_conversion_technologies"]
-            for c in self.sets["set_reference_carriers"][t]
-            for y in self.sets["set_time_steps_yearly"].items
-        }
-        renewable_technologies_carrier = pd.Series(renewable_technologies_carrier)
-        renewable_technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_yearly"]
-        renewable_technologies_carrier = renewable_technologies_carrier.to_xarray().broadcast_like(
-            capacity.lower).fillna(0)
-        mask_renewable_technologies = renewable_technologies_carrier != 0
-        technologies_carrier = pd.Series(technologies_carrier)
-        technologies_carrier.index.names = ["set_carriers", "set_technologies", "set_time_steps_yearly"]
-        technologies_carrier = technologies_carrier.to_xarray().broadcast_like(capacity.lower).fillna(0)
-        mask_technologies = technologies_carrier != 0
-
-        # sum over all technologies, locations (if for each node, then don't sum over location) and
-        # capacity types (capacity types are irrelevant here, because only conversion techs anyway)
-        # TODO .. try to simpify this here: term_renewable_capacity = capacity.where(mask_renewable_technologies).sum(
-        term_renewable_capacity = (renewable_technologies_carrier * capacity).where(mask_renewable_technologies).sum(
-            ["set_technologies", "set_capacity_types", "set_location"])
-        term_capacity = (technologies_carrier * capacity).where(mask_technologies).sum(
-            ["set_technologies", "set_capacity_types", "set_location"])
-        lhs = term_renewable_capacity - term_capacity
-        rhs = 0
-        constraints = lhs >= rhs
-        self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
-
     def constraint_renewable_generation_target(self):
         """ constraint for renewable generation target """
 

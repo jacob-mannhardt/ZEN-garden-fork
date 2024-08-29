@@ -674,19 +674,20 @@ class ConversionTechnologyRules(GenericRule):
                 # Extract the strings from the 'set_output_carriers' coordinate
                 carriers_list = filtered_carriers.set_output_carriers.values
 
-                # Initialize the sum to zero or the first selection
-                ren_gen = term_renewable_generation.sel(set_output_carriers=carriers_list[0])
-                total_gen = target * term_generation.sel(set_output_carriers=carriers_list[0])
+                if len(carriers_list) > 0:
+                    # Initialize the sum to zero or the first selection
+                    ren_gen = term_renewable_generation.sel(set_output_carriers=carriers_list[0])
+                    total_gen = target * term_generation.sel(set_output_carriers=carriers_list[0])
 
-                # Loop through the rest of the items in carriers_list and sum them up
-                # This is done for the heat sector (to include both heat and district heat in the same constraint)
-                for sub_sector in range(1, len(carriers_list)):
-                    ren_gen += term_renewable_generation.sel(set_output_carriers=carriers_list[sub_sector])
-                    total_gen += target * term_generation.sel(set_output_carriers=carriers_list[sub_sector])
+                    # Loop through the rest of the items in carriers_list and sum them up
+                    # This is done for the heat sector (to include both heat and district heat in the same constraint)
+                    for sub_sector in range(1, len(carriers_list)):
+                        ren_gen += term_renewable_generation.sel(set_output_carriers=carriers_list[sub_sector])
+                        total_gen += target * term_generation.sel(set_output_carriers=carriers_list[sub_sector])
 
-                lhs = ren_gen - total_gen
-                rhs = 0
-                constraints[f"{year}_{sector_name}"] = lhs >= rhs
+                    lhs = ren_gen - total_gen
+                    rhs = 0
+                    constraints[f"{year}_{sector_name}"] = lhs >= rhs
 
         self.constraints.add_constraint("constraint_renewable_generation_target", constraints)
 

@@ -609,9 +609,31 @@ class ConversionTechnologyRules(GenericRule):
                 ["set_technologies", "set_capacity_types", "set_location"])
             term_capacity = (technologies_carrier * capacity_addition).where(mask_technologies).sum(
                 ["set_technologies", "set_capacity_types", "set_location"])
-            lhs = term_renewable_capacity - term_capacity
-            rhs = 0
-            constraints[f"{sector_name}"] = lhs >= rhs
+
+            # old code
+            # lhs = term_renewable_capacity - term_capacity
+            # rhs = 0
+            # constraints[f"{sector_name}"] = lhs >= rhs
+
+            filtered_carriers = term_capacity.const.sel(
+                set_carriers=term_renewable_capacity.const.set_carriers.str.contains(sector_name))
+            # Extract the strings from the 'set_output_carriers' coordinate
+            carriers_list = filtered_carriers.set_carriers.values
+
+            if len(carriers_list) > 0:
+                # Initialize the sum to zero or the first selection
+                ren_cap = term_renewable_capacity.sel(set_carriers=carriers_list[0])
+                total_cap = target * term_capacity.sel(set_carriers=carriers_list[0])
+
+                # Loop through the rest of the items in carriers_list and sum them up
+                # This is done for the heat sector (to include both heat and district heat in the same constraint)
+                for sub_sector in range(1, len(carriers_list)):
+                    ren_cap += term_renewable_capacity.sel(set_carriers=carriers_list[sub_sector])
+                    total_cap += target * term_capacity.sel(set_carriers=carriers_list[sub_sector])
+
+                lhs = ren_cap - total_cap
+                rhs = 0
+                constraints[f"{sector_name}"] = lhs >= rhs
 
         self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
 

@@ -571,7 +571,7 @@ class ConversionTechnologyRules(GenericRule):
         capacity_addition = self.variables["capacity_addition"]
 
         renewables_capacity_targets = eval(self.system.renewables_cap_targets)
-        constraints = {}
+        cap_add_constraints = {}
 
         for sector, (target, target_year) in renewables_capacity_targets.items():
             sector_name = str(sector)
@@ -587,7 +587,7 @@ class ConversionTechnologyRules(GenericRule):
                 for y in self.sets["set_time_steps_yearly"].items
             }
             technologies_carrier = {
-                (c, t, y): target if (y in renewable_years and self.sets["set_reference_carriers"][t].items[0] in renewables_reference_carriers) else 0
+                (c, t, y): 1 if (y in renewable_years and self.sets["set_reference_carriers"][t].items[0] in renewables_reference_carriers) else 0
                 for t in self.sets["set_conversion_technologies"]
                 for c in self.sets["set_reference_carriers"][t]
                 for y in self.sets["set_time_steps_yearly"].items
@@ -633,9 +633,9 @@ class ConversionTechnologyRules(GenericRule):
 
                 lhs = ren_cap - total_cap
                 rhs = 0
-                constraints[f"{sector_name}"] = lhs >= rhs
+                cap_add_constraints[f"{sector_name}"] = lhs >= rhs
 
-        self.constraints.add_constraint("constraint_renewable_capacity_target", constraints)
+        self.constraints.add_constraint("constraint_renewable_capacity_target", cap_add_constraints)
 
     def constraint_renewable_generation_target(self):
         """ constraint for renewable generation target """
@@ -648,7 +648,7 @@ class ConversionTechnologyRules(GenericRule):
         flow_conversion_output = self.variables["flow_conversion_output"]
         renewables_generation_targets = eval(self.system.renewables_gen_targets)
 
-        constraints = {}
+        gen_constraints = {}
         for sector, (target, target_year) in renewables_generation_targets.items():
             sector_name = str(sector)
 
@@ -709,9 +709,9 @@ class ConversionTechnologyRules(GenericRule):
 
                     lhs = ren_gen - total_gen
                     rhs = 0
-                    constraints[f"{year}_{sector_name}"] = lhs >= rhs
+                    gen_constraints[f"{year}_{sector_name}"] = lhs >= rhs
 
-        self.constraints.add_constraint("constraint_renewable_generation_target", constraints)
+        self.constraints.add_constraint("constraint_renewable_generation_target", gen_constraints)
 
     def get_flow_expression_conversion(self,techs,nodes,factor=None, rename =False):
         """ return the flow expression for conversion technologies """

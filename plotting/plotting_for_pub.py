@@ -3865,7 +3865,7 @@ if __name__ == "__main__":
         utilization_rate_plot()
 
     # feedback to investent plot_
-    if False:
+    if True:
         if True:
             model_name =  "post_changes_to_model/cons_lead_15"
         else:
@@ -3876,7 +3876,7 @@ if __name__ == "__main__":
         feedback_plot_progression_with_techs()
 
     # feedback to investent plot heat
-    if False:
+    if True:
         if True:
             model_name =  "post_changes_to_model/cons_lead_15"
         else:

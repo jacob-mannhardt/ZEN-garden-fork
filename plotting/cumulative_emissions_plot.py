@@ -26,7 +26,7 @@ from plotting.helpers import *
 
 
 def cumulative_emissions_plot():
-    print("Plotting Cumulative Emissions")
+    print("Plotting Cumulative Emissions (individual scenarios)")
     # Set the color palette from Seaborn
     sns.set_palette('deep')
 
@@ -49,29 +49,43 @@ def cumulative_emissions_plot():
 
     # Concatenate all DataFrames in the list to a single DataFrame
     df = pd.concat(dfs, axis=0, join='outer')
+    df.columns = 2022 + (df.columns * 2)
+    plt.figure(figsize=(10, 6))
+    for label in df.index:
+        plt.plot(df.columns, df.loc[label]/1000, label=label)
+    carbon_budget = 16.58
+    # carbon_budget = 12.23. # budget without the transport sector
+    plt.axhline(y=carbon_budget, color='black', linestyle='--', label='Carbon Budget')
+    plt.xlabel('Year')
+    plt.ylabel('Cumulative Emissions [Gt CO2]')
+    plt.title(model_name + ', TSA:20')
+    plt.legend(title="Series")
+    plt.grid(True)
+    plt.ylim(top=18.5)
+
+    plt.show()
+
+def cumulative_emissions_plot_grouped():
+    print("Plotting Cumulative Emissions")
+    # Set the color palette from Seaborn
+    sns.set_palette('deep')
+
+    dfs = []
+    r, config = read_in_results(model_name)
+    temp_df = r.get_total("carbon_emissions_cumulative")
+    # indexing
+    if desired_scenarios != "dont_index":
+        temp_df = indexmapping(temp_df, special_model_name=model_name)
+    dfs.append(temp_df)
+
+    # Concatenate all DataFrames in the list to a single DataFrame
+    df = pd.concat(dfs, axis=0, join='outer')
 
     # Select only the desired rows
     if desired_scenarios != None:
         if desired_scenarios != "dont_index":
             df = df.loc[desired_scenarios]
     df_T = df.T
-
-    # index_years = np.arange(15)
-    # data = {
-    #     "15_1": np.cumsum(np.random.normal(500, 100, size=15)) + 1000,
-    #     "15_3": np.cumsum(np.random.normal(520, 150, size=15)) + 1200,
-    #     "15_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-    #     "10_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
-    #     "10_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
-    #     "10_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-    #     "5_1": np.cumsum(np.random.normal(530, 90, size=15)) + 1100,
-    #     "5_3": np.cumsum(np.random.normal(510, 110, size=15)) + 1050,
-    #     "5_5": np.cumsum(np.random.normal(550, 80, size=15)) + 950,
-    # }
-
-    # df_T = pd.DataFrame(data, index=index_years)
-
-
     df_T.index = 2022 + (df_T.index * 2)
 
 
@@ -89,11 +103,9 @@ def cumulative_emissions_plot():
     for col in df_T.columns:
         second_prefix = col.split('_')[1]
         if second_prefix not in operation_foresight_dfs:
-            operation_foresight_dfs[second_prefix] = df_T.filter(regex=f'^{second_prefix}_')
+            operation_foresight_dfs[second_prefix] = df_T.filter(regex=f'_{second_prefix}')
 
-
-
-    foresight_dfs = investment_foresight_dfs
+    # foresight_dfs = investment_foresight_dfs
     foresight_dfs = operation_foresight_dfs
 
 
@@ -107,19 +119,16 @@ def cumulative_emissions_plot():
         combined_series.columns = ['Min', 'Max']
         min_max_series[key] = combined_series
 
-    print("stop here")
-
     # Setting up the plot
     plt.figure(figsize=(10, 6))
 
     carbon_budget = 16.58
-    carbon_budget = 12.23
-
+    # carbon_budget = 12.23
 
     j = 0  # Color index
 
     # Base color
-    base_color = 'blue'
+    base_color = 'green'
     # Mapping base colors to matplotlib colormaps
     color_maps = {
         'blue': 'Blues',
@@ -128,16 +137,15 @@ def cumulative_emissions_plot():
         'orange': 'Oranges',
         'red': 'Reds',
         'purple': 'Purples',
-        'turquoise': 'GnBu'  # Green to blue gradient, for a turquoise effect
+        'turquoise': 'GnBu',  # Green to blue gradient, for a turquoise effect
+        'black': 'Greys'
     }
-
 
     # Determine the number of keys in the dictionary
     num_keys = len(min_max_series)
 
     # Base RGB color from a name (using matplotlib's color table)
     rgb_color = mcolors.to_rgb(base_color)
-
 
     # # Iterate over each key in the investment_foresight_dfs dictionary
     # for key, df in investment_foresight_dfs.items():
@@ -174,65 +182,211 @@ def cumulative_emissions_plot():
     elif foresight_dfs == operation_foresight_dfs:
         legend_title = "Operation foresight horizon"
 
-
     # Adding titles and labels
-    plt.title('Base model without Transport sector')  # 'Base Scenario', 'Renewable Capacity Policy', 'Renewable Generation Policy', 'ETS 1 only Policy'
+    plt.title(model_name + ', TSA:20')  # 'Base Scenario', 'Renewable Capacity Policy', 'Renewable Generation Policy', 'ETS 1 only Policy'
     plt.xlabel('Year')
     plt.ylabel('Cumulative Emissions [Gt CO2]')
     plt.legend(title=legend_title)
+    plt.ylim(top=18.5)
 
     # Show the plot
     plt.show()
 
-    #
-    # fig, ax = plt.subplots(figsize=(12, 8))
-    # carbon_budget = 16.58
-    #
-    # num_years = len(df_T)
-    # # Creating an array for the x-axis positions
-    # x = np.arange(num_years)
-    # if desired_scenarios != "dont_index":
-    #     for i, scenario in enumerate(df_T.columns):
-    #         plt.plot(x, df_T[scenario] / 1000, label=df_T.columns[i])
-    # else:
-    #     plt.plot(x, df_T / 1000)
-    # # Adding labels and title
-    # plt.xlabel('Year', fontsize=14)
-    # plt.ylabel('Total Carbon Emissions [Gt CO₂]', fontsize=14)
-    #
-    # # generate figure title:
-    # #fig_title = get_fig_title(plot_name)
-    # # plt.title(fig_title)
-    #
-    # # Adjusting x-ticks
-    # plt.xticks(x, (df_T.index) * 2 + 2022)
-    # # Adding a legend
-    # plt.legend(title="Operation Foresight Horizon:")
-    # # Adding a thin red horizontal line at y = carbon_emissions_budget
-    # plt.axhline(y=carbon_budget, color='black', linestyle='-', linewidth=0.75, xmin=0.25, zorder=1, alpha=0.5)
-    # # Labeling the red line
-    # plt.text(14, carbon_budget - 0.04 * plt.ylim()[1], "Carbon Emission Budget", va='bottom', ha='right', color='black',
-    #          fontsize=12)
-    # # Show the plot
-    # plt.show(block=True)
-    # return
+
+def cumulative_emissions_plot_grouped2x2(model_names):
+    print("Plotting Cumulative Emissions for Multiple Models")
+
+    # Setting up the figure for 2x2 subplots with shared x and y axes
+    fig, axs = plt.subplots(2, 2, figsize=(11.5, 10), sharex=True, sharey=True)
+    axs = axs.flatten()  # Flatten the 2x2 grid of axes for easy indexing
+
+    # Set the color palette from Seaborn
+    sns.set_palette('deep')
+
+    for idx, model_name in enumerate(model_names):
+        dfs = []
+        r, config = read_in_results(model_name)
+        temp_df = r.get_total("carbon_emissions_cumulative")
+        # indexing
+        if desired_scenarios != "dont_index":
+            temp_df = indexmapping(temp_df, special_model_name=model_name)
+        dfs.append(temp_df)
+
+        # Concatenate all DataFrames in the list to a single DataFrame
+        df = pd.concat(dfs, axis=0, join='outer')
+
+        # Select only the desired rows
+        if desired_scenarios != None:
+            if desired_scenarios != "dont_index":
+                df = df.loc[desired_scenarios]
+        df_T = df.T
+        df_T.index = 2022 + (df_T.index * 2)
+
+        # Dictionary to store dataframes
+        investment_foresight_dfs = {}
+        for col in df_T.columns:
+            prefix = col.split('_')[0]
+            if prefix not in investment_foresight_dfs:
+                investment_foresight_dfs[prefix] = df_T.filter(regex=f'^{prefix}_')
+
+        # Dictionary to store dataframes
+        operation_foresight_dfs = {}
+        for col in df_T.columns:
+            second_prefix = col.split('_')[1]
+            if second_prefix not in operation_foresight_dfs:
+                operation_foresight_dfs[second_prefix] = df_T.filter(regex=f'_{second_prefix}')
+
+        foresight_dfs = operation_foresight_dfs
+
+        # New dictionary to store min/max series
+        min_max_series = {}
+        for key, df in foresight_dfs.items():
+            min_series = df.min(axis=1)
+            max_series = df.max(axis=1)
+            combined_series = pd.concat([min_series, max_series], axis=1)
+            combined_series.columns = ['Min', 'Max']
+            min_max_series[key] = combined_series
+
+        # Choose the current subplot axis
+        ax = axs[idx]
+
+        # Set the base color
+        if model_name == "PC_ct_pass_tra_base":
+            base_color = 'black'
+        elif model_name == "PC_ct_pass_tra_cap_add_target":
+            base_color = 'blue'
+        elif model_name == "PC_ct_pass_tra_ETS1and2":
+            base_color = 'red'
+        elif model_name == "PC_ct_pass_tra_gen_target":
+            base_color = 'green'
+        num_keys = len(min_max_series)
+        rgb_color = mcolors.to_rgb(base_color)
+
+        # Plot each min/max series in the current subplot
+        for j, (key, df) in enumerate(min_max_series.items()):
+            alpha_value = (j + 1) / float(num_keys)
+            fill_color = rgb_color[:3] + (alpha_value,)  # Adjust the alpha for the color
+            ax.fill_between(df.index, df['Min'] / 1000, df['Max'] / 1000, label=f'{str(int(key) * 2) + "_years"}',
+                            color=fill_color, alpha=alpha_value)
+
+            # Connect the first point of the series to (2021, 0)
+            first_year = df.index[0]
+            first_min = df['Min'].iloc[0] / 1000
+            first_max = df['Max'].iloc[0] / 1000
+            ax.plot([2021, first_year], [0, first_min], color=fill_color, linewidth=0.8)  # Connecting to the min series
+            ax.plot([2021, first_year], [0, first_max], color=fill_color, linewidth=0.8)  # Connecting to the max series
+
+        # Draw the carbon budget line and add the shaded area
+        carbon_budget = 16.58
+        ax.set_ylim(0, 19.5)  # Fix the y-axis max to 19.5
+        ax.axhline(y=carbon_budget, color='black', linestyle='--', label='Carbon Budget')
+        height = ax.get_ylim()[1] - carbon_budget
+        rectangle = Rectangle((df.index[0] - 30, carbon_budget), df.index[-1] - df.index[0] + 50, height, color='grey',
+                              alpha=0.1)
+        ax.add_patch(rectangle)
+
+        if model_name == "PC_ct_pass_tra_base":
+            model_name_str = "Base Scenario"
+        elif model_name == "PC_ct_pass_tra_ETS1and2":
+            model_name_str = "Emission Policy"
+        elif model_name == "PC_ct_pass_tra_cap_add_target":
+            model_name_str = "Investment Policy"
+        elif model_name == "PC_ct_pass_tra_gen_target":
+            model_name_str = "Operation Policy"
+
+        # Set titles and labels for the subplots
+        ax.set_title(model_name_str + ', TSA:20', loc='left', x=0.01 ,y=0.93, fontsize=12)
+        ax.set_xlabel('Year')
+        ax.set_ylabel('Cumulative Emissions [Gt CO2]')
+
+        # Define x-axis ticks every two years from 2022 to 2050
+        ax.set_xticks(np.arange(2022, 2052, 2))
+        ax.set_xlim([2020, 2052])
+        # Get the current tick labels and only display every second one
+        tick_labels = [label if i % 2 == 0 else '' for i, label in enumerate(np.arange(2022, 2052, 2))]
+        ax.set_xticklabels(tick_labels)
+
+        # Enable minor ticks
+        ax.minorticks_on()
+
+        # Define the position of the minor ticks (every year)
+        ax.set_xticks(np.arange(2021, 2050, 2), minor=True)
+
+        # Optional: You can customize the appearance of minor ticks if needed (e.g., make them shorter)
+        ax.tick_params(axis='x', which='minor', length=2)
+
+        # Move the legend to the bottom right of each subplot
+        ax.legend(title='Operation foresight horizon', loc='lower right')
+
+    # Hide x-axis ticks on the upper plots
+    for ax in axs[:2]:
+        ax.xaxis.set_visible(False)
+
+    # Hide y-axis ticks on the right-side plots
+    for ax in axs[1::2]:
+        ax.yaxis.set_visible(False)
+
+    # Adjust the layout so the subplots are touching (no space between them)
+    plt.subplots_adjust(hspace=0, wspace=0)
+
+    # Show the plot
+    plt.show()
+
 
 
 if __name__ == "__main__":
     # model_name = "PI_small_drastic_coal_capacity_phaseout"
     # model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
     # model_name = "PC_ct_vartdr_w_pass_tra_ren_cap"
-
-    model_name = "PC_ct_base"
-
+    # model_name = "PC_ct_base"
     # model_name = "PC_ct_vartdr_w_pass_tra_ETS1"
+    # model_name = "PC_ct_test"
+    # model_name = "PC_ct_vartdr_w_pass_tra_base"
+    # model_name = "PC_ct_pass_tra_base_oil_prices"
+    # desired_scenarios = ['10_1', '10_5', '5_1', '5_3', '5_5']
+    # model_name = "PC_ct_pass_tra_base"
+    # desired_scenarios = ['15_1', '15_3', '15_5', '10_1', '10_3', '10_5', '5_1', '5_3', '5_5']
+    # model_name = "PC_ct_pass_tra_base_test"
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
 
 
+    # Defined Models (single policy) ==================================
+    # model_name = "PC_ct_pass_tra_base"
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
 
-    # model_name = ["cons_nolead_1to4", "cons_nolead_init", "cons_lead_1to4",
-    #               "cons_lead_init", "lesscons_lead_1to4", "lesscons_lead_init",
-    #               "varcons_lead_1to4", "varcons_lead_init"]
+    # model_name = ("PC_ct_pass_tra_ETS1only")
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
 
-    desired_scenarios = ['15_1', '15_3', '15_5', '10_1', '10_3', '10_1', '5_1', '5_3', '5_1']
-    # desired_scenarios = "dont_index"
+    # model_name = "PC_ct_pass_tra_ETS1and2"
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # model_name = ("PC_ct_pass_tra_cap_add_target")
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # model_name = ("PC_ct_pass_tra_gen_target")
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # model_name = ("PC_ct_pass_tra_coal_cap_phaseout")
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # model_name = ("PC_ct_pass_tra_coal_gen_phaseout")
+    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # Defined Models ==================================
+    desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
+
+    # model_name = "PC_ct_pass_tra_base"
+
+    model_name = "PC_ct_pass_tra_ETS1and2"
+
+    # model_name = "PC_ct_pass_tra_cap_add_target"
+    #
+    # model_name = "PC_ct_pass_tra_gen_target"
+
     cumulative_emissions_plot()
+
+    # cumulative_emissions_plot_grouped()
+
+    model_names = ["PC_ct_pass_tra_base", "PC_ct_pass_tra_cap_add_target", "PC_ct_pass_tra_ETS1and2",
+                   "PC_ct_pass_tra_gen_target"]
+    cumulative_emissions_plot_grouped2x2(model_names)

@@ -236,7 +236,7 @@ class ConversionTechnology(Technology):
                         conversion_factor_lower = params.conversion_factor.loc[tech, carrier, node_set].min().data
                         conversion_factor_upper = params.conversion_factor.loc[tech, carrier, node_set].max().data
                         if 0 in conversion_factor_upper:
-                            _rounding_ts = optimization_setup.solver.rounding_decimal_points_ts
+                            _rounding_tsa = optimization_setup.solver.rounding_decimal_points_tsa
                             raise ValueError(f"Maximum conversion factor of {tech} for carrier {carrier} is 0.\nOne reason might be that the conversion factor is too small (1e-{_rounding_ts}), so that it is rounded to 0 after the time series aggregation.")
 
                     lower.loc[tech, carrier, ...] = model.variables["capacity"].lower.loc[tech, "power", node_set, time_step_year].data * conversion_factor_lower
@@ -372,7 +372,7 @@ class ConversionTechnology(Technology):
                 tech = index
             # retrieve pwa variables
             pwa_parameter = optimization_setup.get_attribute_of_specific_element(cls, tech, f"pwa_capex")
-            pwa_breakpoints[index] = pwa_parameter["capacity"]
+            pwa_breakpoints[index] = pwa_parameter["capacity_addition"]
             pwa_values[index] = pwa_parameter["capex"]
         return pwa_breakpoints, pwa_values
 

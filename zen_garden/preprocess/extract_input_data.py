@@ -345,12 +345,13 @@ class DataInput:
                     self.system["set_nodes"] = set_nodes_input
                     set_nodes_config = set_nodes_input
                 else:
-                    assert len(set_nodes_config) > 1, f"ZENx is a spatially distributed model. Please specify at least 2 nodes."
-                    _missing_nodes = list(set(set_nodes_config).difference(set_nodes_input))
-                    assert len(_missing_nodes) == 0, f"The nodes {_missing_nodes} were declared in the config but do not exist in the input file {self.folder_path + 'set_nodes'}"
+                    missing_nodes = list(set(set_nodes_config).difference(set_nodes_input))
+                    assert len(missing_nodes) == 0, f"The nodes {missing_nodes} were declared in the config but do not exist in the input file {self.folder_path + 'set_nodes'}"
                 if not isinstance(set_nodes_config, list):
                     set_nodes_config = set_nodes_config.to_list()
                 set_nodes_config.sort()
+                # assert that no transport technology is selected if only one node is given
+                assert len(set_nodes_config) > 1 or len(self.system["set_transport_technologies"]) == 0, f"Only one node is given in the system file. Transport technologies are not allowed in this case. You selected {self.system['set_transport_technologies']}"
                 return set_nodes_config
         else:
             set_edges_input = self.read_input_csv("set_edges")
@@ -448,7 +449,7 @@ class DataInput:
         time_steps = "set_time_steps_yearly"
         unit_category = {"money": 1, "energy_quantity": -1, "time": 1}
         # import all input data
-        df_input_nonlinear, has_unit_nonlinear = self.read_pwa_capex_files(file_type="nonlinear_")
+        df_input_nonlinear, has_unit_nonlinear = self.read_pwa_capex_files()
         # if nonlinear
         if df_input_nonlinear is not None:
             if not has_unit_nonlinear:
@@ -458,7 +459,7 @@ class DataInput:
             # extract all data values
             nonlinear_values = {}
 
-            df_input_nonlinear["capex"] = df_input_nonlinear["capex"] * df_input_nonlinear["capacity"]
+            df_input_nonlinear["capex"] = df_input_nonlinear["capex_specific_conversion"] * df_input_nonlinear["capacity_addition"]
             for column in df_input_nonlinear.columns:
                 nonlinear_values[column] = df_input_nonlinear[column].to_list()
 
@@ -532,22 +533,18 @@ class DataInput:
                                                            time_steps=time_steps, unit_category=unit_category)
             return linear_dict, is_pwa
 
-    def read_pwa_capex_files(self, file_type=str()):
+    def read_pwa_capex_files(self):
         """ reads pwa files
 
-        :param file_type: either breakpointsPWA, linear, or nonlinear
         :return df_input: raw input file"""
-        df_input = self.read_input_csv(file_type + "capex")
+        df_input = self.read_input_csv("nonlinear_capex")
         has_unit = False
         if df_input is not None:
             string_row = df_input.map(lambda x: pd.to_numeric(x, errors='coerce')).isna().any(axis=1)
             if string_row.any():
                 unit_row = df_input.loc[string_row]
-                #save non-linear capex units for consistency checks
-                if file_type == "nonlinear_":
-                    self.element.units_nonlinear_capex_files = {"nonlinear": unit_row}
-                # elif file_type == "breakpoints_pwa_":
-                #     self.element.units_nonlinear_capex_files["breakpoints"] = unit_row
+                # save non-linear capex units for consistency checks
+                self.element.units_nonlinear_capex_files = {"nonlinear": unit_row}
                 df_input = df_input.loc[~string_row]
                 if isinstance(unit_row, pd.DataFrame):
                     unit_row = unit_row.squeeze()
@@ -712,8 +709,7 @@ class DataInput:
             # check if input data is still given with generic time indices
             temporal_header = self.index_names["set_time_steps_yearly"]
             if max(df_input.loc[:, temporal_header]) < self.analysis["earliest_year_of_data"]:
-                logging.warning(
-                    f"DeprecationWarning: Generic time indices (used in {file_name}) will not be supported for input data with yearly time steps any longer! Use the corresponding years (e.g. 2022,2023,...) as time indices instead")
+                logging.warning(f"DeprecationWarning: Generic time indices (used in {file_name}) will not be supported for input data with yearly time steps any longer! Use the corresponding years (e.g. 2022,2023,...) as time indices instead")
                 return df_input
             # assert that correct temporal index_set to get corresponding index_name is given (i.e. set_time_steps_yearly for input data with yearly time steps)(otherwise extract_general_input_data() will find a missing_index)
             assert temporal_header in index_name_list, f"Input data with yearly time steps and therefore the temporal header 'year' needs to be extracted with index_sets=['set_time_steps_yearly'] instead of index_sets=['set_time_steps']"

@@ -9,7 +9,7 @@ Default configuration. Changes from the default values are specified in config.p
 
 from pydantic import BaseModel, ConfigDict
 from typing import Any, Optional, Union
-
+import importlib.metadata
 
 class Subscriptable(BaseModel, extra="allow"):
     def __getitem__(self, __name: str) -> Any:
@@ -83,7 +83,6 @@ class HeaderDataInputs(Subscriptable):
     set_capacity_types: str = "capacity_type"
 
 class System(Subscriptable):
-    model_config = ConfigDict(extra="allow")
     set_carriers: list[str] = []
     set_capacity_types: list[str] = ["power", "energy"]
     set_conversion_technologies: list[str] = []
@@ -100,15 +99,14 @@ class System(Subscriptable):
     clean_sub_scenarios: bool = False
     total_hours_per_year: int = 8760
     knowledge_depreciation_rate: float = 0.1
-    enforce_selfish_behavior: bool = False
-    reference_year: int = 2023
+    reference_year: int = 2024
     unaggregated_time_steps_per_year: int = 8760
     aggregated_time_steps_per_year: int = 10
     conduct_time_series_aggregation: bool = True
-    optimized_years: int = 3
+    optimized_years: int = 1
     interval_between_years: int = 1
     use_rolling_horizon: bool = False
-    years_in_rolling_horizon: int = 5
+    years_in_rolling_horizon: int = 1
     years_in_decision_horizon: int = 1
     use_capacities_existing: bool = True
     use_foresight_error: bool = False
@@ -124,52 +122,43 @@ class Solver(Subscriptable):
     keep_files: bool = False
     io_api: str = "lp"
     add_duals: bool = False
-    recommend_base_units: bool = False
-    immutable_unit: list[str] = []
-    range_unit_exponents: dict[str, int] = {"min": -1, "max": 1, "step_width": 1}
-    rounding_decimal_points: int = 5
-    rounding_decimal_points_ts: int = 4
     linear_regression_check: dict[str, float] = {
         "eps_intercept": 0.1,
         "epsRvalue": 1 - (1e-5),
     }
-    rounding_decimal_points_units: int = 6
     round_parameters: bool = True
+    rounding_decimal_points_units: int = 6
     rounding_decimal_points_capacity: int = 4
+    rounding_decimal_points_tsa: int = 4
     analyze_numerics: bool = True
     use_scaling: bool = True
-    scaling_include_rhs: bool = False
+    scaling_include_rhs: bool = True
     scaling_algorithm: Union[list[str],str] = ["geom","geom","geom"]
-
 
 
 class TimeSeriesAggregation(Subscriptable):
     slv: Solver = Solver()
     clusterMethod: str = "hierarchical"
     solver: str = slv.name
-    hoursPerPeriod: int = 1
+    hoursPerPeriod: int = 1 # keep this at 1
     extremePeriodMethod: Optional[str] = "None"
     rescaleClusterPeriods: bool = False
     representationMethod: str = "meanRepresentation"
     resolution: int = 1
-    segmentation: bool = False
-    noSegments: int = 12
 
 class Analysis(Subscriptable):
     dataset: str = ""
     objective: str = "total_cost"
-    sense: str = "minimize"
-    transport_distance: str = "Euclidean"
+    sense: str = "min"
     subsets: Subsets = Subsets()
     header_data_inputs: HeaderDataInputs = HeaderDataInputs()
     time_series_aggregation: TimeSeriesAggregation = TimeSeriesAggregation()
     folder_output: str = "./outputs/"
     overwrite_output: bool = True
     output_format: str = "h5"
-    write_results_yml: bool = False
-    max_output_size_mb: int = 500
-    folder_name_system_specification: str = "system_specification"
     earliest_year_of_data: int = 1900
+    save_benchmarking_results: bool = False
+    zen_garden_version: str = importlib.metadata.version("zen-garden")
 
 class Config(Subscriptable):
     analysis: Analysis = Analysis()

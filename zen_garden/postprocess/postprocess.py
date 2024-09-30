@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from ..utils import HDFPandasSerializer
 from ..model.optimization_setup import OptimizationSetup
 
+
 # Warnings
 warnings.filterwarnings('ignore', category=NaturalNameWarning)
 
@@ -55,6 +56,7 @@ class Postprocess:
         self.sets = model.sets
         self.constraints = model.constraints
         self.param_map = param_map
+        self.scaling = model.scaling
 
         # get name or directory
         self.model_name = model_name
@@ -90,6 +92,8 @@ class Postprocess:
         self.save_scenarios()
         self.save_solver()
         self.save_param_map()
+        if self.analysis.save_benchmarking_results:
+            self.save_benchmarking_data()
 
         # extract and save sequence time steps, we transform the arrays to lists
         self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict())
@@ -130,28 +134,14 @@ class Postprocess:
                     with open(f_name, f_mode) as outfile:
                         outfile.write(serialized_dict)
 
-        elif format == "gzip" or format == "json":
+        elif format == "json":
             # serialize to string
-            
+
             serialized_dict = json.dumps(dictionary, indent=2)
 
-            # if the string is larger than the max output size we compress anyway
-            force_compression = False
-            if format == "json" and sys.getsizeof(serialized_dict) / 1024 ** 2 > self.analysis["max_output_size_mb"]:
-                print(f"WARNING: The file {name}.json would be larger than the maximum allowed output size of "
-                      f"{self.analysis['max_output_size_mb']}MB, compressing...")
-                force_compression = True
-
-            # prep output file
-            if format == "gzip" or force_compression:
-                # compress
-                f_name = f"{name}.gzip"
-                f_mode = "wb"
-                serialized_dict = zlib.compress(serialized_dict.encode())
-            else:
-                # write normal json
-                f_name = f"{name}.json"
-                f_mode = "w+"
+            # write normal json
+            f_name = f"{name}.json"
+            f_mode = "w+"
 
             # write if necessary
             if self.overwrite or not os.path.exists(f_name):
@@ -166,6 +156,29 @@ class Postprocess:
 
         else:
             raise AssertionError(f"The specified output format {format}, chosen in the config, is not supported")
+
+    def save_benchmarking_data(self):
+        #initialize dictionary
+        benchmarking_data = {}
+        # get the benchmarking data
+        benchmarking_data["solving_time"] = self.model.solver_model.Runtime
+        if self.solver.solver_options["Method"] == 2:
+            benchmarking_data["number_iterations"] = self.model.solver_model.BarIterCount
+        else:
+            benchmarking_data["number_iterations"] = self.model.solver_model.IterCount
+        benchmarking_data["solver_status"] = self.model.solver_model.Status
+        benchmarking_data["objective_value"] = self.model.objective_value
+        benchmarking_data["scaling_time"] = self.scaling.scaling_time
+
+        #get numerical range
+        range_lhs, range_rhs, cond = self.scaling.print_numerics(0, False, True)
+        benchmarking_data["numerical_range_lhs"] = range_lhs
+        benchmarking_data["numerical_range_rhs"] = range_rhs
+        benchmarking_data["condition_number"] = cond
+
+
+        fname = self.name_dir.joinpath('benchmarking')
+        self.write_file(fname, benchmarking_data, format="json")
 
     def save_sets(self):
         """ Saves the Set values to a json file which can then be
@@ -402,19 +415,12 @@ class Postprocess:
         :return: #TODO describe parameter/return
         """
         if self.output_format == "h5":
-            # No need to transform the dataframe to json
-            # doc = self._doc_to_df(doc)
             if units is not None:
                 dataframe = {"dataframe": df, "docstring": doc, "units": units}
             else:
                 dataframe = {"dataframe": df, "docstring": doc}
         else:
-            if units is not None:
-                dataframe = {"dataframe": json.loads(df.to_json(orient="table", indent=2)),
-                                                "docstring": doc, "units": units}
-            else:
-                dataframe = {"dataframe": json.loads(df.to_json(orient="table", indent=2)),
-                             "docstring": doc}
+            raise AssertionError(f"The specified output format {self.output_format}, chosen in the config, is not supported")
         return dataframe
 
     def _doc_to_df(self, doc):

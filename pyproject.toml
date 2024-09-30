@@ -6,17 +6,25 @@ build-backend = "flit_core.buildapi"
 name = "zen_garden"
 authors = [
   {name = "Jacob Mannhardt", email = "jmannhardt@ethz.ch"},
-  {name = "Alissa Ganter", email = "aganter@ethz.ch"}
+  {name = "Alissa Ganter"},
+  {name = "Johannes Burger"},
+  {name = "Francesco De Marco"},
+  {name = "Lukas Kunz"},
+  {name = "Lukas Schmidt-Engelbertz"},
+  {name = "Giovanni Sansavini"},
   ]
-version = "1.2.8"
-description="ZEN-garden is an optimization model of energy systems and value chains."
+# do not change version manually! Done by bump2version
+version = "1.11.2"
 requires-python= ">=3.10"
+description="ZEN-garden is an optimization model of energy systems and value chains."
+readme = "README.md"
+license = { file = "LICENSE.txt" }
 
 dependencies = [
     "xarray",
     "cython",
     "numpy<=1.26.4",
-    "pandas",
+    "pandas>=2.2",
     "scipy",
     "pint",
     "tables",
@@ -28,6 +36,9 @@ dependencies = [
     "pyogrio",
     "psutil",
     "linopy<=0.3.10",
+    "requests",
+    "ipykernel",
+    "zen-temple"
 ]
 
 [project.optional-dependencies]
@@ -46,8 +57,13 @@ dev = [
     "coverage",
 ]
 
+vis = [
+    "matplotlib",
+]
+
 gurobipy = ["gurobipy"]
 
 [project.urls]
 Homepage = "https://github.com/ZEN-universe/ZEN-garden"
 Documentation = "https://zen-garden.readthedocs.io/en/latest/"
+Zenodo = "https://zenodo.org/api/records/13385110"

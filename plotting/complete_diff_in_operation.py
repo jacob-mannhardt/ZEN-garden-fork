@@ -1,4 +1,6 @@
 from plotting.helpers import *
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 
 
 
@@ -142,83 +144,103 @@ def complete_diff_in_operation_plot(model_name):
     ETS_colors_5 = [colors(idx) for idx in ETS_tech_em_el_5_5.index]
 
 
-    fig, axs = plt.subplots(3, 2, figsize=(9, 13))  # Creating a 2x3 grid of subplots
+    # for legend:
+    unique_colors_labels = {}
+    all_colors = {
+        **dict(zip(base_tech_em_el_5_1.index, base_colors_1)),
+        **dict(zip(base_tech_em_el_5_5.index, base_colors_5)),
+        **dict(zip(cap_add_tech_em_el_5_1.index, cap_add_colors_1)),
+        **dict(zip(cap_add_tech_em_el_5_5.index, cap_add_colors_5)),
+        **dict(zip(gen_tech_em_el_5_1.index, gen_colors_1)),
+        **dict(zip(gen_tech_em_el_5_5.index, gen_colors_5)),
+        **dict(zip(ETS_tech_em_el_5_1.index, ETS_colors_1)),
+        **dict(zip(ETS_tech_em_el_5_5.index, ETS_colors_5)),
+    }
+    for tech, color in all_colors.items():
+        label = transform_label(tech)
+        unique_colors_labels[label] = color
 
+    legend_elements = []
+    # Add line styles at the top
+    legend_elements.append(mlines.Line2D([], [], color='black', linestyle=':', label='Scenario D (IF:10a,  OF:2a)'))
+    legend_elements.append(mlines.Line2D([], [], color='black', linestyle='-', label='Scenario C (IF:10a,  OF:10a)'))
+    # Add color patches for each unique color
+    for label, color in unique_colors_labels.items():
+        legend_elements.append(mpatches.Patch(color=color, label=label))
+
+    fig, axs = plt.subplots(3, 2, figsize=(9, 13))  # Creating a 2x3 grid of subplots
+    width = 0.4
     # Top-left plot (Percentage renewable electricity)
     axs[0, 0].plot(percentage_renewable_electricity.columns, percentage_renewable_electricity.loc['5_1'],
-                   label='IF:10yr,  OF:2yr', linestyle=':', color='black', zorder=2) # 'IF:30a,  OF:2a'
+                   label='Scenario D (IF:10a,  OF:2a)', linestyle=':', color='black', zorder=2)
     axs[0, 0].plot(percentage_renewable_electricity.columns, percentage_renewable_electricity.loc['5_5'],
-                   label='IF:10yr,  OF:10yr', linestyle='-', color='black', zorder=2)
+                   label='Scenario C (IF:10a,  OF:10a)', linestyle='-', color='black', zorder=2)
 
     axs[0, 0].set_title('Electricity from Renewable Generation')
     axs[0, 0].set_ylabel('Renewable Electricity [%]', fontsize=12)
     axs[0, 0].grid(True, zorder=1)
 
+    # Clear out unwanted elements in the top-right subplot
+    axs[0, 1].plot([], [], ' ')  # Dummy plot to attach the legend
     axs[0, 1].axis('off')
+    # Adding a dummy plot to the top-right subplot to anchor the legend
+    axs[0, 1].legend(handles=legend_elements, loc='center', frameon=False, fontsize=10)
 
     # Middle-left plot (Base Emissions)
     base_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=base_colors_1,
-                               position=-0.15, ax=axs[1, 0], width=0.3)
+                               position=0.0, ax=axs[1, 0], width=width)
     base_tech_em_el_5_5.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=base_colors_5, ax=axs[1, 0],
-                               width=0.3)
+                               position=1, width=width)
     axs[1, 0].set_title('Electricity Sector Emissions over Time')
     axs[1, 0].set_ylabel('Annual Emissions [Mt CO₂]')
     axs[1, 0].grid(True, which='both', linestyle='-', linewidth=0.2, color='gray', alpha=0.4)
 
     # Middle-right plot (Capacity Additions Emissions)
     cap_add_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=cap_add_colors_1,
-                                  position=-0.5, ax=axs[1, 1], width=0.3)
+                                  position=0.0, ax=axs[1, 1], width=width)
     cap_add_tech_em_el_5_5.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=cap_add_colors_5,
-                                  ax=axs[1, 1], width=0.3)
-    axs[1, 1].set_title('Capacity Additions Emissions')
+                                  ax=axs[1, 1], position=1, width=width)
     axs[1, 1].grid(True, which='both', linestyle='-', linewidth=0.2, color='gray', alpha=0.4)
 
     # Bottom-left plot (Generation Emissions)
-    gen_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=gen_colors_1, position=-0.5,
-                              ax=axs[2, 0], width=0.3)
+    gen_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=gen_colors_1, position=0.0,
+                              ax=axs[2, 0], width=width)
     gen_tech_em_el_5_5.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=gen_colors_5, ax=axs[2, 0],
-                              width=0.3)
-    axs[2, 0].set_title('Generation Emissions')
+                              position=1, width=width)
     axs[2, 0].set_ylabel('Annual Emissions [Mt CO₂]')
     axs[2, 0].grid(True, which='both', linestyle='-', linewidth=0.2, color='gray', alpha=0.4)
 
     # Bottom-right plot (ETS Emissions)
-    ETS_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=ETS_colors_1, position=-0.5,
-                              ax=axs[2, 1], width=0.3)
+    ETS_tech_em_el_5_1.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=ETS_colors_1, position=0.0,
+                              ax=axs[2, 1], width=width)
     ETS_tech_em_el_5_5.T.plot(kind='bar', stacked=True, edgecolor='black', linewidth=0.5, color=ETS_colors_5, ax=axs[2, 1],
-                              width=0.3)
-    axs[2, 1].set_title('ETS Emissions')
+                              position=1, width=width)
     axs[2, 1].grid(True, which='both', linestyle='-', linewidth=0.2, color='gray', alpha=0.4)
-
-    axs[2, 1].set_title('Title 2, 1')
-
     # List of target subplots
     target_axes = [axs[1, 0], axs[1, 1], axs[2, 0], axs[2, 1]]
 
-    # Apply settings to each subplot
+    # # Apply settings to each subplot
     for ax in target_axes:
         x_min, x_max = ax.get_xlim()
-        ax.set_xlim(x_min - 0.5, x_max)
+        ax.set_xlim(x_min, x_max + 0.45)
         ax.set_ylim(-100, 800)
         ax.grid(True, which='both', linestyle='-', linewidth=0.2, color='gray', alpha=0.4)
 
-    # # Adding legends and adjusting layout
+    # Remove legends from all subplots except the top-right (axs[0, 1])
     for ax in axs.flat:
-        ax.legend().set_visible(False)
-    handles, labels = axs[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.53, 0.42), ncol=3)
+        if ax != axs[0, 1] and ax.get_legend() is not None:  # Only hide legends if they exist
+            ax.get_legend().set_visible(False)
 
+    subplot_labels = [
+        "Base Scenario", "", "Base Scenario", "Investment Policy",
+        "Operation Policy", "Emission Policy"
+    ]
+    x_pos = 0.03
+    y_pos = 0.93
 
-    # Adjust the layout
-    # # Adjust the layout to make space for the legend outside the subplots
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    # Adjust spacing between subplots and increase the bottom margin
-    fig.subplots_adjust(hspace=0.4, bottom=0.15)  # Increased bottom margin
-
-    # Retrieve and adjust the positions of the last row subplots to create extra space
-    # Manually adjusting the 'bottom' property of the third row's axes
-    bottom_shift = 0.02  # Amount to move the last row down, adjust as needed
-
+    for i, ax in enumerate(axs.flat):
+        ax.text(x=x_pos, y=y_pos, s=subplot_labels[i], transform=ax.transAxes, fontsize=12,
+                verticalalignment='top', bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'))
 
     i = 0
     for row in axs:
@@ -238,26 +260,45 @@ def complete_diff_in_operation_plot(model_name):
                 ax.set_xticklabels(new_labels, rotation=0)
                 for xtick in ax.get_xticks():
                     ax.plot([xtick, xtick], [0, 100], linestyle=':', linewidth=0.3,
-                            color='grey')  # Adjust linestyle, linewidth, and color as needed
+                            color='grey')
 
-            else:
-                ax.set_ylim(0, 750)
-                positive_ticks = np.arange(100, 751, 100)
-                negative_ticks = np.arange(0, -151, -100)
-                yticks_major = np.concatenate((negative_ticks[::-1], positive_ticks))
-                ax.set_yticks(yticks_major)
+            elif i > 0:
+                ax.set_ylim(0, 850)
+                # Define positive ticks
+                positive_ticks = np.arange(0, 851, 100)
+
+                # Set y-axis ticks
+                ax.set_yticks(positive_ticks)
                 ax.yaxis.grid(True, which='major', linestyle=':', linewidth=0.3,
-                              color='grey')  # Adjust linestyle, linewidth, and color as needed
+                              color='grey')
 
-                xticks_major = np.arange(0, 15, 2)
+                xticks_major = np.arange(0, 16, 2)
                 ax.set_xticks(xticks_major)
                 ax.axhline(y=0, color='black', linestyle=':', linewidth=0.7)
                 ax.xaxis.grid(True, which='major', linestyle=':', linewidth=0.3,
-                              color='grey')  # Adjust linestyle, linewidth, and color as needed
+                              color='grey')
 
                 # Calculate new labels for these ticks
                 new_labels = [2022 + 2 * int(tick) for tick in xticks_major]
                 ax.set_xticklabels(new_labels, rotation=0)
+
+            if i == 1 and j == 0:
+                # Calculate sum for the bars at the first x-tick
+                y_coord_5_5 = base_tech_em_el_5_5.sum(axis=0).iloc[0]
+                y_coord_5_1 = base_tech_em_el_5_1.sum(axis=0).iloc[0]
+
+                # X-coordinates based on the adjusted positions of bars
+                x_coord_5_5 = -0.2  # Adjust this value if the left bar shifts
+                x_coord_5_1 = 0.3  # Adjust this value if the right bar shifts
+
+                # Annotations for the bars
+                ax.text(x_coord_5_5 + 8.2, y_coord_5_5 + 80, 'Scenario C (IF:10a,  OF:10a)', ha='center', va='bottom')
+                ax.plot([x_coord_5_5, x_coord_5_5 + 3], [y_coord_5_5 + 100, y_coord_5_5 + 100], color='black')
+                ax.plot([x_coord_5_5, x_coord_5_5], [y_coord_5_5, y_coord_5_5 + 100], color='black')
+
+                ax.text(x_coord_5_1 + 7.7, y_coord_5_1 - 20, 'Scenario D (IF:10a,  OF:2a)', ha='center', va='bottom')
+                ax.plot([x_coord_5_1, x_coord_5_1 + 3], [y_coord_5_1, y_coord_5_1], color='black')
+
             j += 1
         i += 1
 

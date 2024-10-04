@@ -335,58 +335,17 @@ def cumulative_emissions_plot_grouped2x2(model_names):
 
 
 if __name__ == "__main__":
-    # model_name = "PI_small_drastic_coal_capacity_phaseout"
-    # model_name = "PC_ct_vartdr_w_pass_tra_ren_gen"
-    # model_name = "PC_ct_vartdr_w_pass_tra_ren_cap"
-    # model_name = "PC_ct_base"
-    # model_name = "PC_ct_vartdr_w_pass_tra_ETS1"
-    # model_name = "PC_ct_test"
-    # model_name = "PC_ct_vartdr_w_pass_tra_base"
-    # model_name = "PC_ct_pass_tra_base_oil_prices"
-    # desired_scenarios = ['10_1', '10_5', '5_1', '5_3', '5_5']
-    # model_name = "PC_ct_pass_tra_base"
-    # desired_scenarios = ['15_1', '15_3', '15_5', '10_1', '10_3', '10_5', '5_1', '5_3', '5_5']
-    # model_name = "PC_ct_pass_tra_base_test"
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-
-    # Defined Models (single policy) ==================================
-    # model_name = "PC_ct_pass_tra_base"
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = ("PC_ct_pass_tra_ETS1only")
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = "PC_ct_pass_tra_ETS1and2"
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = ("PC_ct_pass_tra_cap_add_target")
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = ("PC_ct_pass_tra_gen_target")
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = ("PC_ct_pass_tra_coal_cap_phaseout")
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = ("PC_ct_pass_tra_coal_gen_phaseout")
-    # desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # Defined Models ==================================
     desired_scenarios = ['15_1', '15_5', '5_1', '5_5']
-
-    # model_name = "PC_ct_pass_tra_base"
-
-    # model_name = "PC_ct_pass_tra_ETS1and2"
-
-    # model_name = "PC_ct_pass_tra_cap_add_target"
-
-    # model_name = "PC_ct_pass_tra_gen_target"
-
-    # cumulative_emissions_plot()
-
-    # cumulative_emissions_plot_grouped()
-
     model_names = ["PC_ct_pass_tra_base", "PC_ct_pass_tra_cap_add_target",
                    "PC_ct_pass_tra_gen_target", "PC_ct_pass_tra_ETS1and2"]
     cumulative_emissions_plot_grouped2x2(model_names)
+
+
+    # individual plots (not in overleaf doc):
+    # model_name = "PC_ct_pass_tra_base"
+    # model_name = "PC_ct_pass_tra_cap_add_target"
+    # model_name = "PC_ct_pass_tra_gen_target"
+    # model_name = "PC_ct_pass_tra_ETS1and2"
+
+    # cumulative_emissions_plot()
+    # cumulative_emissions_plot_grouped()

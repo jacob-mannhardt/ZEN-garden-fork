@@ -1143,6 +1143,7 @@ assert len(desired_scenarios) == 1, "too many scenarios for this plot"
 # Plots: (electricity, heat, BEV)
 feedback_plot_progression_with_techs(model_name)
 
+# plots for the SI
 # feedback_plot_progression_with_techs_heat(model_name)
 
 # feedback_plot_progression_with_techs_transport(model_name)

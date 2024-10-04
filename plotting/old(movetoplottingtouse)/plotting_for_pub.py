@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
-import matplotlib.colors as mcolors  # this is what I recently added
 import seaborn as sns
 import matplotlib.ticker as ticker
 import numpy as np
@@ -12,12 +11,13 @@ import json
 import pandas as pd
 import math
 from pandas import IndexSlice as idx
-from matplotlib.ticker import MultipleLocator, AutoMinorLocator
+from matplotlib.ticker import AutoMinorLocator
 from matplotlib.lines import Line2D
-from postresults import PostResult
+from plotting.postresults import PostResult
 
 from zen_garden.postprocess.results.results import Results
-from zen_garden.model.default_config import Config,Analysis,Solver,System
+from zen_garden.model.default_config import Config
+
 
 # read in results
 def read_in_results(model_name):
@@ -42,7 +42,7 @@ def read_in_results(model_name):
 
 # read in results
 def read_in_special_results(model_name):
-    data_path = "/Users/lukashegner/PycharmProjects/ZEN-garden_fork/data/"
+    data_path = "/data/"
     outputs_path = data_path + "outputs"
     # data_path = "/Volumes/Elements10T/RRE_Myopic_Operation_Project/Model_Outputs/"
     # outputs_path = data_path + "/outputs"

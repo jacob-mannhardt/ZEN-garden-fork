@@ -1,6 +1,5 @@
 from plotting.helpers import *
 
-
 def manipulate_df(df):
     df.reset_index(inplace=True)
     df.rename(columns={'level_0': 'scenario'}, inplace=True)
@@ -10,7 +9,6 @@ def manipulate_df(df):
     df = df[df.index.get_level_values('capacity_type') == 'power']
     df.index = df.index.droplevel('capacity_type')
     df.index = df.index.droplevel('scenario')
-
     return df
 
 

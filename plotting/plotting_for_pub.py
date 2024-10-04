@@ -3826,7 +3826,7 @@ if __name__ == "__main__":
     if False:
         run_unused_plots()
 
-    if True:
+    if False:
         # model_name = "PI_small_drastic_coal_production_phaseout"
         # model_name = ("PI_small")
         # model_name = ("PI_small_drastic_coal_capacity_phaseout")
@@ -3843,7 +3843,7 @@ if __name__ == "__main__":
         comparative_costs_over_time()
 
     # difference in operation plot
-    if False:
+    if True:
         # model_name = "cons_nolead_init"
         model_name = "post_changes_to_model/cons_lead_15"
         desired_scenarios = ['15_15', '15_1']
@@ -3865,7 +3865,7 @@ if __name__ == "__main__":
         utilization_rate_plot()
 
     # feedback to investent plot_
-    if True:
+    if False:
         if True:
             model_name =  "post_changes_to_model/cons_lead_15"
         else:
@@ -3876,7 +3876,7 @@ if __name__ == "__main__":
         feedback_plot_progression_with_techs()
 
     # feedback to investent plot heat
-    if True:
+    if False:
         if True:
             model_name =  "post_changes_to_model/cons_lead_15"
         else:

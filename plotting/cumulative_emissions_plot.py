@@ -58,7 +58,7 @@ def cumulative_emissions_plot():
     plt.axhline(y=carbon_budget, color='black', linestyle='--', label='Carbon Budget')
     plt.xlabel('Year')
     plt.ylabel('Cumulative Emissions [Gt CO2]')
-    plt.title(model_name + ', TSA:20')
+    plt.title(model_name + ', TSA:50')
     plt.legend(title="Series")
     plt.grid(True)
     plt.ylim(top=18.5)
@@ -295,7 +295,7 @@ def cumulative_emissions_plot_grouped2x2(model_names):
             model_name_str = "Operation Policy"
 
         # Set titles and labels for the subplots
-        ax.set_title(model_name_str + ', TSA:20', loc='left', x=0.01 ,y=0.93, fontsize=12)
+        ax.set_title(model_name_str, loc='left', x=0.01 ,y=0.93, fontsize=12)
         ax.set_xlabel('Year')
         ax.set_ylabel('Cumulative Emissions [Gt CO2]')
 
@@ -377,16 +377,16 @@ if __name__ == "__main__":
 
     # model_name = "PC_ct_pass_tra_base"
 
-    model_name = "PC_ct_pass_tra_ETS1and2"
+    # model_name = "PC_ct_pass_tra_ETS1and2"
 
     # model_name = "PC_ct_pass_tra_cap_add_target"
-    #
+
     # model_name = "PC_ct_pass_tra_gen_target"
 
-    cumulative_emissions_plot()
+    # cumulative_emissions_plot()
 
     # cumulative_emissions_plot_grouped()
 
-    model_names = ["PC_ct_pass_tra_base", "PC_ct_pass_tra_cap_add_target", "PC_ct_pass_tra_ETS1and2",
-                   "PC_ct_pass_tra_gen_target"]
+    model_names = ["PC_ct_pass_tra_base", "PC_ct_pass_tra_cap_add_target",
+                   "PC_ct_pass_tra_gen_target", "PC_ct_pass_tra_ETS1and2"]
     cumulative_emissions_plot_grouped2x2(model_names)

@@ -49,6 +49,60 @@ def generate_df():
 
     return df
 
+def calculate_benefits(model_name):
+    discounted = False
+    if type(model_name) == str:
+        model_name = [model_name]
+
+    dfs = []
+    for name in model_name:
+        if discounted == True:
+            r, config = read_in_special_results(name)
+            df_OPEX, df_CAPEX = r.get_npc()
+            temp_dfs = []
+            for i, df in enumerate([df_OPEX, df_CAPEX]):
+                names = ['cost_opex_total', 'cost_capex_total']
+                df = indexmapping(df, special_model_name=name)
+                df_selected = df.iloc[:, ::2]
+                new_column_names = range(15)
+                df_selected.columns = new_column_names
+                df_selected.index = pd.MultiIndex.from_product([[names[i]], df_selected.index])
+                if i == 0:
+                    df_OPEX = df_selected
+                    temp_dfs.append(df_OPEX)
+                else:
+                    df_CAPEX = df_selected
+                    temp_dfs.append(df_CAPEX)
+            df = pd.concat(temp_dfs, axis=0, join='outer')
+        else:
+            r, config = read_in_results(name)
+
+            costs = ["cost_opex_total", "cost_carrier_total", "cost_capex_total"]
+            df = {}
+            for c in costs:
+                df[c] = r.get_total(c)
+                df[c] = indexmapping(df[c], special_model_name=name)
+
+            df = pd.concat(df, keys=df.keys())
+            df.loc['cost_opex_total'] = (df.loc['cost_opex_total'].values + df.loc['cost_carrier_total'].values)
+            df = df.drop('cost_carrier_total')
+            df.index = pd.MultiIndex.from_tuples([(first, second + "_" + name) for first, second in df.index])
+
+        # Append the processed DataFrame to the list
+        dfs.append(df)
+
+    # Concatenate all DataFrames in the list to a single DataFrame
+    # Adjust 'axis' and 'join' arguments as per your data structure and needs
+    df = pd.concat(dfs, axis=0, join='outer')
+    df = df / 1000
+    df = df.sort_index()
+    df = df[~df.index.get_level_values(1).str.startswith(('15_1', '5_5'))]
+    df.columns = rename_columns(df.columns)
+
+    print("done")
+
+
+
 def comparative_costs_over_time_5(model_name):
     discounted = False
     # Iterate over each model name in the list
@@ -99,18 +153,12 @@ def comparative_costs_over_time_5(model_name):
     df = df.sort_index()
     df = df[~df.index.get_level_values(1).str.startswith(('15_1', '15_5'))]
 
-
+    # ==============================================
+    # to develop the figure without the data carrier:
     # df = generate_df()
+    # ==============================================
+
     df.columns = rename_columns(df.columns)
-
-    # Set the color palette
-    colors = sns.color_palette('pastel')[:2]  # Choosing two colors from the 'pastel' palette
-    saved_lines = {}
-    saved_lines_capex = {}
-
-    # Set up a 2x2 grid of plots with no space between them
-    # fig, axs = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
-    # axs = axs.flatten()
 
     colors = ['#1f77b4', '#ff7f0e']
 
@@ -173,7 +221,7 @@ def comparative_costs_over_time_5(model_name):
             model_name_str = "Investment Policy"
         elif name == "PC_ct_pass_tra_gen_target":
             model_name_str = "Operation Policy"
-        axs[i].set_title(model_name_str + ', TSA:20', loc='left', x=0.05, y=0.9, fontsize=12,
+        axs[i].set_title(model_name_str + ', TSA:50', loc='left', x=0.05, y=0.9, fontsize=12,
                          bbox=dict(facecolor='white', alpha=0.9, edgecolor='none'))
 
         # Set y-limits (adjust based on your data)
@@ -244,7 +292,11 @@ def comparative_costs_over_time_15(model_name):
     df = df[~df.index.get_level_values(1).str.startswith(('5_5', '5_1'))]
 
 
+    # ==============================================
+    # to develop the figure without the data carrier:
     # df = generate_df()
+    # ==============================================
+
     df.columns = rename_columns(df.columns)
 
     # Set the color palette
@@ -317,7 +369,7 @@ def comparative_costs_over_time_15(model_name):
             model_name_str = "Investment Policy"
         elif name == "PC_ct_pass_tra_gen_target":
             model_name_str = "Operation Policy"
-        axs[i].set_title(model_name_str + ', TSA:20', loc='left', x=0.05, y=0.9, fontsize=12,
+        axs[i].set_title(model_name_str + ', TSA:50', loc='left', x=0.05, y=0.9, fontsize=12,
                          bbox=dict(facecolor='white', alpha=0.9, edgecolor='none'))
 
         # Set y-limits (adjust based on your data)
@@ -388,7 +440,11 @@ def comparative_costs_over_time_extreme(model_name):
     df = df[~df.index.get_level_values(1).str.startswith(('15_1', '5_5'))]
 
 
+    # ==============================================
+    # to develop the figure without the data carrier:
     # df = generate_df()
+    # ==============================================
+
     df.columns = rename_columns(df.columns)
 
     # Set the color palette
@@ -461,7 +517,7 @@ def comparative_costs_over_time_extreme(model_name):
             model_name_str = "Investment Policy"
         elif name == "PC_ct_pass_tra_gen_target":
             model_name_str = "Operation Policy"
-        axs[i].set_title(model_name_str + ', TSA:20', loc='left', x=0.05, y=0.9, fontsize=12,
+        axs[i].set_title(model_name_str + ', TSA:50', loc='left', x=0.05, y=0.9, fontsize=12,
                          bbox=dict(facecolor='white', alpha=0.9, edgecolor='none'))
 
         # Set y-limits (adjust based on your data)
@@ -614,7 +670,7 @@ def comparative_costs_over_time_policy_impact(model_name, scenario):
             model_name_str = "Investment Policy"
         elif name == "PC_ct_pass_tra_gen_target":
             model_name_str = "Operation Policy"
-        axs[i].set_title(model_name_str + ', TSA:20', loc='left', x=0.05, y=0.9, fontsize=12,
+        axs[i].set_title(model_name_str + ', TSA:50', loc='left', x=0.05, y=0.9, fontsize=12,
                          bbox=dict(facecolor='white', alpha=0.9, edgecolor='none'))
 
         # Set y-limits (adjust based on your data)
@@ -649,7 +705,7 @@ def comparative_costs_over_time_policy_impact(model_name, scenario):
 # model_name = ("PC_ct_pass_tra_coal_gen_phaseout")
 
 model_name = ["PC_ct_pass_tra_base", "PC_ct_pass_tra_cap_add_target", "PC_ct_pass_tra_ETS1and2", "PC_ct_pass_tra_gen_target"]
-sectors = ["electricity", "heat", "passenger_mileage"] #  "electricity", "heat", "passenger_mileage"
+# sectors = ["electricity", "heat", "passenger_mileage"] #  "electricity", "heat", "passenger_mileage"
 
 
 
@@ -665,4 +721,5 @@ sectors = ["electricity", "heat", "passenger_mileage"] #  "electricity", "heat",
 # # policy impact plot
 # scenario = "5_1"
 # comparative_costs_over_time_policy_impact(model_name, scenario)
-#
+
+calculate_benefits(model_name)

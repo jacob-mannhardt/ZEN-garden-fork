@@ -1133,24 +1133,16 @@ model_name = "PC_ct_pass_tra_base"
 
 # model_name = "PC_ct_pass_tra_ETS1and2"
 
-# model_name = ("PC_ct_pass_tra_ETS1only")
+# model_name = "PC_ct_pass_tra_cap_add_target"
 
-# model_name = ("PC_ct_pass_tra_cap_add_target")
+# model_name = "PC_ct_pass_tra_gen_target"
 
-# model_name = ("PC_ct_pass_tra_gen_target")
-
-# model_name = ("PC_ct_pass_tra_coal_cap_phaseout")
-
-# model_name = ("PC_ct_pass_tra_coal_gen_phaseout")
-
-
-
-desired_scenarios = ['15_1'] # ['5_1']
+desired_scenarios = ['15_1']
 assert len(desired_scenarios) == 1, "too many scenarios for this plot"
 
 # Plots: (electricity, heat, BEV)
 feedback_plot_progression_with_techs(model_name)
 
-feedback_plot_progression_with_techs_heat(model_name)
+# feedback_plot_progression_with_techs_heat(model_name)
 
-feedback_plot_progression_with_techs_transport(model_name)
+# feedback_plot_progression_with_techs_transport(model_name)

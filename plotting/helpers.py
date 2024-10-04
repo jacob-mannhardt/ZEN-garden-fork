@@ -68,6 +68,7 @@ def indexmapping(df, special_model_name=None):
     global model_name
     if special_model_name is not None:
         model_name = special_model_name
+
     if model_name.startswith('PC_ct_') or model_name.endswith('_test'):
         # Define a dictionary mapping the current index values to the desired ones
         # PC_ct_vartdr_w_pass_tra_ETS1and2
@@ -76,53 +77,6 @@ def indexmapping(df, special_model_name=None):
             'scenario_1': '15_5',
             'scenario_2': '5_1',
             'scenario_3': '5_5'
-        }
-    elif model_name.startswith('PC_ct_vartdr_w_pass_tra_'):
-        # Define a dictionary mapping the current index values to the desired ones
-        # PC_ct_vartdr_w_pass_tra_ETS1and2
-        index_mapping = {
-            'scenario_': '15_1',
-            'scenario_1': '15_3',
-            'scenario_2': '15_5',
-            'scenario_3': '10_1',
-            'scenario_4': '10_3',
-            'scenario_5': '10_5',
-            'scenario_6': '5_1',
-            'scenario_7': '5_3',
-            'scenario_8': '5_5'
-        }
-        # index_mapping = {
-        #     'scenario_6': '5_1',
-        #     'scenario_7': '5_3',
-        #     'scenario_8': '5_5'
-        # }
-        # index_mapping = {
-        #     'scenario_3': '10_1',
-        #     'scenario_5': '10_5',
-        #     'scenario_6': '5_1',
-        #     'scenario_7': '5_3',
-        #     'scenario_8': '5_5'
-        # }
-    elif model_name == 'cons_lead_15' or model_name == 'cons_nolead_15' \
-            or model_name == 'lesscons_lead_15' or model_name == 'varcons_lead_15'\
-            or model_name == 'post_changes_to_model/cons_lead_15':
-        # Define a dictionary mapping the current index values to the desired ones,
-        index_mapping = {
-            'scenario_': '15_1',
-            'scenario_1': '15_2',
-            'scenario_2': '15_3',
-            'scenario_3': '15_4',
-            'scenario_4': '15_5',
-            'scenario_5': '15_6',
-            'scenario_7': '15_8',
-            'scenario_6': '15_7',
-            'scenario_8': '15_9',
-            'scenario_9': '15_10',
-            'scenario_10': '15_11',
-            'scenario_11': '15_12',
-            'scenario_12': '15_13',
-            'scenario_13': '15_14',
-            'scenario_14': '15_15'
         }
     else:
         print("dataset not defined correctly")
@@ -221,7 +175,35 @@ def sector_proportion(df):
     ]
 
 
+def rename_technology(tech):
+    suffixes = ["_boiler", "_boiler_DH", "_plant", "_turbine"]
+    for suffix in suffixes:
+        if tech.endswith(suffix):
+            return tech[:-len(suffix)]
+    return tech  # Return the original string if no suffixes match
 
 
-    pass
+def calculate_renewable_percentage(df):
+    # Calculate the total and renewable sums across each column for each scenario
+    total_sum = df.groupby('scenario').sum()
+    renewable_sum = df[df['category'] == 'renewable'].groupby('scenario').sum()
+
+    renewable_sum = renewable_sum.drop(columns='category')
+    total_sum = total_sum.drop(columns='category')
+    # Calculate the percentage of renewable
+    percentage_renewable = (renewable_sum / total_sum) * 100
+    return percentage_renewable
+
+def format_string(input_string):
+    # Step 1: Replace underscores with spaces
+    formatted_string = input_string.replace("_", " ")
+
+    # Step 2 & 3: Split into words and capitalize the first letter of each
+    words = formatted_string.split()
+    capitalized_words = [word.capitalize() for word in words]
+
+    # Step 4: Join the words back into a string
+    result = " ".join(capitalized_words)
+
+    return result
 

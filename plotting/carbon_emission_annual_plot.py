@@ -6,9 +6,10 @@ from plotting.helpers import *
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Beginning of code:
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# model_name = "PC_ct_pass_tra_ETS1only"
 model_name = "PC_ct_pass_tra_ETS1and2"
 # model_name = "PC_ct_pass_tra_base"
+# model_name = ("PC_ct_pass_tra_cap_add_target")
+# model_name = ("PC_ct_pass_tra_gen_target")
 
 r, config = read_in_special_results(model_name)
 carbon_emissions_annual = r.get_total("carbon_emissions_annual")

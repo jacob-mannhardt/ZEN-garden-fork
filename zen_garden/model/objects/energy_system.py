@@ -114,6 +114,49 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
 
+        #ToDO make this more genreal and more compact
+        #From here on for CoC implementation
+        #company tax-rate
+        self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly","set_nodes"],time_steps="set_time_steps_yearly" ,unit_category={})
+        def add_location_index_to_input_data(self,object):
+            #Add set_location to tax_rate
+            extended_data = []
+            # First, add the existing nodes to the extended data
+            for node in self.set_nodes:
+                for timestep in self.set_time_steps_yearly:
+                    value = object.loc[timestep, node]  # Get the tax rate for the node at this timestep
+                    extended_data.append((node, timestep, value))
+            # Now, add the edges as a combination of from_node and to_node
+            for edge in self.set_edges:
+                from_node, to_node = self.set_nodes_on_edges[edge]  # Decompose the edge into the from_node and to_node
+                for timestep in self.set_time_steps_yearly:
+                    # Assign the tax_rate of the from_node (incoming node) to the edge
+                    value = object.loc[timestep, to_node]
+                    edge_name = f'{from_node}-{to_node}'  # Create a combined name for the edge
+                    extended_data.append((edge_name, timestep, value))
+            # Convert the extended data into a new Series
+            extended_tax_rate = pd.Series(
+                data=[data[2] for data in extended_data],  # tax values
+                index=pd.MultiIndex.from_tuples(
+                    [(data[0], data[1]) for data in extended_data],  # MultiIndex: (set_location, timestep)
+                    names=["set_location", "set_time_steps_yearly"]
+                )
+            )
+            return extended_tax_rate.to_xarray()
+
+        self.tax_rate = add_location_index_to_input_data(self,self.tax_rate)
+        #debt_margin
+        self.interest_rate_carrier = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+        self.interest_rate = add_location_index_to_input_data(self,self.interest_rate_carrier)
+        #equity_margin
+        self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+        self.equity_margin = add_location_index_to_input_data(self,self.equity_margin)
+
+
+
+
+
+
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
 
@@ -254,6 +297,8 @@ class EnergySystem:
         # carbon price of overshoot
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
 
+
+
     def construct_vars(self):
         """ constructs the pe.Vars of the class <EnergySystem> """
         variables = self.optimization_setup.variables
@@ -279,6 +324,11 @@ class EnergySystem:
         # net_present_cost
         variables.add_variable(model, name="net_present_cost", index_sets=sets["set_time_steps_yearly"],
                                doc="net_present_cost of energy system", unit_category={"money": 1})
+        # net_present_cost_system
+        variables.add_variable(model, name="net_present_cost_system", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),
+                               doc="net_present_cost of energy system that includes carbon budget and overshoot costs", unit_category={"money": 1})
+        # add net present cost of the system with variable CoC
+        variables.add_variable(model, name="net_present_cost_CoC",index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),doc="net_present_cost of energy system", unit_category={"money": 1})
 
     def construct_constraints(self):
         """ constructs the constraints of the class <EnergySystem> """
@@ -313,6 +363,12 @@ class EnergySystem:
         # disable annual carbon emissions overshoot
         self.rules.constraint_carbon_emissions_annual_overshoot()
 
+        # net_present_cost_system
+        self.rules.constraint_net_present_cost_system()
+
+        #net present cost of the system with variable CoC
+        self.rules.constraint_add_net_present_cost()
+
 
     def construct_objective(self):
         """ constructs the pe.Objective of the class <EnergySystem> """
@@ -320,7 +376,7 @@ class EnergySystem:
 
         # get selected objective rule
         if self.optimization_setup.analysis["objective"] == "total_cost":
-            objective = self.rules.objective_total_cost(self.optimization_setup.model)
+            objective = self.rules.objective_total_cost_CoC(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "total_carbon_emissions":
             objective = self.rules.objective_total_carbon_emissions(self.optimization_setup.model)
         else:
@@ -433,6 +489,43 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_net_present_cost",constraints)
 
+    def constraint_net_present_cost_system(self):
+        """ discounts the annual system costs to calculate the net_present_cost_system
+       """
+        factor = pd.Series(index = self.energy_system.set_time_steps_yearly)
+        for year in self.energy_system.set_time_steps_yearly:
+
+            ### auxiliary calculations
+            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
+                interval_between_years = 1
+            else:
+                interval_between_years = self.system["interval_between_years"]
+            # economic discount
+            factor[year] = sum(((1 / (1 + self.parameters.discount_rate)) ** (self.system["interval_between_years"] * (year - self.energy_system.set_time_steps_yearly[0]) + _intermediate_time_step))
+                         for _intermediate_time_step in range(0, interval_between_years))
+
+        mask_last_year = [year == self.energy_system.set_time_steps_yearly[-1] for year in self.energy_system.set_time_steps_yearly]
+        # add cost for overshooting carbon emissions budget
+        if self.parameters.price_carbon_emissions_budget_overshoot != np.inf:
+            cost_emission = -self.variables["carbon_emissions_budget_overshoot"].where(mask_last_year) * self.parameters.price_carbon_emissions_budget_overshoot
+        # add cost for overshooting annual carbon emissions limit
+        if self.parameters.price_carbon_emissions_annual_overshoot != np.inf:
+            try:
+                cost_emission -= self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot
+            except:
+                cost_emission = -self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot
+
+        try:
+            term_discounted_cost_emission = (cost_emission) * factor
+        except:
+            term_discounted_cost_emission = 0
+
+        lhs = self.variables["net_present_cost_system"] - term_discounted_cost_emission
+        rhs = 0
+        constraints = lhs == rhs
+
+        self.constraints.add_constraint("constraint_net_present_cost_system",constraints)
+
     def constraint_carbon_emissions_budget_overshoot(self):
         """ ensures carbon emissions overshoot of carbon budget is zero when carbon emissions price for budget overshoot is inf
 
@@ -526,8 +619,19 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_cost_total",constraints)
 
+    def constraint_add_net_present_cost(self):
+        lhs = self.variables["net_present_cost_system"] + self.variables["net_present_cost_yearly_technology"].sum(["set_technologies","set_location"]) + self.variables["net_present_cost_yearly_carrier"].sum(["set_nodes"])
+        lhs -= self.variables["net_present_cost_CoC"]
+        rhs = 0
+        constraints = lhs == rhs
+        self.constraints.add_constraint("constraint_add_net_present_cost",constraints)
+
     # Objective rules
     # ---------------
+    def objective_total_cost_CoC(self, model):
+        """objective function to minimize the total net present cost defined for implementation of variable CoC
+        """
+        return sum([model.variables["net_present_cost_CoC"][year] for year in self.energy_system.set_time_steps_yearly])
 
     def objective_total_cost(self, model):
         """objective function to minimize the total net present cost

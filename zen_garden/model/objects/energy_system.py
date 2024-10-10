@@ -132,7 +132,7 @@ class EnergySystem:
                 for timestep in self.set_time_steps_yearly:
                     # Assign the tax_rate of the from_node (incoming node) to the edge
                     value = object.loc[timestep, to_node]
-                    edge_name = f'{from_node}-{to_node}'  # Create a combined name for the edge
+                    edge_name = f'{from_node}-{to_node}'  # Create a combined name for the edge #ToDo replace just with edge instead of edge name
                     extended_data.append((edge_name, timestep, value))
             # Convert the extended data into a new Series
             extended_tax_rate = pd.Series(
@@ -296,7 +296,8 @@ class EnergySystem:
         parameters.add_parameter(name="market_share_unbounded", doc='Parameter which specifies the unbounded market share', calling_class=cls)
         # carbon price of overshoot
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
-
+        # tax rate
+        parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
 
 
     def construct_vars(self):

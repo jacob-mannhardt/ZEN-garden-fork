@@ -19,6 +19,7 @@ from collections import defaultdict
 import linopy as lp
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from .objects.component import Parameter, Variable, Constraint, IndexSet
 from .objects.element import Element
@@ -626,6 +627,8 @@ class OptimizationSetup(object):
                 component_data = component[self.sets[set_time_steps]]
             elif type(component) == float:
                 component_data = component
+            elif type(component) == xr.DataArray:
+                component_data = component.to_series()
             else:
                 component_data = component.squeeze()
         else:

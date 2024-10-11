@@ -23,6 +23,8 @@ import time
 from pathlib import Path
 from zen_garden.preprocess.extract_input_data import DataInput
 
+
+
 class Element:
     """
     Class defining a standard Element
@@ -316,6 +318,71 @@ class GenericRule(object):
         self.time_steps = self.energy_system.time_steps
 
     # helper methods for constraint rules
+    def get_discount_factor(self,calling_class,get_WACC=False):
+        """ returns discount factor """
+        #calculate the discount factor
+        if calling_class == "Technology":
+            discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
+            if get_WACC:
+                return discount_factor
+        elif calling_class == "Carrier":
+            discount_factor = self.parameters.interest_rate.sel(set_location=self.energy_system.set_nodes)
+            discount_factor = discount_factor.rename({'set_location': 'set_nodes'})
+        elif calling_class == "EnergySystem":
+            discount_factor = self.parameters.discount_rate
+
+        # Create the xarray.DataArray for the discount factor
+        time_steps = self.energy_system.set_time_steps_yearly
+
+        #Get the dimensions and indices of the factor xarray
+        # Get indexes of discount factor
+        try:
+            dim = list(discount_factor.indexes)
+        except:
+            dim = []
+
+        coord = {}
+        for i in dim:
+            if i == "set_location":
+                coord[i] = self.variables["cost_capex_yearly"].indexes["set_location"]
+            else:
+                coord[i] = list(self.sets[i])
+
+        if "set_time_steps_yearly" not in dim:
+            dim.append("set_time_steps_yearly")
+            coord["set_time_steps_yearly"] = time_steps
+
+        # Create a 3D DataArray for the discount factor (time, technology, location)
+        factor = xr.DataArray(
+            dims=dim,
+            coords=coord,
+        )
+
+        # Loop over the years and calculate the discount factor for each year, technology, and location
+        for year in time_steps:
+            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
+                interval_between_years = 1
+            else:
+                interval_between_years = self.system["interval_between_years"]
+
+            # Vectorized calculation over technologies and locations
+            # Broadcasting the discount factor calculation for each combination of tech and loc
+            if calling_class == "EnergySystem":
+                factor.loc[{"set_time_steps_yearly": year}] = sum(
+                    ((1 / (1 + discount_factor)) **
+                     (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
+                    for _intermediate_time_step in range(interval_between_years)
+                )
+            else:
+                factor.loc[{"set_time_steps_yearly": year}] = sum(
+                    ((1 / (1 + discount_factor.loc[{"set_time_steps_yearly": year}])) **
+                     (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
+                    for _intermediate_time_step in range(interval_between_years)
+                )
+        return factor
+
+
+
     def get_year_time_step_array(self,storage = False):
         """ returns array with year and time steps of each year """
         # create times xarray with 1 where the operation time step is in the year

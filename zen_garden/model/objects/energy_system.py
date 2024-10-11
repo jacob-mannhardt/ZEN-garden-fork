@@ -114,46 +114,49 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
 
-        #ToDO make this more genreal and more compact
         #From here on for CoC implementation
         #company tax-rate
         self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly","set_nodes"],time_steps="set_time_steps_yearly" ,unit_category={})
-        def add_location_index_to_input_data(self,object):
-            #Add set_location to tax_rate
-            extended_data = []
-            # First, add the existing nodes to the extended data
-            for node in self.set_nodes:
-                for timestep in self.set_time_steps_yearly:
-                    value = object.loc[timestep, node]  # Get the tax rate for the node at this timestep
-                    extended_data.append((node, timestep, value))
-            # Now, add the edges as a combination of from_node and to_node
-            for edge in self.set_edges:
-                from_node, to_node = self.set_nodes_on_edges[edge]  # Decompose the edge into the from_node and to_node
-                for timestep in self.set_time_steps_yearly:
-                    # Assign the tax_rate of the from_node (incoming node) to the edge
-                    value = object.loc[timestep, to_node]
-                    edge_name = f'{from_node}-{to_node}'  # Create a combined name for the edge #ToDo replace just with edge instead of edge name
-                    extended_data.append((edge_name, timestep, value))
-            # Convert the extended data into a new Series
-            extended_tax_rate = pd.Series(
-                data=[data[2] for data in extended_data],  # tax values
-                index=pd.MultiIndex.from_tuples(
-                    [(data[0], data[1]) for data in extended_data],  # MultiIndex: (set_location, timestep)
-                    names=["set_location", "set_time_steps_yearly"]
-                )
-            )
-            return extended_tax_rate.to_xarray()
-
-        self.tax_rate = add_location_index_to_input_data(self,self.tax_rate)
+        self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
         #debt_margin
-        self.interest_rate_carrier = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-        self.interest_rate = add_location_index_to_input_data(self,self.interest_rate_carrier)
+        self.interest_rate = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+        self.interest_rate = self.add_location_index_to_input_data(self.interest_rate)
         #equity_margin
         self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-        self.equity_margin = add_location_index_to_input_data(self,self.equity_margin)
+        self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
 
+    def add_location_index_to_input_data(self, object):
+        """
+        This function can add to node-specific input data the location index.
+        This is done by computing for each edge the mean of the respective input parameters of the two nodes that are connected by the edge.
 
+        :param object: input data that is node-specific
+        :return: extended input data with location index
 
+        """
+        # Add set_location to tax_rate
+        extended_data = []
+        # First, add the existing nodes to the extended data
+        for node in self.set_nodes:
+            for timestep in self.set_time_steps_yearly:
+                value = object.loc[timestep, node]  # Get the tax rate for the node at this timestep
+                extended_data.append((node, timestep, value))
+        # Now, add the edges as a combination of from_node and to_node
+        for edge in self.set_edges:
+            from_node, to_node = self.set_nodes_on_edges[edge]  # Decompose the edge into the from_node and to_node
+            for timestep in self.set_time_steps_yearly:
+                # Assign the value as the average of the from_node (incoming node) and to_node (outgoing node)
+                value = (object.loc[timestep, to_node]+object.loc[timestep, from_node])/2
+                extended_data.append((edge, timestep, value))
+        # Convert the extended data into a new Series
+        extended_tax_rate = pd.Series(
+            data=[data[2] for data in extended_data],  # tax values
+            index=pd.MultiIndex.from_tuples(
+                [(data[0], data[1]) for data in extended_data],  # MultiIndex: (set_location, timestep)
+                names=["set_location", "set_time_steps_yearly"]
+            )
+        )
+        return extended_tax_rate.to_xarray()
 
 
 
@@ -298,6 +301,10 @@ class EnergySystem:
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
         # tax rate
         parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
+        # interest rate
+        parameters.add_parameter(name="interest_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the interest rate', calling_class=cls)
+        # equity margin
+        parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
 
 
     def construct_vars(self):
@@ -319,10 +326,10 @@ class EnergySystem:
         # cost of carbon emissions
         variables.add_variable(model, name="cost_carbon_emissions_total", index_sets=sets["set_time_steps_yearly"],
                                doc="total cost of carbon emissions of energy system", unit_category={"money": 1})
-        # costs
+        # costs #ToDo: can be removed for variable CoC
         variables.add_variable(model, name="cost_total", index_sets=sets["set_time_steps_yearly"],
                                doc="total cost of energy system", unit_category={"money": 1})
-        # net_present_cost
+        # net_present_cost #ToDo: can be removed for variable CoC
         variables.add_variable(model, name="net_present_cost", index_sets=sets["set_time_steps_yearly"],
                                doc="net_present_cost of energy system", unit_category={"money": 1})
         # net_present_cost_system
@@ -347,7 +354,7 @@ class EnergySystem:
         self.rules.constraint_carbon_emissions_budget()
 
         # net_present_cost
-        self.rules.constraint_net_present_cost()
+        #self.rules.constraint_net_present_cost()
 
         # total carbon emissions
         self.rules.constraint_carbon_emissions_annual()
@@ -464,6 +471,7 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_carbon_emissions_budget",constraints)
 
+    #ToDo: can be removed for variable CoC
     def constraint_net_present_cost(self):
         """ discounts the annual capital flows to calculate the net_present_cost
 
@@ -493,17 +501,8 @@ class EnergySystemRules(GenericRule):
     def constraint_net_present_cost_system(self):
         """ discounts the annual system costs to calculate the net_present_cost_system
        """
-        factor = pd.Series(index = self.energy_system.set_time_steps_yearly)
-        for year in self.energy_system.set_time_steps_yearly:
 
-            ### auxiliary calculations
-            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
-                interval_between_years = 1
-            else:
-                interval_between_years = self.system["interval_between_years"]
-            # economic discount
-            factor[year] = sum(((1 / (1 + self.parameters.discount_rate)) ** (self.system["interval_between_years"] * (year - self.energy_system.set_time_steps_yearly[0]) + _intermediate_time_step))
-                         for _intermediate_time_step in range(0, interval_between_years))
+        factor = self.get_discount_factor(calling_class="EnergySystem")
 
         mask_last_year = [year == self.energy_system.set_time_steps_yearly[-1] for year in self.energy_system.set_time_steps_yearly]
         # add cost for overshooting carbon emissions budget
@@ -579,6 +578,7 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_carbon_emissions_annual",constraints)
 
+    #ToDo: can be removed for variable CoC
     def constraint_cost_carbon_emissions_total(self):
         """ carbon cost associated with the carbon emissions of the system in each year
 
@@ -602,6 +602,7 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_cost_carbon_emissions_total",constraints)
 
+    #ToDo: can be removed for variable CoC
     def constraint_cost_total(self):
         """ add up all costs from technologies and carriers
 

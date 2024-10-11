@@ -170,7 +170,7 @@ class Carrier(Element):
         rules.constraint_nodal_energy_balance()
 
         # net present cost of carrier
-        rules.constraint_net_pressent_cost_carrier()
+        rules.constraint_net_present_cost_carrier()
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -195,48 +195,12 @@ class CarrierRules(GenericRule):
     # Rule-based constraints
     # ----------------------
 
-    def constraint_net_pressent_cost_carrier(self):
-
-        # Ensure discount_rate is a DataArray with dimensions (set_time_steps_yearly, set_nodes)
-        discount_rate = self.energy_system.interest_rate_carrier
-        discount_rate.index.names = ["set_time_steps_yearly","set_nodes"]
-        discount_rate = discount_rate.to_xarray()
-
-        # Create the xarray.DataArray for the discount factor with three dimensions
-        time_steps = self.energy_system.set_time_steps_yearly
-
-        # Create a 3D DataArray for the discount factor (time, technology, location)
-        factor = xr.DataArray(
-            dims=["set_time_steps_yearly","set_nodes"],
-            coords={"set_time_steps_yearly": self.energy_system.set_time_steps_yearly, "set_nodes": self.energy_system.set_nodes},
-        )
-
-        # Loop over the years and calculate the discount factor for each year, technology, and location
-        for year in time_steps:
-            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
-                interval_between_years = 1
-            else:
-                interval_between_years = self.system["interval_between_years"]
-
-            # Vectorized calculation over technologies and locations
-            # Broadcasting the discount factor calculation for each combination of tech and loc
-            factor.loc[year,:] = sum(
-                ((1 / (1 + discount_rate.loc[year,:])) **
-                 (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-                for _intermediate_time_step in range(interval_between_years)
-            )
+    def constraint_net_present_cost_carrier(self):
         """
-        factor = pd.Series(index = self.energy_system.set_time_steps_yearly)
-        for year in self.energy_system.set_time_steps_yearly:
-
-            ### auxiliary calculations
-            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
-                interval_between_years = 1
-            else:
-                interval_between_years = self.system["interval_between_years"]
-            # economic discount
-            factor[year] = sum(((1 / (1 + self.parameters.discount_rate)) ** (self.system["interval_between_years"] * (year - self.energy_system.set_time_steps_yearly[0]) + _intermediate_time_step))for _intermediate_time_step in range(0, interval_between_years))
+        net present cost of carrier
         """
+        factor = self.get_discount_factor(calling_class="Carrier")
+
         times = self.get_year_time_step_duration_array()
         term_summed_cost_carrier = ((self.variables["cost_carrier"].broadcast_like(times) + self.variables["cost_shed_demand"].broadcast_like(times))*times).sum(["set_carriers","set_time_steps_operation"])
         term_discounted_cost_total = (term_summed_cost_carrier+((self.variables["carbon_emissions_carrier"] * self.get_year_time_step_duration_array()).sum(["set_carriers","set_time_steps_operation"]))*self.parameters.price_carbon_emissions) * factor
@@ -247,6 +211,7 @@ class CarrierRules(GenericRule):
 
         self.constraints.add_constraint("constraint_net_present_cost_carrier",constraints)
 
+    #ToDo: can be removed for variable CoC formulation
     def constraint_cost_carrier_total(self):
         """ total cost of importing and exporting carrier
 

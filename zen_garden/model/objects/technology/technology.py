@@ -71,8 +71,8 @@ class Technology(Element):
         self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
         #extract data for cost of capital
-        self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=[], unit_category={})
-        self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location], unit_category={})
+        self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=["set_time_steps_yearly"], unit_category={})
+        self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location,"set_time_steps_yearly"], unit_category={})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -353,9 +353,9 @@ class Technology(Element):
         optimization_setup.parameters.add_parameter(name="existing_capex", data=cls.get_existing_quantity(optimization_setup,type_existing_quantity="cost_capex_overnight"),
                                                     doc="Parameter which specifies the total capex of existing technologies at the beginning of the optimization", calling_class=cls)
         #debt ratio
-        optimization_setup.parameters.add_parameter(name="debt_ratio", index_names=["set_technologies"],doc='Parameter which specifies the debt ratio of technology',calling_class=cls)
+        optimization_setup.parameters.add_parameter(name="debt_ratio", index_names=["set_technologies","set_time_steps_yearly"],doc='Parameter which specifies the debt ratio of technology',calling_class=cls)
         #technology premium
-        optimization_setup.parameters.add_parameter(name="technology_premium", index_names=["set_technologies", "set_location"],doc='Parameter which specifies the technology premium for calculating the cost of capital',calling_class=cls)
+        optimization_setup.parameters.add_parameter(name="technology_premium", index_names=["set_technologies", "set_location","set_time_steps_yearly"],doc='Parameter which specifies the technology premium for calculating the cost of capital',calling_class=cls)
 
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -501,7 +501,7 @@ class Technology(Element):
         rules.constraint_carbon_emissions_technology_total()
 
         #net present cost
-        rules.constraint_net_pressent_cost_technology()
+        rules.constraint_net_present_cost_technology()
 
         # disjunct if technology is on
         # the disjunction variables
@@ -645,46 +645,12 @@ class TechnologyRules(GenericRule):
     # Normal constraints
     # -----------------------
 
-    def constraint_net_pressent_cost_technology(self):
-
-        # Ensure discount_rate is a DataArray with dimensions (set_location, set_technology)
-        WACC = self.parameters.debt_ratio * (1-self.energy_system.tax_rate) * (self.energy_system.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.energy_system.interest_rate+self.energy_system.equity_margin+self.parameters.technology_premium)
-
-        # Create the xarray.DataArray for the discount factor with three dimensions
-        time_steps = self.energy_system.set_time_steps_yearly
-
-        # Create a 3D DataArray for the discount factor (time, technology, location)
-        factor = xr.DataArray(
-            dims=["set_technologies","set_location","set_time_steps_yearly"],
-            coords={"set_time_steps_yearly": self.energy_system.set_time_steps_yearly, "set_technologies": self.energy_system.set_technologies, "set_location": self.variables["cost_capex_yearly"].indexes["set_location"]},
-        )
-
-        # Loop over the years and calculate the discount factor for each year, technology, and location
-        for year in time_steps:
-            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
-                interval_between_years = 1
-            else:
-                interval_between_years = self.system["interval_between_years"]
-
-            # Vectorized calculation over technologies and locations
-            # Broadcasting the discount factor calculation for each combination of tech and loc
-            factor.loc[:,:,year] = sum(
-                ((1 / (1 + WACC.loc[:,:,year])) **
-                 (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-                for _intermediate_time_step in range(interval_between_years)
-            )
+    def constraint_net_present_cost_technology(self):
         """
-        factor = pd.Series(index = self.energy_system.set_time_steps_yearly)
-        for year in self.energy_system.set_time_steps_yearly:
-
-            ### auxiliary calculations
-            if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
-                interval_between_years = 1
-            else:
-                interval_between_years = self.system["interval_between_years"]
-            # economic discount
-            factor[year] = sum(((1 / (1 + self.parameters.discount_rate)) ** (self.system["interval_between_years"] * (year - self.energy_system.set_time_steps_yearly[0]) + _intermediate_time_step))for _intermediate_time_step in range(0, interval_between_years))
+        net present cost of technology
         """
+        factor = self.get_discount_factor(calling_class="Technology")
+
         term_discounted_cost_total = (self.variables["cost_opex_yearly"]+self.variables["cost_capex_yearly"].sum(["set_capacity_types"])
                                       +((self.variables["carbon_emissions_technology"]* self.get_year_time_step_duration_array()).sum(["set_time_steps_operation"])*self.parameters.price_carbon_emissions)) * factor
 
@@ -694,7 +660,7 @@ class TechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_net_present_cost_technology",constraints)
 
-
+    #ToDo: can be removed if variable CoC
     def constraint_cost_capex_yearly_total(self):
         """ sums over all technologies to calculate total capex
 
@@ -708,6 +674,7 @@ class TechnologyRules(GenericRule):
 
         self.constraints.add_constraint("constraint_cost_capex_yearly_total",constraints)
 
+    #ToDo: can be removed if variable CoC
     def constraint_cost_opex_yearly_total(self):
         """ sums over all technologies to calculate total opex
 
@@ -1002,9 +969,9 @@ class TechnologyRules(GenericRule):
         ### masks
         # not necessary
 
-        dr = self.parameters.discount_rate
+        dr = self.get_discount_factor(calling_class="Technology", get_WACC=True)
         lt = self.parameters.lifetime
-        if dr != 0:
+        if dr.all() != 0: #ToDo: could both 0 and non-zero discount rates be possible?; Check if it is implemented correctly, but annuity factor does not need to be indexed with set_time_steps_yearly_prev
             a = ((1 + dr) ** lt * dr) / ((1 + dr) ** lt - 1)
         else:
             a = 1 / lt

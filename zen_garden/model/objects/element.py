@@ -333,6 +333,8 @@ class GenericRule(object):
                 discount_factor = self.parameters.discount_rate
         else:
             discount_factor = self.parameters.discount_rate
+            if get_WACC:
+                return discount_factor
 
         # Create the xarray.DataArray for the discount factor
         time_steps = self.energy_system.set_time_steps_yearly

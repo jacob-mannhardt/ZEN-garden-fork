@@ -158,6 +158,7 @@ class Analysis(Subscriptable):
     earliest_year_of_data: int = 1900
     save_benchmarking_results: bool = False
     zen_garden_version: str = importlib.metadata.version("zen-garden")
+    variable_CoC: bool = False
 
 class Config(Subscriptable):
     analysis: Analysis = Analysis()

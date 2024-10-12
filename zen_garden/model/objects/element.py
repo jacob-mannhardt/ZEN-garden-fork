@@ -320,15 +320,18 @@ class GenericRule(object):
     # helper methods for constraint rules
     def get_discount_factor(self,calling_class,get_WACC=False):
         """ returns discount factor """
-        #calculate the discount factor
-        if calling_class == "Technology":
-            discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
-            if get_WACC:
-                return discount_factor
-        elif calling_class == "Carrier":
-            discount_factor = self.parameters.interest_rate.sel(set_location=self.energy_system.set_nodes)
-            discount_factor = discount_factor.rename({'set_location': 'set_nodes'})
-        elif calling_class == "EnergySystem":
+        if self.analysis.variable_CoC:
+            #calculate the discount factor
+            if calling_class == "Technology":
+                discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
+                if get_WACC:
+                    return discount_factor
+            elif calling_class == "Carrier":
+                discount_factor = self.parameters.interest_rate.sel(set_location=self.energy_system.set_nodes)
+                discount_factor = discount_factor.rename({'set_location': 'set_nodes'})
+            elif calling_class == "EnergySystem":
+                discount_factor = self.parameters.discount_rate
+        else:
             discount_factor = self.parameters.discount_rate
 
         # Create the xarray.DataArray for the discount factor
@@ -367,7 +370,7 @@ class GenericRule(object):
 
             # Vectorized calculation over technologies and locations
             # Broadcasting the discount factor calculation for each combination of tech and loc
-            if calling_class == "EnergySystem":
+            if calling_class == "EnergySystem" or not self.analysis.variable_CoC:
                 factor.loc[{"set_time_steps_yearly": year}] = sum(
                     ((1 / (1 + discount_factor)) **
                      (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))

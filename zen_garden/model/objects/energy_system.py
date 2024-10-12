@@ -114,16 +114,17 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
 
-        #From here on for CoC implementation
-        #company tax-rate
-        self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly","set_nodes"],time_steps="set_time_steps_yearly" ,unit_category={})
-        self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
-        #debt_margin
-        self.interest_rate = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-        self.interest_rate = self.add_location_index_to_input_data(self.interest_rate)
-        #equity_margin
-        self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-        self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
+        if self.optimization_setup.analysis.variable_CoC:
+            #From here on for CoC implementation
+            #company tax-rate
+            self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly","set_nodes"],time_steps="set_time_steps_yearly" ,unit_category={})
+            self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
+            #debt_margin
+            self.interest_rate = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+            self.interest_rate = self.add_location_index_to_input_data(self.interest_rate)
+            #equity_margin
+            self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+            self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
 
     def add_location_index_to_input_data(self, object):
         """
@@ -299,12 +300,14 @@ class EnergySystem:
         parameters.add_parameter(name="market_share_unbounded", doc='Parameter which specifies the unbounded market share', calling_class=cls)
         # carbon price of overshoot
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
-        # tax rate
-        parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
-        # interest rate
-        parameters.add_parameter(name="interest_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the interest rate', calling_class=cls)
-        # equity margin
-        parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
+
+        if self.optimization_setup.analysis.variable_CoC:
+            # tax rate
+            parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
+            # interest rate
+            parameters.add_parameter(name="interest_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the interest rate', calling_class=cls)
+            # equity margin
+            parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
 
 
     def construct_vars(self):
@@ -336,7 +339,7 @@ class EnergySystem:
         variables.add_variable(model, name="net_present_cost_system", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),
                                doc="net_present_cost of energy system that includes carbon budget and overshoot costs", unit_category={"money": 1})
         # add net present cost of the system with variable CoC
-        variables.add_variable(model, name="net_present_cost_CoC",index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),doc="net_present_cost of energy system", unit_category={"money": 1})
+        #variables.add_variable(model, name="net_present_cost_CoC",index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),doc="net_present_cost of energy system", unit_category={"money": 1})
 
     def construct_constraints(self):
         """ constructs the constraints of the class <EnergySystem> """
@@ -384,7 +387,7 @@ class EnergySystem:
 
         # get selected objective rule
         if self.optimization_setup.analysis["objective"] == "total_cost":
-            objective = self.rules.objective_total_cost_CoC(self.optimization_setup.model)
+            objective = self.rules.objective_total_cost(self.optimization_setup.model)
         elif self.optimization_setup.analysis["objective"] == "total_carbon_emissions":
             objective = self.rules.objective_total_carbon_emissions(self.optimization_setup.model)
         else:
@@ -623,17 +626,18 @@ class EnergySystemRules(GenericRule):
 
     def constraint_add_net_present_cost(self):
         lhs = self.variables["net_present_cost_system"] + self.variables["net_present_cost_yearly_technology"].sum(["set_technologies","set_location"]) + self.variables["net_present_cost_yearly_carrier"].sum(["set_nodes"])
-        lhs -= self.variables["net_present_cost_CoC"]
+        lhs -= self.variables["net_present_cost"]
         rhs = 0
         constraints = lhs == rhs
         self.constraints.add_constraint("constraint_add_net_present_cost",constraints)
 
     # Objective rules
     # ---------------
-    def objective_total_cost_CoC(self, model):
-        """objective function to minimize the total net present cost defined for implementation of variable CoC
-        """
-        return sum([model.variables["net_present_cost_CoC"][year] for year in self.energy_system.set_time_steps_yearly])
+    #not necessary anymore as NPC can be used for both variable and constant CoC
+    #def objective_total_cost_CoC(self, model):
+    #    """objective function to minimize the total net present cost defined for implementation of variable CoC
+    #    """
+    #    return sum([model.variables["net_present_cost_CoC"][year] for year in self.energy_system.set_time_steps_yearly])
 
     def objective_total_cost(self, model):
         """objective function to minimize the total net present cost

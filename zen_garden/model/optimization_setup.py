@@ -313,7 +313,9 @@ class OptimizationSetup(object):
                     # append energy only for storage technologies
                     if capacity_type == self.system.set_capacity_types[0] or element.name in self.system.set_storage_technologies:
                         dict_of_attributes, attribute_is_series_temp, dict_of_units = self.append_attribute_of_element_to_dict(element, attribute_name, dict_of_attributes, dict_of_units, capacity_type)
-                        dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,dict_of_attributes,index_names,capacity_type)
+                        dict_of_attributes = self.get_foresight_error_attribute(element, attribute_name,
+                                                                                dict_of_attributes, index_names,
+                                                                                capacity_type)
                         if attribute_is_series_temp:
                             attribute_is_series = attribute_is_series_temp
         if return_attribute_is_series:

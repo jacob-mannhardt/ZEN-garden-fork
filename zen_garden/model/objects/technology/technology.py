@@ -401,9 +401,6 @@ class Technology(Element):
         # built_capacity technology
         variables.add_variable(model, name="capacity_addition", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of built technology (invested capacity after construction) at location l and time t', unit_category={"energy_quantity": 1, "time": -1})
-        # built_capacity technology
-        variables.add_variable(model, name="capacity_addition_scrapped", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
-                               bounds=(0, np.inf),doc='size of scrapped technology project (invested capacity after construction) at location l and time t',unit_category={"energy_quantity": 1, "time": -1})
         # invested_capacity technology
         variables.add_variable(model, name="capacity_investment", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of invested technology at location l and time t', unit_category={"energy_quantity": 1, "time": -1})
@@ -777,7 +774,7 @@ class TechnologyRules(GenericRule):
 
         ### formulate constraint
         lhs = lp.merge(
-            self.variables["capacity_addition"] + self.variables["capacity_addition_scrapped"],
+            self.variables["capacity_addition"],
             - (investment_time_current*capacity_investment_addition).sum("set_time_steps_construction")
             , compat="broadcast_equals")
         rhs = (investment_time_existing*capacity_investment_existing).sum("set_time_steps_construction")

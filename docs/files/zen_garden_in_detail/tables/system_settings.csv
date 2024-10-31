@@ -8,7 +8,7 @@ Key;Type;Default Value;Description
 ``double_capex_transport``;``bool``;``False``;per default the capex for transport is not separated into the capacity- and the distance-dependent term, as this introduces binary variables
 ``set_nodes``;``list[str]``;``[]``;per default all nodes are selected, however, by overwriting the empty list value you can conduct the optimization for a subset of subset of nodes
 ``unaggregated_time_steps_per_year``;``int``;``8760``;per default the total hours per year are set to 8760, overwrite this parameter if you want to investigate a shorter period
-``conduct_time_series_aggregation``;``bool``;``True``;per default the time-series-aggregation is conducted, set to ``False`` to skip the timeseries aggregation
+``conduct_time_series_aggregation``;``bool``;``False``;per default the time-series-aggregation is not conducted, set to ``True`` to enable the timeseries aggregation
 ``total_hours_per_year``;``int``;``8760``;defines the definition of a year. Do not change this value unless you know what you are doing
 ``aggregated_time_steps_per_year``;``int``;``10``;per default the timeseries aggregation aggregates the number of time-steps to 10, overwrite this value to increase or decrease the intra-yearly temporal resolution
 ``reference_year``;``int``;``2024``;per default the reference year is set to 2024
@@ -18,8 +18,8 @@ Key;Type;Default Value;Description
 ``years_in_rolling_horizon``;``int``;``1``;per default the foresight is limited of the rolling horizon approach is limited to one year, flexibly increase or decrease this value to investigate longer or shorter foresight horizons
 ``years_in_decision_horizon``;``int``;``1``;per default, the rolling horizon decision horizon is one year, increase this value to only allow decision every second (2) or third (3) planning period, etc.
 ``conduct_scenario_analysis``;``bool``;``False``;per default only the optimization is only conducted for the default scenario, set to ``True`` to conduct scenario analysis
-``run_default_scenario``;``bool``;``True``;per default the optimization is conducted for the default scenario as well as all scenarios specified in ``scenarios.json``, if ``False``the optimization is only conducted for the scenarios specified in ``scenarios.json``
-``clean_sub_scenarios``;``bool``;``False``;per default sub-scenarios are not removed, set to ``True``to delete sub-scenarios between runs
+``run_default_scenario``;``bool``;``True``;per default the optimization is conducted for the default scenario as well as all scenarios specified in ``scenarios.json`` , if ``False`` the optimization is only conducted for the scenarios specified in ``scenarios.json``
+``clean_sub_scenarios``;``bool``;``False``;per default sub-scenarios are not removed, set to ``True`` to delete sub-scenarios between runs
 ``set_transport_technologies_loss_exponential``;``list[str]``;``[]``;list of transport technologies for which exponential transport loss function is used
 ``double_capex_transport``;``bool``;``False``;per default only distance dependent capital expenditures are applied to transport tech, if true, apply both fix capital expenditures (capex) and distance dependent capex to installation of transport technologies
 ``storage_periodicity``;``bool``;``True``;enable storage periodicity

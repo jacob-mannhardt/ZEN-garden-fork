@@ -7,7 +7,7 @@ Input data handling
 Attribute.json files
 ==============
 Each element in the input data folder has an ``attributes.json`` file, as shown in :ref:`Input data structure`, which defines the default values for the element.
-This file must be specified for each element and must contain all parameters that this class of elements (Technology, Carrier, etc.) can have (see :ref:`optimization_problem`).
+This file must be specified for each element and must contain all parameters that this class of elements (Technology, Carrier, etc.) can have (see :ref:`Sets, parameters, variables, and constraints`).
 
 The ``attributes.json`` files have three main purposes:
 
@@ -239,12 +239,16 @@ So, the user can reduce the number of data points in the ``demand_yearly_variati
     2020,1
     2050,4
 
-If the user wants to disable the interpolation for a specific parameter, the user can create a ``parameters_interpolation_off.csv`` file and specify the parameter names in the file:
+If the user wants to disable the interpolation for a specific parameter, the user can create a ``parameters_interpolation_off.json`` file and specify the parameter names in the file:
 
 .. code-block::
 
-    parameter_name
-    demand_yearly_variation
+    {
+      "parameter_name": [
+        "carbon_emissions_annual_limit",
+        "demand_yearly_variation"
+      ]
+    }
 
 .. note::
     The user must specify the file name, i.e., in the example above, the specified file is ``demand_yearly_variation.csv``, not ``demand.csv``.
@@ -369,7 +373,8 @@ Known issues with pint
 
 The ``pint`` package that we use for the unit handling has amazing functionalities but also some hurdles to look out for. The ones we have already found are:
 
-* ``ton``: pint uses the keyword ``ton`` for imperial ton, not the metric ton. The keyword for those are ``metric_ton`` or ``tonne``. However, per default, ZEN-garden overwrites the definition of ``ton`` to be the metric ton, so ``ton`` and ``tonne`` can be used interchangeably. If you for some reason want to use imperial tons, set ``solver["define_ton_as_metric_ton"] = False``.
+* ``ton``: pint uses the keyword ``ton`` for imperial ton, not the metric ton. The keyword for those are ``metric_ton`` or ``tonne``. However, per default, ZEN-garden overwrites the definition of ``ton`` to be the metric ton, so ``ton`` and ``tonne`` can be used interchangeably.
+If you for some reason want to use imperial tons, set ``"solver": {"define_ton_as_metric_ton": false}``.
 * ``h``: Until recently, ``h`` was treated as the planck constant, not hour. Fortunately, this has been fixed in Feb 2023. If you encounter this error, please update your pint version.
 
 .. _Scaling:
@@ -411,7 +416,7 @@ In ZEN-garden we provide 3 different scaling algorithms, from which the row and 
 The approximated geometric mean is the root of the product of the maximum and minimum absolute values of the respective row or column.
 The arithmetic mean is derived over all absolute values of the respective row or column.
 The infinity norm is the maximum absolute value of the respective row or column.
-For a more detailed explanation of each algorithm please see the paper from Elble and Sahinidis (2012) (https://rdcu.be/dStfc).
+For a more detailed explanation of each algorithm please see the paper from `Elble and Sahinidis (2012) <https://rdcu.be/dStfc>`_.
 
 **Combination of Scaling Algorithms**
 
@@ -468,7 +473,7 @@ Therefore, it is recommended to include the right-hand side vector in the scalin
 
 **When not to use scaling?**
 
-If the optimization problem already has a good numerical range (which can be checked with ``solver["analyze_numerics"] = True``), scaling might not be necessary. Also if the optimization problem already solves fast, the time necessary for scaling the problem might
+If the optimization problem already has a good numerical range (which can be checked with ``"solver": {"analyze_numerics": true}``), scaling might not be necessary. Also if the optimization problem already solves fast, the time necessary for scaling the problem might
 outweigh the time savings from solving the scaled optimization problem. As a rule of thumb, if the time to solve the optimization problem is in similar order of magnitude as the time to scale the problem, scaling should not be applied. The time necessary for scaling can be checked in the output of the optimization problem, if
 scaling is applied.
 
@@ -492,7 +497,7 @@ The scaling functionality was benchmarked by running the following set of models
     :widths: 10 20 10 10 10 10
     :delim: ;
 
-Overall, fur the purpose of benchmarking over all models a total number of 3250 runs were collected.
+Overall, for the purpose of benchmarking over all models a total number of 3250 runs were collected.
 The following sections will display the results of the benchmarking analysis and should provide insights about the effectiveness and functionality of the scaling algorithm.
 
 **Numerical Range vs. Number of Iterations**
@@ -512,9 +517,10 @@ From the plot we can observe:
 
 * convergence of the numerical range (of the LHS) is visible for both algorithms after three iterations
 * a trade-off between a lower LHS range and also decreasing the RHS range may exist, which is visible in case of arithmetic mean scaling
-* neglecting the RHS may lead to a significant increase in its numerical range, which is visible for both scaling algorithms (as shown in :ref:`Regression Analysis` this also leads on average to longer solving times)
+* neglecting the RHS may lead to a significant increase in its numerical range, which is visible for both scaling algorithms (as shown in :ref:`regression_analysis` this also leads on average to longer solving times)
 
-**Net-solving time comparison for multiple scaling configurations**
+Net-solving time comparison for multiple scaling configurations
+^^^^^^^^^^^^
 
 The following plots show the net-solving time (solving time + scaling time) for the models ``PI_small`` and ``NoErr``. These models were chosen as they represent very different results in terms
 of effectiveness of scaling. The model ``PI_small`` showed mostly a significant decrease in net-solving time when scaling was applied, whereas the model ``NoErr`` showed no significant effect of scaling on the net-solving time or even worse an
@@ -559,8 +565,9 @@ From the plot we can derive:
 The two examples shown here, again indicate that deriving a general recommendation for the scaling configuration is difficult and that the performance of the scaling algorithm is highly dependent on the optimization problem at hand.
 Therefore, we recommended to test different scaling algorithms and configurations via trial and error.
 
-
-**Regression Analysis**
+.. _regression_analysis:
+Regression Analysis
+^^^^^^^^^^^^
 
 Based on the collected data from the benchmarking runs for the models ``PI_small``, ``WES_nofe``, ``WES_nofe_PI``, and ``WES_nofe_PC``, a regression is run with the net-solving time (solving time + scaling time) as
 the dependent variable. The explanatory variables are the models, the ``use_scaling`` boolean, the ``include_rhs`` boolean, the ``NumericFcous`` (:math:`0` or :math:`1`) setting of Gurobi as well as an interaction term between ZEN-garden scaling and Gurobi's ``ScaleFlag``.

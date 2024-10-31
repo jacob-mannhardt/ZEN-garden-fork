@@ -87,7 +87,7 @@ Additional information on the representation of the temporal domain is provided 
 
 **Intrayearly resolution:**
 
-Per default, the intrayearly resolution is set at to an hourly resolution and considers 8760 h/a. Timeseries aggregation methods are available via the tsam package and allow users to flexibly reduce model complexity. Timeseries which should not impact the clustering can be excluded by the user. Moreover, a novel forumlation of the constraints describing the storage levels enables users to capture both long- and short-term storage operation despite applying aggregation methods. :ref:`Time series aggregation and representation` provides a detailed description of the available parameters.
+Per default, the intrayearly resolution is set at to an hourly resolution and considers 8760 h/a. Timeseries aggregation methods are available via the tsam package and allow users to flexibly reduce model complexity. Timeseries which should not impact the clustering can be excluded by the user. Moreover, a novel formulation of the constraints describing the storage levels enables users to capture both long- and short-term storage operation despite applying aggregation methods. :ref:`Time series aggregation and representation` provides a detailed description of the available parameters.
 
 The transition pathway can be optimized with perfect foresight, i.e., all years optimized together, or myopic foresight, i.e., the optimization horizon is reduced.
 The foresight and decision horizon lengths can be flexibly defined in the system configuration (``system.json``).
@@ -192,7 +192,7 @@ Github integration
 -----------------------
 
 ZEN-garden is hosted on `Github <https://github.com/ZEN-universe/ZEN-garden>`_ and is open-source.
-The installation of ZEN-garden is possible via pip or by cloning and forking the repository (:ref:`_installation`).
+The installation of ZEN-garden is possible via pip or by cloning and forking the repository (:ref:`installation`).
 Users can contribute to the development of ZEN-garden by creating a pull request on Github.
 Automated tests are implement to test the key functionalities of the code. We ask contributors to test their code locally before creating a pull request and add tests for new functionalities.
 
@@ -202,7 +202,7 @@ Results analysis & visualization
 The results of the optimization can be analyzed and visualized with the following functionalities:
 
 1. Detailed results analysis with the results class (:ref:`Accessing results`)
-2. Visualization of the results with the ZEN-explorer visualization platform (:ref:`Visualization`)
+2. Visualization of the results with the ZEN-explorer visualization platform (:ref:`Visualization`), both offline and `online <https://zen-garden.ethz.ch/explorer/>`_.
 3. Comparison of two different results objects (:ref:`Comparing results`)
 
 

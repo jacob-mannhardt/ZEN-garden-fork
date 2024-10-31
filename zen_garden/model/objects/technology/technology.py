@@ -774,7 +774,7 @@ class TechnologyRules(GenericRule):
 
         ### formulate constraint
         lhs = lp.merge(
-            self.variables["capacity_addition"],
+            1 * self.variables["capacity_addition"],
             - (investment_time_current*capacity_investment_addition).sum("set_time_steps_construction")
             , compat="broadcast_equals")
         rhs = (investment_time_existing*capacity_investment_existing).sum("set_time_steps_construction")

@@ -111,8 +111,6 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_depreciation_rate = self.data_input.extract_input_data("knowledge_depreciation_rate", index_sets=[], unit_category={})
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
-        # capex share that must be paid even when scrapping the project
-        self.capex_share_scrapping = self.data_input.extract_input_data("capex_share_scrapping", index_sets=[], unit_category={})
 
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
@@ -255,8 +253,6 @@ class EnergySystem:
         parameters.add_parameter(name="knowledge_depreciation_rate", doc='Parameter which specifies the knowledge depreciation rate', calling_class=cls)
         # knowledge spillover rate
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
-        # capex share scrapping
-        parameters.add_parameter(name="capex_share_scrapping", doc='Parameter which specifies which share of the capex must be paid when scrapping the project', calling_class=cls)
 
     def construct_vars(self):
         """ constructs the pe.Vars of the class <EnergySystem> """

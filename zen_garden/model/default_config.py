@@ -159,6 +159,7 @@ class Analysis(Subscriptable):
     save_benchmarking_results: bool = False
     zen_garden_version: str = importlib.metadata.version("zen-garden")
     variable_CoC: bool = False
+    calculate_WACC: bool = False
 
 class Config(Subscriptable):
     analysis: Analysis = Analysis()

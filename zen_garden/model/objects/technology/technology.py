@@ -71,9 +71,12 @@ class Technology(Element):
         self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
         if self.optimization_setup.analysis.variable_CoC:
-            #extract data for cost of capital
-            self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=["set_time_steps_yearly"], unit_category={})
-            self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location,"set_time_steps_yearly"], unit_category={})
+            if self.optimization_setup.analysis.calculate_WACC:
+                #extract data for cost of capital
+                self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=["set_time_steps_yearly"], unit_category={})
+                self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location,"set_time_steps_yearly"], unit_category={})
+            else:
+                self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"], unit_category={})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -354,10 +357,14 @@ class Technology(Element):
         optimization_setup.parameters.add_parameter(name="existing_capex", data=cls.get_existing_quantity(optimization_setup,type_existing_quantity="cost_capex_overnight"),
                                                     doc="Parameter which specifies the total capex of existing technologies at the beginning of the optimization", calling_class=cls)
         if optimization_setup.analysis.variable_CoC:
-            #debt ratio
-            optimization_setup.parameters.add_parameter(name="debt_ratio", index_names=["set_technologies","set_time_steps_yearly"],doc='Parameter which specifies the debt ratio of technology',calling_class=cls)
-            #technology premium
-            optimization_setup.parameters.add_parameter(name="technology_premium", index_names=["set_technologies", "set_location","set_time_steps_yearly"],doc='Parameter which specifies the technology premium for calculating the cost of capital',calling_class=cls)
+            if optimization_setup.analysis.calculate_WACC:
+                #debt ratio
+                optimization_setup.parameters.add_parameter(name="debt_ratio", index_names=["set_technologies","set_time_steps_yearly"],doc='Parameter which specifies the debt ratio of technology',calling_class=cls)
+                #technology premium
+                optimization_setup.parameters.add_parameter(name="technology_premium", index_names=["set_technologies", "set_location","set_time_steps_yearly"],doc='Parameter which specifies the technology premium for calculating the cost of capital',calling_class=cls)
+            else:
+                # weighted average cost of capital
+                optimization_setup.parameters.add_parameter(name="WACC", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the weighted average cost of capital', calling_class=cls)
 
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -973,6 +980,7 @@ class TechnologyRules(GenericRule):
 
         dr = self.get_discount_factor(calling_class="Technology", get_WACC=True)
         lt = self.parameters.lifetime
+        #ToDo: check for each entry if != then dr otherwise lt
         if dr.all() != 0: #ToDo: could both 0 and non-zero discount rates be possible?; Check if it is implemented correctly, but annuity factor does not need to be indexed with set_time_steps_yearly_prev
             a = ((1 + dr) ** lt * dr) / ((1 + dr) ** lt - 1)
         else:

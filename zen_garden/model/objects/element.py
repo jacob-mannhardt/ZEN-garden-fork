@@ -323,7 +323,10 @@ class GenericRule(object):
         if self.analysis.variable_CoC:
             #calculate the discount factor
             if calling_class == "Technology":
-                discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
+                if self.optimization_setup.analysis["calculate_WACC"]:
+                    discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
+                else:
+                    discount_factor = self.parameters.WACC
                 if get_WACC:
                     return discount_factor
             elif calling_class == "Carrier":

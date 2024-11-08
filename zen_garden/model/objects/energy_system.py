@@ -116,15 +116,16 @@ class EnergySystem:
 
         if self.optimization_setup.analysis.variable_CoC:
             #From here on for CoC implementation
-            #company tax-rate
-            self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly","set_nodes"],time_steps="set_time_steps_yearly" ,unit_category={})
-            self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
             #debt_margin
             self.interest_rate = self.data_input.extract_input_data("interest_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
             self.interest_rate = self.add_location_index_to_input_data(self.interest_rate)
-            #equity_margin
-            self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-            self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
+            if self.optimization_setup.analysis.calculate_WACC:
+                # company tax-rate
+                self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+                self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
+                #equity_margin
+                self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
+                self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
 
     def add_location_index_to_input_data(self, object):
         """
@@ -302,12 +303,13 @@ class EnergySystem:
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
 
         if self.optimization_setup.analysis.variable_CoC:
-            # tax rate
-            parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
             # interest rate
-            parameters.add_parameter(name="interest_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the interest rate', calling_class=cls)
-            # equity margin
-            parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
+            parameters.add_parameter(name="interest_rate", index_names=["set_location", "set_time_steps_yearly"],doc='Parameter which specifies the interest rate', calling_class=cls)
+            if self.optimization_setup.analysis.calculate_WACC:
+                # tax rate
+                parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
+                # equity margin
+                parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
 
 
     def construct_vars(self):

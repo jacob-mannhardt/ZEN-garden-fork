@@ -153,6 +153,7 @@ class TimeSeriesAggregation(Subscriptable):
     rescaleClusterPeriods: bool = False
     representationMethod: str = "meanRepresentation"
     resolution: int = 1
+    storageRepresentationMethod: str = "ZEN-garden"
 
 class Analysis(Subscriptable):
     """

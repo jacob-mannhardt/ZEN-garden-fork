@@ -22,4 +22,4 @@ analysis.dataset = os.path.join(os.path.dirname(__file__), "test_1c")
 analysis.objective = "total_cost"
 
 ## Solver - settings update compared to default values
-solver.name = "highs"  # free solver
+solver.name = "gurobi"  # free solver

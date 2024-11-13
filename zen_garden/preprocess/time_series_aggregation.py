@@ -415,25 +415,31 @@ class TimeSeriesAggregation(object):
         """
         sequence_time_steps = self.time_steps.sequence_time_steps_operation
         # if time series aggregation was conducted
-        if self.conducted_tsa:
-            # calculate connected storage levels, i.e., time steps that are constant for
-            idx_last_connected_storage_level = np.append(np.flatnonzero(np.diff(sequence_time_steps)), len(sequence_time_steps) - 1)
-            time_steps_storage = []
-            time_steps_storage_duration = {}
-            time_steps_energy2power = {}
-            sequence_time_steps_storage = np.zeros(np.size(sequence_time_steps)).astype(int)
-            counter_time_step = 0
-            for idx_time_step, idx_storage_level in enumerate(idx_last_connected_storage_level):
-                time_steps_storage.append(idx_time_step)
-                time_steps_storage_duration[idx_time_step] = len(range(counter_time_step, idx_storage_level + 1))
-                sequence_time_steps_storage[counter_time_step:idx_storage_level + 1] = idx_time_step
-                time_steps_energy2power[idx_time_step] = sequence_time_steps[idx_storage_level]
-                counter_time_step = idx_storage_level + 1
-        else:
-            time_steps_storage = self.time_steps.time_steps_operation
-            time_steps_storage_duration = self.time_steps.time_steps_operation_duration
-            sequence_time_steps_storage = sequence_time_steps
-            time_steps_energy2power = {idx: idx for idx in self.time_steps.time_steps_operation}
+        if self.analysis.time_series_aggregation.storageRepresentationMethod == "ZEN-garden":
+            if self.conducted_tsa:
+                # calculate connected storage levels, i.e., time steps that are constant for
+                idx_last_connected_storage_level = np.append(np.flatnonzero(np.diff(sequence_time_steps)), len(sequence_time_steps) - 1)
+                time_steps_storage = []
+                time_steps_storage_duration = {}
+                time_steps_energy2power = {}
+                sequence_time_steps_storage = np.zeros(np.size(sequence_time_steps)).astype(int)
+                counter_time_step = 0
+                for idx_time_step, idx_storage_level in enumerate(idx_last_connected_storage_level):
+                    time_steps_storage.append(idx_time_step)
+                    time_steps_storage_duration[idx_time_step] = len(range(counter_time_step, idx_storage_level + 1))
+                    sequence_time_steps_storage[counter_time_step:idx_storage_level + 1] = idx_time_step
+                    time_steps_energy2power[idx_time_step] = sequence_time_steps[idx_storage_level]
+                    counter_time_step = idx_storage_level + 1
+            else:
+                time_steps_storage = self.time_steps.time_steps_operation
+                time_steps_storage_duration = self.time_steps.time_steps_operation_duration
+                sequence_time_steps_storage = sequence_time_steps
+                time_steps_energy2power = {idx: idx for idx in self.time_steps.time_steps_operation}
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "gabrielli":
+            time_steps_storage = self.set_base_time_steps
+            time_steps_storage_duration = {key: 1 for key in time_steps_storage}
+            sequence_time_steps_storage = np.array(self.set_base_time_steps)
+            time_steps_energy2power = self.sequence_time_steps
         # overwrite in time steps object
         self.time_steps.time_steps_storage = time_steps_storage
         self.time_steps.time_steps_storage_duration = time_steps_storage_duration

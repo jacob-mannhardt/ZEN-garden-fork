@@ -2,7 +2,7 @@
 Functions to apply time series aggregation to time series
 """
 import copy
-
+import itertools
 import pandas as pd
 import numpy as np
 import logging
@@ -30,7 +30,7 @@ class TimeSeriesAggregation(object):
         self.header_set_time_steps = self.analysis.header_data_inputs.set_time_steps
         # if set_time_steps as input (because already aggregated), use this as base time step, otherwise self.set_base_time_steps
         self.set_base_time_steps = self.energy_system.set_base_time_steps_yearly
-        self.number_typical_periods = min(self.system.unaggregated_time_steps_per_year, self.system.aggregated_time_steps_per_year)
+        self.number_typical_periods = min(self.system.unaggregated_time_steps_per_year, self.system.aggregated_time_steps_per_year) // self.analysis.time_series_aggregation.hoursPerPeriod
         self.conducted_tsa = False
         self.get_excluded_ts()
         # if number of time steps >= number of base time steps, skip aggregation
@@ -343,7 +343,7 @@ class TimeSeriesAggregation(object):
         sequence_time_steps = self.time_steps.sequence_time_steps_operation
         # if time series aggregation was conducted
         if self.analysis.time_series_aggregation.storageRepresentationMethod == "ZEN-garden":
-            if self.conducted_tsa:
+            if self.conducted_tsa and self.analysis.time_series_aggregation.hoursPerPeriod == 1:
                 # calculate connected storage levels, i.e., time steps that are constant for
                 idx_last_connected_storage_level = np.append(np.flatnonzero(np.diff(sequence_time_steps)), len(sequence_time_steps) - 1)
                 time_steps_storage = []
@@ -357,6 +357,12 @@ class TimeSeriesAggregation(object):
                     sequence_time_steps_storage[counter_time_step:idx_storage_level + 1] = idx_time_step
                     time_steps_energy2power[idx_time_step] = sequence_time_steps[idx_storage_level]
                     counter_time_step = idx_storage_level + 1
+            elif self.conducted_tsa:
+                # concept of connected storage level not applicable to representative days --> storage time steps must be resolved hourly, i.e., 8760 time steps per year
+                time_steps_storage = self.set_base_time_steps
+                time_steps_storage_duration = {key: 1 for key in time_steps_storage}
+                sequence_time_steps_storage = np.array(self.set_base_time_steps)
+                time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
             else:
                 time_steps_storage = self.time_steps.time_steps_operation
                 time_steps_storage_duration = self.time_steps.time_steps_operation_duration
@@ -366,7 +372,7 @@ class TimeSeriesAggregation(object):
             time_steps_storage = self.set_base_time_steps
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.array(self.set_base_time_steps)
-            time_steps_energy2power = self.sequence_time_steps
+            time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
         # overwrite in time steps object
         self.time_steps.time_steps_storage = time_steps_storage
         self.time_steps.time_steps_storage_duration = time_steps_storage_duration
@@ -423,6 +429,6 @@ class TimeSeriesAggregation(object):
         :param set_time_steps: set_time_steps of operation
         :param time_steps_duration: time_steps_duration of operation
         :param sequence_time_steps: sequence of operation """
-        self.set_time_steps = set_time_steps
-        self.time_steps_duration = time_steps_duration
-        self.sequence_time_steps = sequence_time_steps
+        self.set_time_steps = np.arange(self.analysis.time_series_aggregation.hoursPerPeriod * len(set_time_steps))
+        self.time_steps_duration = {i: v for i, v in enumerate(itertools.chain.from_iterable(itertools.repeat(value, self.analysis.time_series_aggregation.hoursPerPeriod) for value in time_steps_duration.values() ))}
+        self.sequence_time_steps = np.array([np.arange(self.analysis.time_series_aggregation.hoursPerPeriod) + x * self.analysis.time_series_aggregation.hoursPerPeriod for x in sequence_time_steps]).flatten()

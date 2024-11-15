@@ -252,6 +252,9 @@ class Postprocess:
             if len(df.index.names) == len(index_list):
                 df.index.names = index_list
 
+            print(param)
+            print(df.index)
+            print(units)
             units = self._unit_df(units,df.index)
             # update dict
             data_frames[param] = self._transform_df(df, doc, units)

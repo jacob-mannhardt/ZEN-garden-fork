@@ -446,6 +446,14 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.array(self.set_base_time_steps)
             time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            unique_array, sequence = np.unique(sequence_time_steps, return_inverse=True)
+            time_steps_storage = unique_array
+            self.time_steps.time_steps_storage_inter = np.arange(len(self.set_base_time_steps)//self.analysis.time_series_aggregation.hoursPerPeriod)
+            time_steps_storage_duration = {key: 1 for key in time_steps_storage}
+            sequence_time_steps_storage = sequence_time_steps
+            time_steps_energy2power = {idx: sequence[idx] for idx in unique_array}
+
         # overwrite in time steps object
         self.time_steps.time_steps_storage = time_steps_storage
         self.time_steps.time_steps_storage_duration = time_steps_storage_duration

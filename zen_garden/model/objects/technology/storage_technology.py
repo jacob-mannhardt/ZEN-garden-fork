@@ -9,7 +9,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from zen_garden.utils import linexpr_from_tuple_np
+from zen_garden.utils import linexpr_from_tuple_np, setup_logger
 from .technology import Technology
 from ..component import ZenIndex, IndexSet
 from ..element import Element, GenericRule
@@ -155,6 +155,12 @@ class StorageTechnology(Technology):
         # storage level
         variables.add_variable(model, name="storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), bounds=(0, np.inf),
             doc='storage level of storage technology ón node in each storage time step', unit_category={"energy_quantity": 1})
+        if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            # intra storage level
+            variables.add_variable(model, name="intra_storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup), bounds=(0, np.inf),
+                doc='intra storage level of storage technology on node in each storage time step', unit_category={"energy_quantity": 1})
+            variables.add_variable(model, name="inter_storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage_inter"], optimization_setup), bounds=(0, np.inf),
+                doc='inter storage level of storage technology on node in each storage time steps', unit_category={"energy_quantity": 1})
         # energy spillage
         variables.add_variable(model, name="flow_storage_spillage", index_sets=(index_values, index_names), bounds=(0, np.inf), doc='storage spillage of storage technology on node i in each storage time step', unit_category={"energy_quantity": 1, "time": -1})
 
@@ -429,24 +435,49 @@ class StorageTechnologyRules(GenericRule):
         times_coupling,mask_coupling = self.get_previous_storage_time_step_array()
         self_discharge_previous = (1-self_discharge)**time_steps_storage_duration
         self_discharge_previous["set_time_steps_storage"] = times_coupling
-        term_delta_storage_level = (
-                self.variables["storage_level"] - self_discharge_previous * self.variables["storage_level"].sel({"set_time_steps_storage": times_coupling}))
-        # charge and discharge flow
         times_year_time_step = self.get_year_time_step_array()
         efficiency_charge = self.parameters.efficiency_charge.broadcast_like(times_year_time_step).where(times_year_time_step,0.0).sum("set_time_steps_yearly")
         efficiency_discharge = self.parameters.efficiency_discharge.broadcast_like(times_year_time_step).where(times_year_time_step,0.0).sum("set_time_steps_yearly")
-        term_flow_charge_discharge = (
-                self.variables["flow_storage_charge"] * efficiency_charge -
-                self.variables["flow_storage_discharge"] / efficiency_discharge +
-                flow_storage_inflow -
-                flow_storage_spillage)
-        times_power2energy = self.get_power2energy_time_step_array()
-        term_flow_charge_discharge = self.map_and_expand(term_flow_charge_discharge, times_power2energy)
-        term_flow_charge_discharge = term_flow_charge_discharge*multiplier
-        # sum up all terms
-        lhs = (term_delta_storage_level - term_flow_charge_discharge).where(mask_coupling,0.0)
-        rhs = 0
-        constraints = lhs == rhs
+        if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+            # first intra storage level must be 0 per definition
+            constraints_intra_zero = self.variables["intra_storage_level"].loc[{"set_time_steps_storage":
+                                                                               self.variables["intra_storage_level"].coords["set_time_steps_storage"][::hpp]}] == 0
+            self.constraints.add_constraint("constraint_set_first_intra_storage_level_to_zero", constraints_intra_zero)
+            constraints_intra = {}
+            for period in range(self.optimization_setup.time_series_aggregation.number_typical_periods):
+                term_delta_storage_level_intra =  (self.variables["intra_storage_level"].loc[{"set_time_steps_storage": slice(period*hpp+1, hpp*(1+period)-1)}]
+                                                   - (1-self_discharge) * self.variables["intra_storage_level"].sel({"set_time_steps_storage": times_coupling[period*hpp+1:hpp*(1+period)]}))
+                term_flow_charge_discharge_intra = (self.variables["flow_storage_charge"].loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}]
+                                                    * efficiency_charge.loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}]
+                                                    - self.variables["flow_storage_discharge"].loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}]
+                                                    / efficiency_discharge.loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}]
+                                                    + flow_storage_inflow.loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}]
+                                                    - flow_storage_spillage.loc[{"set_time_steps_operation": slice(period*hpp, hpp*(1+period)-2)}])
+                lhs = term_delta_storage_level_intra - term_flow_charge_discharge_intra
+                rhs = 0
+                constraint_intra = lhs == rhs
+                constraints_intra[period] = constraint_intra
+            self.constraints.add_constraint("constraint_couple_storage_level_intra", constraints_intra)
+            for ts_inter in self.time_steps.time_steps_storage_inter:
+                idx_last_inter = self.time_steps.sequence_time_steps_storage[ts_inter*hpp]
+                self.variables["inter_storage_charge"] == self.variables["inter_storage_charge"].sel({"set_time_steps_storage_inter": })
+        else:
+            term_delta_storage_level = (
+                    self.variables["storage_level"] - self_discharge_previous * self.variables["storage_level"].sel({"set_time_steps_storage": times_coupling}))
+            # charge and discharge flow
+            term_flow_charge_discharge = (
+                    self.variables["flow_storage_charge"] * efficiency_charge -
+                    self.variables["flow_storage_discharge"] / efficiency_discharge +
+                    flow_storage_inflow -
+                    flow_storage_spillage)
+            times_power2energy = self.get_power2energy_time_step_array()
+            term_flow_charge_discharge = self.map_and_expand(term_flow_charge_discharge, times_power2energy)
+            term_flow_charge_discharge = term_flow_charge_discharge*multiplier
+            # sum up all terms
+            lhs = (term_delta_storage_level - term_flow_charge_discharge).where(mask_coupling,0.0)
+            rhs = 0
+            constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_couple_storage_level",constraints)
 

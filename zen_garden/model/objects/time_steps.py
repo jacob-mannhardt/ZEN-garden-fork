@@ -22,6 +22,7 @@ class TimeStepsDicts(object):
         if dict_all_sequence_time_steps is None:
             self.time_steps_operation = None
             self.time_steps_storage = None
+            self.time_steps_storage_inter = None
             self.sequence_time_steps_operation = None
             self.sequence_time_steps_storage = None
             self.sequence_time_steps_yearly = None

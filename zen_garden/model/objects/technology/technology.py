@@ -76,7 +76,7 @@ class Technology(Element):
                 self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=["set_time_steps_yearly"], unit_category={})
                 self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location,"set_time_steps_yearly"], unit_category={})
             else:
-                self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"], unit_category={})
+                self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"],time_steps="set_time_steps_yearly", unit_category={})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities

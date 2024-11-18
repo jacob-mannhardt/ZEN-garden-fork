@@ -342,6 +342,8 @@ class GenericRule(object):
         # Create the xarray.DataArray for the discount factor
         time_steps = self.energy_system.set_time_steps_yearly
 
+        #only annuity factor as variable WACC -> #ToDo: delete this part again -> only for testing
+        discount_factor = self.parameters.discount_rate
         #Get the dimensions and indices of the factor xarray
         # Get indexes of discount factor
         try:

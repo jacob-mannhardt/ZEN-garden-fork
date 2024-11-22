@@ -40,6 +40,7 @@ class TimestepType(Enum):
     yearly: str = "year"
     operational: str = "time_operation"
     storage: str = "time_storage_level"
+    storage_inter: str = "time_storage_level_inter"
 
     @classmethod
     def get_time_steps_names(cls) -> list[str]:

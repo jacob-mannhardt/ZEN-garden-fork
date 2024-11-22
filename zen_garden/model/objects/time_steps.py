@@ -22,6 +22,7 @@ class TimeStepsDicts(object):
         if dict_all_sequence_time_steps is None:
             self.time_steps_operation = None
             self.time_steps_storage = None
+            self.time_steps_storage_intra = None
             self.time_steps_storage_inter = None
             self.sequence_time_steps_operation = None
             self.sequence_time_steps_storage = None
@@ -232,9 +233,18 @@ class TimeStepsDicts(object):
         :param time_step: current time step
         :return previous_time_step: previous time step
         """
-        sequence = self.sequence_time_steps_storage
-        previous_time_step = sequence[np.where(sequence == time_step)[0] - 1][0]
+        previous_time_step = self.sequence_time_steps_storage[np.where(self.sequence_time_steps_storage == time_step)[0] - 1][0]
         return previous_time_step
+
+    def get_next_storage_time_step(self, time_steps):
+        """
+        needed for kotzur's intra layer
+        """
+        if time_steps == self.time_steps_storage_intra[-1]:
+            next_time_step = self.time_steps_storage_intra[0]
+        else:
+            next_time_step = self.time_steps_storage_intra[np.where(self.time_steps_storage_intra == time_steps)[0] + 1][0]
+        return next_time_step
 
     def decode_yearly_time_steps(self, element_time_steps):
         """ decodes list of years to base time steps

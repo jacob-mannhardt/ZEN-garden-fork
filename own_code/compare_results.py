@@ -5,6 +5,7 @@ from zen_garden.postprocess.results.results import Results
 from zen_garden.postprocess.comparisons import compare_model_values, compare_configs, compare_component_values
 import os
 from matplotlib import pyplot as plt
+import numpy as np
 
 def post_compute_storage_level(result):
     """
@@ -23,14 +24,21 @@ def post_compute_storage_level(result):
 
 
 
-rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours')
-rGab = Results(path='../data/outputs/dummy_model_TSA_gab_repHours')
-rZEN_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours_varNGPrice')
-rGab_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_gab_repHours_varNGPrice')
-rZEN_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_ZEN_selfDisNG')
-rGab_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_gab_selfDisNG')
+#rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours')
+#rGab = Results(path='../data/outputs/dummy_model_TSA_gab_repHours')
+#rZEN_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours_varNGPrice')
+#rGab_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_gab_repHours_varNGPrice')
+#rZEN_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_ZEN_selfDisNG')
+#rGab_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_gab_selfDisNG')
 rZEN_repDays = Results(path='../data/outputs/dummy_model_TSA_ZEN_repDays')
-rGab_repDays = Results(path='../data/outputs/dummy_model_TSA_gab_repDays')
+#rGab_repDays = Results(path='../data/outputs/dummy_model_TSA_gab_repDays')
+rKot = Results(path='../data/outputs/dummy_model_TSA_Kotzur')
+#rTest = Results(path='../data/outputs/dummy_model_TSA')
+
+relative_error = abs((rKot.get_full_ts("flow_storage_charge").T - rZEN_repDays.get_full_ts("flow_storage_charge").T) / rZEN_repDays.get_full_ts("flow_storage_charge").T)
+
+
+rKot.get_full_ts("inter_storage_level")
 
 #compare_parameters = compare_model_values([rZEN, rGab], component_type = 'parameter')
 #compare_variables = compare_model_values([rZEN, rGab], component_type = 'variable')

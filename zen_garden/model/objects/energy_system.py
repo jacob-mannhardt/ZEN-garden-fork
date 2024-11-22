@@ -222,6 +222,7 @@ class EnergySystem:
         # storage time steps
         self.optimization_setup.sets.add_set(name="set_time_steps_storage",data=self.time_steps.time_steps_storage,doc="Set of storage level time steps")
         if self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            self.optimization_setup.sets.add_set(name="set_time_steps_storage_intra", data=self.time_steps.time_steps_storage_intra, doc="Set of intra storage level time steps")
             self.optimization_setup.sets.add_set(name="set_time_steps_storage_inter", data=self.time_steps.time_steps_storage_inter, doc="Set of inter storage level time steps")
 
     def construct_params(self):

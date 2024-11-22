@@ -13,6 +13,7 @@ import os
 import pandas as pd
 import xarray as xr
 import linopy as lp
+import numpy as np
 import psutil
 import time
 from pathlib import Path
@@ -357,11 +358,33 @@ class GenericRule(object):
         mask = xr.DataArray(mask, dims="set_time_steps_storage", coords={"set_time_steps_storage": self.sets["set_time_steps_storage"]})
         return times_prev, mask
 
-    def get_power2energy_time_step_array(self):
+    def get_next_storage_time_step_array(self):
+        """
+
+        """
+        times_next = []
+        mask = []
+        hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+        for ts in self.sets["set_time_steps_storage_intra"]:
+            ts_next = self.energy_system.time_steps.get_next_storage_time_step(ts)
+            if ts % hpp - (hpp-1) == 0 and ts != 0:
+                times_next.append(ts_next)
+                mask.append(False)
+            else:
+                times_next.append(ts_next)
+                mask.append(True)
+        mask = xr.DataArray(mask, dims="set_time_steps_storage_intra", coords={"set_time_steps_storage_intra": self.sets["set_time_steps_storage_intra"]})
+        return times_next, mask
+
+    def get_power2energy_time_step_array(self, ts_type=None):
         """ returns array with power2energy time steps """
-        times = {st: self.energy_system.time_steps.convert_time_step_energy2power(st) for st in self.sets["set_time_steps_storage"]}
+        if ts_type == "intra":
+            ts_name = "set_time_steps_storage_intra"
+        else:
+            ts_name = "set_time_steps_storage"
+        times = {st: self.energy_system.time_steps.convert_time_step_energy2power(st) for st in self.sets[ts_name]}
         times = pd.Series(times,name="set_time_steps_operation")
-        times.index.name = "set_time_steps_storage"
+        times.index.name = ts_name
         return times
 
     def get_storage2year_time_step_array(self):
@@ -370,6 +393,74 @@ class GenericRule(object):
         times = pd.Series(times,name="set_time_steps_yearly")
         times.index.name = "set_time_steps_storage"
         return times
+
+    def get_intra2energy_time_step_array(self):
+        """
+
+        """
+        sequence = self.get_typical_period_sequence()
+        sequence_hours = []
+        hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+        for ts_inter in sequence:
+            sequence_hours.extend(self.time_steps.time_steps_storage_intra[ts_inter*hpp:hpp*(1+ts_inter)])
+        times = {ind: ts for ind, ts in enumerate(sequence_hours)}
+        times = pd.Series(times,name="set_time_steps_storage_intra")
+        times.index.name = "set_time_steps_storage"
+        return times
+
+    def get_inter2storage_time_step_array(self):
+        """
+
+        """
+        hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+        rep = np.repeat(self.time_steps.time_steps_storage_inter, hpp)
+        times = {st: inter for st, inter in enumerate(rep)}
+        times = pd.Series(times,name="set_time_steps_storage_inter")
+        times.index.name = "set_time_steps_storage"
+        return times
+
+    def get_intra2inter_time_step_array(self, get_last_ts=False):
+        """
+
+        """
+        sequence = self.get_typical_period_sequence()
+        if get_last_ts:
+            hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+            sequence = sequence*hpp + (hpp-1)
+        times = {inter: intra for inter, intra in enumerate(sequence)}
+        times = pd.Series(times,name="set_time_steps_storage_intra")
+        times.index.name = "set_time_steps_storage_inter"
+        return times
+
+    def get_power2inter_time_step_array(self):
+        """
+
+        """
+        times_intra2inter = self.get_intra2inter_time_step_array(get_last_ts=True)
+        times = {ind: self.time_steps.time_steps_energy2power[val] for ind, val in enumerate(times_intra2inter)}
+        times = pd.Series(times,name="set_time_steps_operation")
+        times.index.name = "set_time_steps_storage_inter"
+        return times
+
+    def get_typical_period_sequence(self):
+        """
+
+        """
+        hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+        sequences = self.time_steps.sequence_time_steps_operation.reshape(-1, hpp)
+        sequence_to_index = {}
+        indices = []
+        current_index = 0
+        for seq in sequences:
+            # Convert sequence to a tuple (hashable) for dictionary lookup
+            seq_tuple = tuple(seq)
+            if seq_tuple not in sequence_to_index:
+                sequence_to_index[seq_tuple] = current_index
+                current_index += 1
+            indices.append(sequence_to_index[seq_tuple])
+        # Convert the list of indices to a numpy array
+        sequence = np.array(indices)
+        return sequence
 
     def map_and_expand(self, array, mapping):
         """ maps and expands array

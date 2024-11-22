@@ -32,6 +32,7 @@ time_steps_map: dict[str | None, TimestepType] = {
     "year": TimestepType.yearly,
     "time_operation": TimestepType.operational,
     "time_storage_level": TimestepType.storage,
+    "time_storage_level_inter": TimestepType.storage_inter
 }
 
 

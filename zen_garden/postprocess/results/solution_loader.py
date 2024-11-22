@@ -23,6 +23,7 @@ class TimestepType(Enum):
     yearly: str = "year"
     operational: str = "time_operation"
     storage: str = "time_storage_level"
+    storage_inter: str = "time_storage_level_inter"
 
 
 class Component(ABC):

@@ -236,6 +236,9 @@ class Postprocess:
         # dataframe serialization
         data_frames = {}
         for param in self.params.docs.keys():
+            #temprary fix for rolling horizon #ToDO remove this!!!!
+            if param == "interest_rate":
+                continue
             # get the values
             vals = getattr(self.params, param)
             doc = self.params.docs[param]

@@ -6,6 +6,7 @@ from zen_garden.postprocess.comparisons import compare_model_values, compare_con
 import os
 from matplotlib import pyplot as plt
 import numpy as np
+import pandas as pd
 
 def post_compute_storage_level(result):
     """
@@ -22,28 +23,42 @@ def post_compute_storage_level(result):
         storage_level.loc[ts+1] = storage_level.loc[ts] * (1-self_discharge) + (efficiency_charge * flow_storage_charge.loc[ts+1] - flow_storage_discharge.loc[ts+1]/efficiency_discharge)
     return storage_level
 
+def post_compute_storage_level_kotzur(result):
+    """
+
+    """
+    storage_level_inter = result.get_full_ts("storage_level_inter").T
+    self_discharge = pd.DataFrame([result.get_total("self_discharge")] * len(storage_level_inter.index.values), columns=result.get_total("self_discharge").index).reset_index(drop=True)
+    exponents = storage_level_inter.index.values%24
+    storage_level_inter_sd = storage_level_inter * (1-self_discharge)**exponents[:,None]
+    storage_level_intra = result.get_full_ts("storage_level_intra").T
+    return storage_level_inter_sd + storage_level_intra
 
 
-#rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours')
-#rGab = Results(path='../data/outputs/dummy_model_TSA_gab_repHours')
-#rZEN_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_ZEN_repHours_varNGPrice')
-#rGab_varNGPrice = Results(path='../data/outputs/dummy_model_TSA_gab_repHours_varNGPrice')
-#rZEN_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_ZEN_selfDisNG')
-#rGab_selfDisNG = Results(path='../data/outputs/dummy_model_TSA_gab_selfDisNG')
-rZEN_repDays = Results(path='../data/outputs/dummy_model_TSA_ZEN_repDays')
-#rGab_repDays = Results(path='../data/outputs/dummy_model_TSA_gab_repDays')
-rKot = Results(path='../data/outputs/dummy_model_TSA_Kotzur')
-#rTest = Results(path='../data/outputs/dummy_model_TSA')
+rTest = Results(path='../data/outputs/dummy_model_TSA')
+rKot = Results(path='../data/outputs/dummy_model_TSA_kot')
+rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN')
 
-relative_error = abs((rKot.get_full_ts("flow_storage_charge").T - rZEN_repDays.get_full_ts("flow_storage_charge").T) / rZEN_repDays.get_full_ts("flow_storage_charge").T)
-
-
-rKot.get_full_ts("inter_storage_level")
 
 #compare_parameters = compare_model_values([rZEN, rGab], component_type = 'parameter')
 #compare_variables = compare_model_values([rZEN, rGab], component_type = 'variable')
 
-ex_post_ZEN = post_compute_storage_level(rZEN)
+plt.figure()
+plt.plot(rTest.get_full_ts("flow_storage_charge").T["battery"])
+plt.plot(rTest.get_full_ts("flow_storage_discharge").T["battery"])
+plt.plot(post_compute_storage_level_kotzur(rTest)["battery"])
+plt.plot(rTest.get_full_ts("storage_level_inter").T["battery"])
+plt.plot(rTest.get_full_ts("storage_level_intra").T["battery"])
+plt.legend(["charge", "discharge", "storage_level", "storage_level_inter", "storage_level_intra"])
+plt.show()
+
+rZENUnc.get_full_ts("flow_storage_charge")
+rKotUnc.get_full_ts("flow_storage_charge")
+
+storage_level_kot = post_compute_storage_level_kotzur(rKotUnc)
+ex_post_ZEN = post_compute_storage_level(rZENUnc)
+
+
 ex_post_Gab = post_compute_storage_level(rGab)
 sl_diff = ex_post_ZEN-rGab.get_full_ts("storage_level").transpose()
 sl_diff_Gab = ex_post_Gab-rGab.get_full_ts("storage_level").transpose()

@@ -32,7 +32,8 @@ time_steps_map: dict[str | None, TimestepType] = {
     "year": TimestepType.yearly,
     "time_operation": TimestepType.operational,
     "time_storage_level": TimestepType.storage,
-    "time_storage_level_inter": TimestepType.storage_inter
+    "time_storage_level_inter": TimestepType.storage_inter,
+    "time_storage_level_intra": TimestepType.storage_intra
 }
 
 
@@ -524,6 +525,10 @@ class MultiHdfLoader(AbstractLoader):
             sequence_timesteps_name = "operation"
         elif timestep_type is TimestepType.storage:
             sequence_timesteps_name = "storage"
+        elif timestep_type is TimestepType.storage_inter:
+            sequence_timesteps_name = "inter"
+        elif timestep_type is TimestepType.storage_intra:
+            sequence_timesteps_name = "intra"
         else:
             sequence_timesteps_name = "yearly"
 

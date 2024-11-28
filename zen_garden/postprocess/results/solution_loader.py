@@ -24,6 +24,7 @@ class TimestepType(Enum):
     operational: str = "time_operation"
     storage: str = "time_storage_level"
     storage_inter: str = "time_storage_level_inter"
+    storage_intra: str = "time_storage_level_intra"
 
 
 class Component(ABC):

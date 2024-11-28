@@ -364,22 +364,31 @@ class GenericRule(object):
         mask = xr.DataArray(mask, dims="set_time_steps_storage", coords={"set_time_steps_storage": self.sets["set_time_steps_storage"]})
         return times_prev, mask
 
-    def get_next_storage_time_step_array(self):
+    def get_next_time_step_array(self, type):
         """
 
         """
         times_next = []
         mask = []
         hpp = self.analysis.time_series_aggregation.hoursPerPeriod
-        for ts in self.sets["set_time_steps_storage_intra"]:
-            ts_next = self.energy_system.time_steps.get_next_storage_time_step(ts)
+        if type == "storage_intra":
+            index_name = "set_time_steps_storage_intra"
+            time_steps = self.sets[index_name]
+        elif type == "storage_inter":
+            index_name = "set_time_steps_storage_inter"
+            time_steps = self.sets[index_name]
+        elif type == "operation":
+            index_name = "set_time_steps_operation"
+            time_steps = self.sets[index_name]
+        for ts in time_steps:
+            ts_next = self.energy_system.time_steps.get_next_time_step(ts, type)
             if ts % hpp - (hpp-1) == 0 and ts != 0:
                 times_next.append(ts_next)
                 mask.append(False)
             else:
                 times_next.append(ts_next)
                 mask.append(True)
-        mask = xr.DataArray(mask, dims="set_time_steps_storage_intra", coords={"set_time_steps_storage_intra": self.sets["set_time_steps_storage_intra"]})
+        mask = xr.DataArray(mask, dims=index_name, coords={index_name: self.sets[index_name]})
         return times_next, mask
 
     def get_power2energy_time_step_array(self, ts_type=None):

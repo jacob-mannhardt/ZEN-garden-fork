@@ -27,6 +27,8 @@ class TimeStepsDicts(object):
             self.sequence_time_steps_operation = None
             self.sequence_time_steps_storage = None
             self.sequence_time_steps_yearly = None
+            self.sequence_time_steps_inter = None
+            self.sequence_time_steps_intra = None
             self.time_steps_operation_duration = None
             self.time_steps_storage_duration = None
 
@@ -75,7 +77,7 @@ class TimeStepsDicts(object):
         else:
             raise KeyError(f"Time step type {time_step_type} is incorrect")
 
-    def get_sequence_time_steps_dict(self):
+    def get_sequence_time_steps_dict(self, analysis):
         """
         Returns all dicts of sequence of time steps.
 
@@ -85,6 +87,9 @@ class TimeStepsDicts(object):
         dict_all_sequence_time_steps = {"operation": self.sequence_time_steps_operation,
                                         "storage": self.sequence_time_steps_storage,
                                         "yearly": self.sequence_time_steps_yearly}
+        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            dict_all_sequence_time_steps["intra"] = self.sequence_time_steps_intra
+            dict_all_sequence_time_steps["inter"] = self.sequence_time_steps_inter
         return dict_all_sequence_time_steps
 
     def encode_time_step(self, base_time_steps: int, time_step_type: str = None):
@@ -236,14 +241,20 @@ class TimeStepsDicts(object):
         previous_time_step = self.sequence_time_steps_storage[np.where(self.sequence_time_steps_storage == time_step)[0] - 1][0]
         return previous_time_step
 
-    def get_next_storage_time_step(self, time_steps):
+    def get_next_time_step(self, time_step, type):
         """
-        needed for kotzur's intra layer
+        needed for kotzur's intra layer/wogrin's storage difference
         """
-        if time_steps == self.time_steps_storage_intra[-1]:
-            next_time_step = self.time_steps_storage_intra[0]
+        if type == "storage_intra":
+            time_steps = self.time_steps_storage_intra
+        elif type == "storage_inter":
+            time_steps = self.time_steps_storage_inter
+        elif type == "operation":
+            time_steps = np.array(self.time_steps_operation)
+        if time_step == time_steps[-1]:
+            next_time_step = time_steps[0]
         else:
-            next_time_step = self.time_steps_storage_intra[np.where(self.time_steps_storage_intra == time_steps)[0] + 1][0]
+            next_time_step = time_steps[np.where(time_steps == time_step)[0] + 1][0]
         return next_time_step
 
     def decode_yearly_time_steps(self, element_time_steps):

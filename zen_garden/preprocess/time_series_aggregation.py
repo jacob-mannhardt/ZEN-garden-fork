@@ -33,10 +33,11 @@ class TimeSeriesAggregation(object):
         # if set_time_steps as input (because already aggregated), use this as base time step, otherwise self.set_base_time_steps
         self.set_base_time_steps = self.energy_system.set_base_time_steps_yearly
         self.number_typical_periods = min(self.system.unaggregated_time_steps_per_year, self.system.aggregated_time_steps_per_year) // self.analysis.time_series_aggregation.hoursPerPeriod
+        self.hours_per_period = self.analysis.time_series_aggregation.hoursPerPeriod
         self.conducted_tsa = False
         self.get_excluded_ts()
         # if number of time steps >= number of base time steps, skip aggregation
-        if self.number_typical_periods < np.size(self.set_base_time_steps) and self.system.conduct_time_series_aggregation:
+        if self.number_typical_periods*self.hours_per_period < np.size(self.set_base_time_steps) and self.system.conduct_time_series_aggregation:
             # select time series
             self.select_ts_of_all_elements()
             # make copy of raw time series
@@ -415,7 +416,7 @@ class TimeSeriesAggregation(object):
         """
         sequence_time_steps = self.time_steps.sequence_time_steps_operation
         # if time series aggregation was conducted
-        if self.analysis.time_series_aggregation.storageRepresentationMethod == "ZEN-garden":
+        if self.analysis.time_series_aggregation.storageRepresentationMethod in ["ZEN-garden", "wogrin"]:
             if self.conducted_tsa and self.analysis.time_series_aggregation.hoursPerPeriod == 1:
                 # calculate connected storage levels, i.e., time steps that are constant for
                 idx_last_connected_storage_level = np.append(np.flatnonzero(np.diff(sequence_time_steps)), len(sequence_time_steps) - 1)
@@ -512,6 +513,13 @@ class TimeSeriesAggregation(object):
         :param set_time_steps: set_time_steps of operation
         :param time_steps_duration: time_steps_duration of operation
         :param sequence_time_steps: sequence of operation """
-        self.set_time_steps = np.arange(self.analysis.time_series_aggregation.hoursPerPeriod * len(set_time_steps))
-        self.time_steps_duration = {i: v for i, v in enumerate(itertools.chain.from_iterable(itertools.repeat(value, self.analysis.time_series_aggregation.hoursPerPeriod) for value in time_steps_duration.values() ))}
-        self.sequence_time_steps = np.array([np.arange(self.analysis.time_series_aggregation.hoursPerPeriod) + x * self.analysis.time_series_aggregation.hoursPerPeriod for x in sequence_time_steps]).flatten()
+        if self.number_typical_periods * self.hours_per_period < self.system.unaggregated_time_steps_per_year:
+            self.set_time_steps = np.arange(self.analysis.time_series_aggregation.hoursPerPeriod * len(set_time_steps))
+            self.time_steps_duration = {i: v for i, v in enumerate(itertools.chain.from_iterable(itertools.repeat(value, self.analysis.time_series_aggregation.hoursPerPeriod)
+                                                                                                 for value in time_steps_duration.values()))}
+            self.sequence_time_steps = np.array([np.arange(self.analysis.time_series_aggregation.hoursPerPeriod) + x * self.analysis.time_series_aggregation.hoursPerPeriod
+                                                 for x in sequence_time_steps]).flatten()
+        else:
+            self.set_time_steps = set_time_steps
+            self.time_steps_duration = time_steps_duration
+            self.sequence_time_steps = sequence_time_steps

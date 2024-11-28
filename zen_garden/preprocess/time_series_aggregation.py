@@ -433,9 +433,9 @@ class TimeSeriesAggregation(object):
                     counter_time_step = idx_storage_level + 1
             elif self.conducted_tsa:
                 # concept of connected storage level not applicable to representative days --> storage time steps must be resolved hourly, i.e., 8760 time steps per year
-                time_steps_storage = self.set_base_time_steps
+                time_steps_storage = np.arange(len(sequence_time_steps))
                 time_steps_storage_duration = {key: 1 for key in time_steps_storage}
-                sequence_time_steps_storage = np.array(self.set_base_time_steps)
+                sequence_time_steps_storage = np.arange(len(sequence_time_steps))
                 time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
             else:
                 time_steps_storage = self.time_steps.time_steps_operation
@@ -443,18 +443,18 @@ class TimeSeriesAggregation(object):
                 sequence_time_steps_storage = sequence_time_steps
                 time_steps_energy2power = {idx: idx for idx in self.time_steps.time_steps_operation}
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "gabrielli":
-            time_steps_storage = self.set_base_time_steps
+            time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
-            sequence_time_steps_storage = np.array(self.set_base_time_steps)
+            sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
-            time_steps_storage = self.set_base_time_steps
+            time_steps_storage = np.arange(len(sequence_time_steps))
             unique_array, idx = np.unique(sequence_time_steps, return_index=True)
             unique_sequence_time_steps = sequence_time_steps[np.sort(idx)]
             self.time_steps.time_steps_storage_intra = unique_array
-            self.time_steps.time_steps_storage_inter = np.arange(len(self.set_base_time_steps)//self.analysis.time_series_aggregation.hoursPerPeriod)
+            self.time_steps.time_steps_storage_inter = np.arange(len(sequence_time_steps)//self.analysis.time_series_aggregation.hoursPerPeriod)
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
-            sequence_time_steps_storage = self.set_base_time_steps
+            sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: ts for idx, ts in enumerate(unique_sequence_time_steps)}
 
         # overwrite in time steps object
@@ -466,7 +466,7 @@ class TimeSeriesAggregation(object):
         # set the dict time_steps_energy2power
         self.time_steps.time_steps_energy2power = time_steps_energy2power
         # set the first and last time step of each year
-        self.time_steps.set_time_steps_storage_startend(self.optimization_setup.system)
+        self.time_steps.set_time_steps_storage_startend(self.optimization_setup.system, self.optimization_setup.analysis)
 
     def unique_time_steps_multiple_indices(self, list_sequence_time_steps):
         """ this method returns the unique time steps of multiple time grids

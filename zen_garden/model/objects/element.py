@@ -349,7 +349,7 @@ class GenericRule(object):
         times_prev = []
         mask = []
         for ts in self.sets["set_time_steps_storage"]:
-            ts_end = self.energy_system.time_steps.get_time_steps_storage_startend(ts)
+            ts_end = self.energy_system.time_steps.get_time_steps_storage_startend(ts, direction="previous")
             if ts_end is not None:
                 if self.system.storage_periodicity:
                     times_prev.append(ts_end)
@@ -381,13 +381,21 @@ class GenericRule(object):
             index_name = "set_time_steps_operation"
             time_steps = self.sets[index_name]
         for ts in time_steps:
-            ts_next = self.energy_system.time_steps.get_next_time_step(ts, type)
-            if ts % hpp - (hpp-1) == 0 and ts != 0:
-                times_next.append(ts_next)
-                mask.append(False)
+            ts_start = self.energy_system.time_steps.get_time_steps_storage_startend(ts, direction="next", ts_type=type)
+            if ts_start is not None:
+                times_next.append(ts_start)
+                if ts % hpp - (hpp - 1) == 0 and ts != 0:
+                    mask.append(False)
+                else:
+                    mask.append(True)
             else:
-                times_next.append(ts_next)
-                mask.append(True)
+                ts_next = self.energy_system.time_steps.get_next_time_step(ts, type)
+                if ts % hpp - (hpp-1) == 0 and ts != 0:
+                    times_next.append(ts_next)
+                    mask.append(False)
+                else:
+                    times_next.append(ts_next)
+                    mask.append(True)
         mask = xr.DataArray(mask, dims=index_name, coords={index_name: self.sets[index_name]})
         return times_next, mask
 

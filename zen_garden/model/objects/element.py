@@ -343,7 +343,7 @@ class GenericRule(object):
         time_steps = self.energy_system.set_time_steps_yearly
 
         #ToDO delete later
-        #discount_factor=self.parameters.discount_rate
+        discount_factor=self.parameters.discount_rate
         #Get the dimensions and indices of the factor xarray
         # Get indexes of discount factor
         try:
@@ -377,22 +377,22 @@ class GenericRule(object):
 
             # Vectorized calculation over technologies and locations
             # Broadcasting the discount factor calculation for each combination of tech and loc
-            if calling_class == "EnergySystem" or not self.analysis.variable_CoC:
-                factor.loc[{"set_time_steps_yearly": year}] = sum(
-                    ((1 / (1 + discount_factor)) **
-                     (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-                    for _intermediate_time_step in range(interval_between_years)
-                )
-            else:
-                factor.loc[{"set_time_steps_yearly": year}] = sum(
-                    ((1 / (1 + discount_factor.loc[{"set_time_steps_yearly": year}])) **
-                     (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-                    for _intermediate_time_step in range(interval_between_years)
-                )
-            #factor.loc[{"set_time_steps_yearly": year}] = sum(
-            #    ((1 / (1 + discount_factor)) **
-            #     (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-            #    for _intermediate_time_step in range(interval_between_years))
+            #if calling_class == "EnergySystem" or not self.analysis.variable_CoC:
+            #    factor.loc[{"set_time_steps_yearly": year}] = sum(
+            #        ((1 / (1 + discount_factor)) **
+            #         (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
+            #        for _intermediate_time_step in range(interval_between_years)
+            #    )
+            #else:
+            #    factor.loc[{"set_time_steps_yearly": year}] = sum(
+            #        ((1 / (1 + discount_factor.loc[{"set_time_steps_yearly": year}])) **
+            #         (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
+            #        for _intermediate_time_step in range(interval_between_years)
+            #    )
+            factor.loc[{"set_time_steps_yearly": year}] = sum(
+                ((1 / (1 + discount_factor)) **
+                 (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
+                for _intermediate_time_step in range(interval_between_years))
 
         return factor
 

@@ -40,6 +40,7 @@ class TimeStepsDicts(object):
             self.time_steps_energy2power = None
 
             self.time_steps_storage_level_startend_year = None
+            self.time_steps_storage_level_inter_startend_year = None
 
         # set the params if provided
         else:
@@ -172,7 +173,7 @@ class TimeStepsDicts(object):
             time_steps_year2storage[year] = time_steps_combi_storage[0,time_steps_combi_storage[1] == year]
         self.time_steps_year2storage = time_steps_year2storage
 
-    def set_time_steps_storage_startend(self, system):
+    def set_time_steps_storage_startend(self, system, analysis):
         """ sets the dict of matching the last time step of the year in the storage level domain to the first
 
         :param system: dictionary defining the system
@@ -187,6 +188,17 @@ class TimeStepsDicts(object):
             counter += unaggregated_time_steps
             time_steps_end.append(sequence_time_steps[counter - 1])
         self.time_steps_storage_level_startend_year = {start: end for start, end in zip(time_steps_start, time_steps_end)}
+
+        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            sequence_time_steps_inter = self.time_steps_storage_inter
+            counter_inter = 0
+            time_steps_start_inter = []
+            time_steps_end_inter = []
+            while counter_inter < len(sequence_time_steps_inter):
+                time_steps_start_inter.append(sequence_time_steps_inter[counter_inter])
+                counter_inter += unaggregated_time_steps // analysis.time_series_aggregation.hoursPerPeriod
+                time_steps_end_inter.append(sequence_time_steps_inter[counter_inter - 1])
+            self.time_steps_storage_level_inter_startend_year = {start: end for start, end in zip(time_steps_start_inter, time_steps_end_inter)}
 
     def get_time_steps_year2operation(self, year=None):
         """ gets the dict of converting the invest time steps to the operation time steps of technologies
@@ -217,16 +229,25 @@ class TimeStepsDicts(object):
         else:
             return self.time_steps_year2storage[year]
 
-    def get_time_steps_storage_startend(self, time_step):
+    def get_time_steps_storage_startend(self, time_step, direction, ts_type=None):
         """ gets the dict of converting the operational time steps to the invest time steps of technologies
 
         :param time_step: #TODO describe parameter/return
         :return: #TODO describe parameter/return
         """
-        if time_step in self.time_steps_storage_level_startend_year.keys():
-            return self.time_steps_storage_level_startend_year[time_step]
-        else:
-            return None
+        if direction == "previous":
+            if time_step in self.time_steps_storage_level_startend_year.keys():
+                return self.time_steps_storage_level_startend_year[time_step]
+            else:
+                return None
+        elif direction == "next":
+            if ts_type == "storage_inter":
+                if time_step in self.time_steps_storage_level_inter_startend_year.values():
+                    return [key for key, value in self.time_steps_storage_level_inter_startend_year.items() if value == time_step][0]
+                else:
+                    return None
+            else:
+                return None
 
     def get_previous_storage_time_step(self, time_step):
         """ gets the storage time step before in the sequence

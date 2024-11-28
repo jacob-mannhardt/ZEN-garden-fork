@@ -35,40 +35,9 @@ def post_compute_storage_level_kotzur(result):
     return storage_level_inter_sd + storage_level_intra
 
 
-rTest = Results(path='../data/outputs/dummy_model_TSA')
-rKot = Results(path='../data/outputs/dummy_model_TSA_kot')
 rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN')
+rKot = Results(path='../data/outputs/dummy_model_TSA_Kot')
+rGab = Results(path='../data/outputs/dummy_model_TSA_Gab')
+rOp = Results(path='../data/outputs/operation')
 
-
-#compare_parameters = compare_model_values([rZEN, rGab], component_type = 'parameter')
-#compare_variables = compare_model_values([rZEN, rGab], component_type = 'variable')
-
-plt.figure()
-plt.plot(rTest.get_full_ts("flow_storage_charge").T["battery"])
-plt.plot(rTest.get_full_ts("flow_storage_discharge").T["battery"])
-plt.plot(post_compute_storage_level_kotzur(rTest)["battery"])
-plt.plot(rTest.get_full_ts("storage_level_inter").T["battery"])
-plt.plot(rTest.get_full_ts("storage_level_intra").T["battery"])
-plt.legend(["charge", "discharge", "storage_level", "storage_level_inter", "storage_level_intra"])
-plt.show()
-
-rZENUnc.get_full_ts("flow_storage_charge")
-rKotUnc.get_full_ts("flow_storage_charge")
-
-storage_level_kot = post_compute_storage_level_kotzur(rKotUnc)
-ex_post_ZEN = post_compute_storage_level(rZENUnc)
-
-
-ex_post_Gab = post_compute_storage_level(rGab)
-sl_diff = ex_post_ZEN-rGab.get_full_ts("storage_level").transpose()
-sl_diff_Gab = ex_post_Gab-rGab.get_full_ts("storage_level").transpose()
-
-charge_diff = (rZEN.get_full_ts("flow_storage_charge").transpose()-rGab.get_full_ts("flow_storage_charge").transpose())
-charge_diff = charge_diff[abs(charge_diff)>1e-3]
-charge_diff = charge_diff.stack()
-
-storage_level_rZEN = rZEN.get_full_ts("storage_level").transpose()
-storage_level_rGab = rGab.get_full_ts("storage_level").transpose()
-
-plt.figure()
 a = 1

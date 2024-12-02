@@ -34,7 +34,7 @@ def post_compute_storage_level_kotzur(result):
     storage_level_intra = result.get_full_ts("storage_level_intra").T
     return storage_level_inter_sd + storage_level_intra
 
-
+rOp = Results(path='../data/outputs/operation_scenarios_single_year')
 rZEN = Results(path='../data/outputs/dummy_model_TSA_ZEN')
 rKot = Results(path='../data/outputs/dummy_model_TSA_Kot')
 rGab = Results(path='../data/outputs/dummy_model_TSA_Gab')

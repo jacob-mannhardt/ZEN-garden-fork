@@ -114,6 +114,7 @@ class Element:
         t_end = time.perf_counter()
         if optimization_setup.solver.run_diagnostics:
             logging.info(f"Total time to construct model components: {t_end - t_start:0.1f} seconds")
+            optimization_setup.construction_time = t_end - t_start
 
     @classmethod
     def construct_sets(cls, optimization_setup):

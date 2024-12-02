@@ -65,6 +65,8 @@ class OptimizationSetup(object):
         self.parameters = None
         self.constraints = None
         self.sets = None
+        # model construction time
+        self.construction_time = None
 
         # initiate dictionary for storing extra year data
         self.year_specific_ts = {}

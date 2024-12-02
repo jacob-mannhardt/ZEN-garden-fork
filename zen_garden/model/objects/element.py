@@ -108,6 +108,7 @@ class Element:
         optimization_setup.energy_system.construct_objective()
         t_end = time.perf_counter()
         logging.info(f"Total time to construct model components: {t_end - t_start:0.1f} seconds")
+        optimization_setup.construction_time = t_end - t_start
 
     @classmethod
     def construct_sets(cls, optimization_setup):

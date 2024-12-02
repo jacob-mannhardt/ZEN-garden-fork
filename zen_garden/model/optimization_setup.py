@@ -65,6 +65,8 @@ class OptimizationSetup(object):
         self.parameters = None
         self.constraints = None
         self.sets = None
+        # model construction time
+        self.construction_time = None
 
         # sorted list of class names
         element_classes = self.dict_element_classes.keys()

@@ -142,6 +142,7 @@ class Scenario(AbstractScenario):
         self._analysis: Analysis = self._read_analysis()
         self._system: System = self._read_system()
         self._solver: Solver = self._read_solver()
+        self._benchmarking = self._read_benchmarking()
         self._ureg = self._read_ureg()
         self.name = name
         self.base_name = base_scenario
@@ -163,6 +164,12 @@ class Scenario(AbstractScenario):
 
         with open(solver_path, "r") as f:
             return Solver(**json.load(f))
+
+    def _read_benchmarking(self):
+        benchmarking_path = os.path.join(self.path, "benchmarking.json")
+
+        with open(benchmarking_path, "r") as f:
+            return json.load(f)
 
     def _read_ureg(self) -> pint.UnitRegistry:
         ureg = pint.UnitRegistry()
@@ -186,6 +193,10 @@ class Scenario(AbstractScenario):
     @property
     def system(self) -> System:
         return self._system
+
+    @property
+    def benchmarking(self) -> dict:
+        return self._benchmarking
 
     @property
     def ureg(self) -> pint.UnitRegistry:
@@ -384,43 +395,52 @@ class MultiHdfLoader(AbstractLoader):
         if any of the defined time steps name is in the index of the dataframe.
         """
         ans: dict[str, AbstractComponent] = {}
+        scenarios = []
         first_scenario_name = next(iter(self._scenarios.keys()))
-        first_scenario = self._scenarios[first_scenario_name]
+        scenarios.append(self._scenarios[first_scenario_name])
+        # check if there exists a Kotzur scenario which has additional variables
+        kotzur_scenario_names = [scen_name for scen_name in self._scenarios.keys() if "kotzur" in scen_name]
+        if kotzur_scenario_names:
+            kotzur_scen_name = next(iter(kotzur_scenario_names))
+            scenarios.append(self._scenarios[kotzur_scen_name])
 
-        if self.has_rh:
-            mf_name = [i for i in os.listdir(first_scenario.path) if "MF_" in i][0]
-            component_folder = os.path.join(first_scenario.path, mf_name)
-        else:
-            component_folder = first_scenario.path
+        for scenario in scenarios:
 
-        for file_name, component_type in file_names_maps.items():
-            file_path = os.path.join(component_folder, file_name)
+            if self.has_rh:
+                mf_name = [i for i in os.listdir(scenario.path) if "MF_" in i][0]
+                component_folder = os.path.join(scenario.path, mf_name)
+            else:
+                component_folder = scenario.path
 
-            if not os.path.exists(file_path):
-                continue
+            for file_name, component_type in file_names_maps.items():
+                file_path = os.path.join(component_folder, file_name)
 
-            h5_file = h5py.File(file_path)
-            for component_name in h5_file.keys():
-                index_names = get_index_names(h5_file[component_name + "/dataframe"])
-                time_index = set(index_names).intersection(set(time_steps_map.keys()))
-                timestep_name = time_index.pop() if len(time_index) > 0 else None
-                timestep_type = time_steps_map.get(timestep_name, None)
+                if not os.path.exists(file_path):
+                    continue
 
-                doc = str(np.char.decode(h5_file[component_name + "/docstring"].attrs.get("value")))
-                if ";" in doc and ":" in doc:
-                    doc = '\n'.join([f'{v.split(":")[0]}: {v.split(":")[1]}' for v in doc.split(";")])
+                h5_file = h5py.File(file_path)
+                for component_name in h5_file.keys():
+                    if component_name not in ans:
+                        index_names = get_index_names(h5_file[component_name + "/dataframe"])
+                        time_index = set(index_names).intersection(set(time_steps_map.keys()))
+                        timestep_name = time_index.pop() if len(time_index) > 0 else None
+                        timestep_type = time_steps_map.get(timestep_name, None)
 
-                has_units = "units" in h5_file[component_name]
+                        doc = str(np.char.decode(h5_file[component_name + "/docstring"].attrs.get("value")))
+                        if ";" in doc and ":" in doc:
+                            doc = '\n'.join([f'{v.split(":")[0]}: {v.split(":")[1]}' for v in doc.split(";")])
 
-                ans[component_name] = Component(
-                    component_name,
-                    component_type,
-                    timestep_type,
-                    timestep_name,
-                    file_name,
-                    doc,
-                    has_units
-                )
+                        has_units = "units" in h5_file[component_name]
+
+                        ans[component_name] = Component(
+                            component_name,
+                            component_type,
+                            timestep_type,
+                            timestep_name,
+                            file_name,
+                            doc,
+                            has_units
+                        )
 
         return ans
 

@@ -96,7 +96,7 @@ def average_benchmarking_values(rep_settings):
         rep_settings[rs_name] = avg_scens
     return rep_settings
 
-def compare_KPI(results, KPI_name, reference="ZEN", average=False):
+def compare_KPI(results, KPI_name, reference="ZEN", average=False, plot_type="whiskers"):
     """
 
     """
@@ -130,30 +130,43 @@ def compare_KPI(results, KPI_name, reference="ZEN", average=False):
         fig, ax = plt.subplots()
         # Create an array of equidistant positions for the x-axis
         unique_positions = sorted(set(positions))  # Get unique positions
-        equidistant_positions = np.linspace(0, len(unique_positions) - 1,
-                                            len(unique_positions))  # Create equidistant positions
-
+        equidistant_positions = np.linspace(0, len(unique_positions) - 1, len(unique_positions))  # Create equidistant positions
         # Map the original positions to the equidistant positions
         position_map = {pos: equidistant_positions[i] for i, pos in enumerate(unique_positions)}
+        label_offsets = {label: i for i, label in enumerate(color_mapping.keys())}
+        num_labels = len(color_mapping)
+        # Plot with offsets
+        for dat, pos, label in zip(data, positions, labels):
+            base_pos = position_map[pos]  # Get base position for this time step
+            offset = (label_offsets[label] - (num_labels - 1) / 2) * 0.2  # Calculate offset
+            plot_pos = base_pos + offset  # Adjust position with offset
 
-        # Plot the violins at equidistant positions with smaller widths
-        for i, (dat, pos, label) in enumerate(zip(data, positions, labels)):
-            new_pos = position_map[pos]  # Get the new equidistant position
-            violin = ax.violinplot([dat], positions=[new_pos], widths=0.8, showmeans=True,
-                                   showextrema=False)  # Use smaller widths
-
-            # Set custom color for this violin
-            for pc in violin['bodies']:
-                pc.set_facecolor(color_mapping[label])
-                pc.set_edgecolor(color_mapping[label])
-                pc.set_alpha(0.7)
-
+            if plot_type == "violins":
+                violin = ax.violinplot([dat], positions=[plot_pos], widths=0.15, showmeans=True, showextrema=False)
+                # Set custom color for this violin
+                for pc in violin['bodies']:
+                    pc.set_facecolor(color_mapping[label])
+                    pc.set_edgecolor(color_mapping[label])
+                    pc.set_alpha(0.7)
+            else:
+                # Calculate statistics
+                mean_val = np.mean(dat)
+                lower_whisker = np.percentile(dat, 5)  # 5th percentile
+                upper_whisker = np.percentile(dat, 95)  # 95th percentile
+                # Plot the mean as a marker
+                ax.scatter([plot_pos], [mean_val], color=color_mapping[label], zorder=3)
+                # Plot the whiskers
+                ax.vlines(plot_pos, lower_whisker, upper_whisker, color=color_mapping[label], linewidth=2)
+        # Add vertical lines to separate groups
+        for i in range(1, len(unique_positions)):
+            ax.axvline(x=(equidistant_positions[i - 1] + equidistant_positions[i]) / 2, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
         # Set x-axis ticks to show original positions
         ax.set_xticks(equidistant_positions)
         ax.set_xticklabels([str(pos) for pos in unique_positions])
-
         # Adjust x-axis limits to reflect the new spacing
         ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
+        legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
+        ax.legend(handles=legend_handles, title="Labels", loc='best')
 
     if KPI_name == "objective_value":
         if reference == "ZEN":
@@ -166,53 +179,10 @@ def compare_KPI(results, KPI_name, reference="ZEN", average=False):
         plt.axhline(y=benchmarking[KPI_name], label="Reference")
     plt.xlabel("Hours per Period")
     plt.ylabel(KPI_name)
-    plt.legend()
+    #plt.legend()
     plt.show()
 
-def plot_clustered_stacked(dfall, labels=None, title="multiple stacked bar plot",  H="/", **kwargs):
-    """Given a list of dataframes, with identical columns and index, create a clustered stacked bar plot.
-labels is a list of the names of the dataframe, used for the legend
-title is a string for the title of the plot
-H is the hatch used for identification of the different dataframe"""
-
-    n_df = len(dfall)
-    n_col = len(dfall[0].columns)
-    n_ind = len(dfall[0].index)
-    axe = plt.subplot(111)
-
-    for df in dfall : # for each data frame
-        axe = df.plot(kind="bar",
-                      linewidth=0,
-                      stacked=True,
-                      ax=axe,
-                      legend=False,
-                      grid=False,
-                      **kwargs)  # make bar plots
-
-    h,l = axe.get_legend_handles_labels() # get the handles we want to modify
-    for i in range(0, n_df * n_col, n_col): # len(h) = n_col * n_df
-        for j, pa in enumerate(h[i:i+n_col]):
-            for rect in pa.patches: # for each index
-                rect.set_x(rect.get_x() + 1 / float(n_df + 1) * i / float(n_col))
-                rect.set_hatch(H * int(i / n_col)) #edited part
-                rect.set_width(1 / float(n_df + 1))
-
-    axe.set_xticks((np.arange(0, 2 * n_ind, 2) + 1 / float(n_df + 1)) / 2.)
-    axe.set_xticklabels(df.index, rotation = 0)
-    axe.set_title(title)
-
-    # Add invisible data to add another legend
-    n=[]
-    for i in range(n_df):
-        n.append(axe.bar(0, 0, color="gray", hatch=H * i))
-
-    l1 = axe.legend(h[:n_col], l[:n_col], loc=[1.01, 0.5])
-    if labels is not None:
-        l2 = plt.legend(n, labels, loc=[1.01, 0.1])
-    axe.add_artist(l1)
-    return axe
-
-def plot_capacities(r, tech_type, capacity_type, carrier, average=False):
+def get_capacities(r, tech_type, capacity_type, carrier, average=False):
     """
 
     """
@@ -235,6 +205,8 @@ def cycles_per_year(r):
     cycles_per_year = (r.get_total("flow_storage_charge") + r.get_total("flow_storage_discharge")) / (2*capacity)
     return cycles_per_year
 
+#snap_ZEN_f = Results(path="../data/outputs/snapshot_fully_resolved_ZEN")
+#snap_Kot_f = Results(path="../data/outputs/snapshot_fully_resolved_Kot")
 rRep2 = Results(path="../data/outputs/operation_multiRepTs_384to768")
 compare_KPI(rRep2, "solving_time")
 rRep_r1 = Results(path="../data/outputs/operation_multiRepTs_24to192_r1")

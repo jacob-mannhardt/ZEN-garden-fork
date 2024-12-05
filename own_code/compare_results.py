@@ -104,15 +104,56 @@ def compare_KPI(results, KPI_name, reference="ZEN", average=False):
         results = [results]
     rep_settings = sort_scenarios(results)
     if average:
+        plt.figure()
         rep_settings = average_benchmarking_values(rep_settings)
-    plt.figure()
-    for rs_name, rss in rep_settings.items():
-        KPI = []
-        agg_ts = []
-        for rs in rss:
-            agg_ts.append(rs.system.aggregated_time_steps_per_year)
-            KPI.append(rs.benchmarking[KPI_name])
-        plt.scatter(agg_ts, KPI, label=rs_name)
+        for rs_name, rss in rep_settings.items():
+            KPI = []
+            agg_ts = []
+            for rs in rss:
+                agg_ts.append(rs.system.aggregated_time_steps_per_year)
+                KPI.append(rs.benchmarking[KPI_name])
+            plt.scatter(agg_ts, KPI, label=rs_name)
+    # plot as cloud
+    else:
+        data = []
+        positions = []
+        labels = []
+        color_mapping = {label: col for label, col in zip(rep_settings.keys(), plt.cm.Set1.colors)}
+        for rs_name, rss in rep_settings.items():
+            for ag_ts, rss_identical in rss.items():
+                positions.append(next(iter(rss_identical)).system.aggregated_time_steps_per_year)
+                labels.append(rs_name)
+                KPI = []
+                for rs in rss_identical:
+                    KPI.append(rs.benchmarking[KPI_name])
+                data.append(KPI)
+        fig, ax = plt.subplots()
+        # Create an array of equidistant positions for the x-axis
+        unique_positions = sorted(set(positions))  # Get unique positions
+        equidistant_positions = np.linspace(0, len(unique_positions) - 1,
+                                            len(unique_positions))  # Create equidistant positions
+
+        # Map the original positions to the equidistant positions
+        position_map = {pos: equidistant_positions[i] for i, pos in enumerate(unique_positions)}
+
+        # Plot the violins at equidistant positions with smaller widths
+        for i, (dat, pos, label) in enumerate(zip(data, positions, labels)):
+            new_pos = position_map[pos]  # Get the new equidistant position
+            violin = ax.violinplot([dat], positions=[new_pos], widths=0.8, showmeans=True,
+                                   showextrema=False)  # Use smaller widths
+
+            # Set custom color for this violin
+            for pc in violin['bodies']:
+                pc.set_facecolor(color_mapping[label])
+                pc.set_edgecolor(color_mapping[label])
+                pc.set_alpha(0.7)
+
+        # Set x-axis ticks to show original positions
+        ax.set_xticks(equidistant_positions)
+        ax.set_xticklabels([str(pos) for pos in unique_positions])
+
+        # Adjust x-axis limits to reflect the new spacing
+        ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
 
     if KPI_name == "objective_value":
         if reference == "ZEN":
@@ -195,8 +236,10 @@ def cycles_per_year(r):
     return cycles_per_year
 
 rRep2 = Results(path="../data/outputs/operation_multiRepTs_384to768")
+compare_KPI(rRep2, "solving_time")
 rRep_r1 = Results(path="../data/outputs/operation_multiRepTs_24to192_r1")
-compare_KPI([rRep_r1,rRep2], "objective_value")
+rRep3 = Results(path="../data/outputs/operation_multiRepTs_1536to1536")
+compare_KPI([rRep2,rRep_r1,rRep3], "solving_time")
 sort_scenarios([rRep_r1,rRep2])
 rRep_r2 = Results(path="../data/outputs/operation_multiRepTs_24to192_r2")
 r_ZEN_f = Results(path="../data/outputs/operation_fully_resolved_ZEN")

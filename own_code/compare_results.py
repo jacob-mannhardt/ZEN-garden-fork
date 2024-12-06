@@ -1,3 +1,5 @@
+from sqlalchemy.testing.plugin.plugin_base import warnings
+
 from zen_garden.postprocess.results.multi_hdf_loader import file_names_maps
 from zen_garden.postprocess.results.results import Results
 from zen_garden.postprocess.comparisons import compare_model_values, compare_configs, compare_component_values
@@ -120,7 +122,7 @@ def plot_obj_err_vs_solving_time(results):
     plt.legend()
     plt.show()
 
-def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier):
+def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_ts=None):
     """
 
     """
@@ -133,6 +135,8 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier):
     labels = []
     for rs_name, rss in rep_settings.items():
         for ag_ts, rss_identical in rss.items():
+            if ag_ts == drop_ag_ts:
+                continue
             positions.append(next(iter(rss_identical))[0].system.aggregated_time_steps_per_year)
             labels.append(rs_name)
             KPI = []
@@ -148,7 +152,7 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier):
 
 
 def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type="storage", capacity_type="energy",
-             carrier="electricity", subplots=False):
+             carrier="electricity", subplots=False, drop_ag_ts=None):
     """
     Plot KPI data with optional subplots.
 
@@ -161,10 +165,9 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         capacity_type: Capacity type to filter (e.g., "energy").
         carrier: Energy carrier (e.g., "electricity").
         subplots: Whether to create subplots.
-        num_subplots: Number of subplots to create if `subplots=True`.
     """
     data, positions, labels, color_mapping = get_KPI_data(
-        results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier)
+        results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier, drop_ag_ts=drop_ag_ts)
 
     if subplots:
         if isinstance(next(iter(next(iter(data)))), pd.Series):
@@ -180,7 +183,7 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         # Determine grid size for subplots
         num_rows = int(np.ceil(np.sqrt(num_subplots)))
         num_cols = int(np.ceil(num_subplots / num_rows))
-        fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 8), sharex=True, sharey=False)
+        fig, axs = plt.subplots(num_rows, num_cols, sharex=True, sharey=False)
 
         # Flatten the axes array for easier handling
         if num_rows > 1 or num_cols > 1:
@@ -192,18 +195,24 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         for idx, ax in enumerate(axs):
             if idx < num_subplots:
                 # Reuse the single-plot logic for each subplot
-                _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, color_mapping, KPI_name, plot_type, reference)
+                _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, color_mapping, KPI_name,
+                                 plot_type, reference, add_legend=False)
+                ax.set_title(subplot_labels[idx])
             else:
                 ax.axis('off')  # Hide unused subplots
 
+        # Add a single legend for all subplots
+        legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
+        fig.legend(handles=legend_handles)
         plt.tight_layout()
     else:
         fig, ax = plt.subplots(figsize=(8, 6))
-        _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference)
+        _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference, add_legend=True)
 
     plt.show()
 
-def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference):
+
+def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference, add_legend=True):
     """
     Helper function to plot a single KPI on a given axis.
     """
@@ -212,6 +221,11 @@ def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_
     position_map = {pos: equidistant_positions[i] for i, pos in enumerate(unique_positions)}
     label_offsets = {label: i for i, label in enumerate(color_mapping.keys())}
     num_labels = len(color_mapping)
+
+    flat_data = [item for sublist in data for item in sublist]
+    val_ratio = np.max(flat_data) / np.min(flat_data)
+    if val_ratio > 20:
+        ax.set_yscale("log")
 
     for dat, pos, label in zip(data, positions, labels):
         base_pos = position_map[pos]
@@ -250,8 +264,9 @@ def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_
     ax.set_xticklabels([str(pos) for pos in unique_positions])
     ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
 
-    legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
-    ax.legend(handles=legend_handles, title="Labels", loc='best')
+    if add_legend:
+        legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
+        ax.legend(handles=legend_handles, loc='best')
 
     if KPI_name == "objective_value" and reference:
         rRef = Results(path=f"../data/outputs/operation_fully_resolved_{reference}")
@@ -261,15 +276,27 @@ def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_
     ax.set_xlabel("Hours per Period")
     ax.set_ylabel(KPI_name)
 
+
+
 def get_capacities(results, rs, tech_type, capacity_type, carrier):
     """
 
     """
+    if tech_type in ["conversion", "transport"]:
+        capacity_type = "power"
     scen, result_name = rs[0], rs[1]
     r = [r for r in results if r.name == result_name][0]
     capacity = r.get_total("capacity", scenario_name=scen.name)
+    capacity = capacity.loc[pd.IndexSlice[:,capacity_type,:],:]
+    capacity = capacity.reset_index(level="capacity_type", drop=True)
+    if tech_type == "conversion":
+        output_carriers = r.get_total("set_output_carriers", scenario_name=scen.name)
+        conversion_techs = output_carriers[output_carriers == carrier].index
+        capacity = capacity[capacity.index.get_level_values("technology").isin(conversion_techs)]
+    capacity = capacity.groupby(level="technology").sum()
+    capacity = capacity.squeeze()
+    capacity = capacity[capacity>1e-3]
     r.get_total("set_input_carriers")
-    capacity = capacity.loc[pd.IndexSlice[1]]
     return capacity
 
 def get_cycles_per_year(results, rs, method="max_min"):
@@ -310,10 +337,9 @@ def load_results(ts="all", reps=False):
 
 
 
-
 r1 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r2")
-plot_KPI(r1, "storage_cycles", subplots=True)
-r2 = Results(path="../data/outputs/operation_multiRepTs_384to768")
+plot_KPI(r1, "capacity", subplots=True, tech_type="conversion", capacity_type="power")
+
 plot_KPI([r1, r2],"storage_cycles", subplots=True)
 r3 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r3")
 a = 1

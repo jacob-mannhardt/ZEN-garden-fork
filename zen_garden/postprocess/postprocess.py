@@ -179,7 +179,9 @@ class Postprocess:
                 benchmarking_data["number_iterations"] = self.model.solver_model.IterCount
             benchmarking_data["solver_status"] = self.model.solver_model.Status
             benchmarking_data["number_constraints"] = self.model.solver_model.NumConstrs
+            benchmarking_data["number_of_storage_constraints"]= sum(self.model.constraints[const_name].size for const_name in self.model.constraints if "storage_level" in const_name)
             benchmarking_data["number_variables"] = self.model.solver_model.NumVars
+            benchmarking_data["number_of_storage_variables"] = sum(self.model.variables[var_name].size for var_name in self.model.variables if "storage_level" in var_name)
         elif self.solver.name == "highs":
             benchmarking_data["solver_status"] = self.model.solver_model.getModelStatus().name
             benchmarking_data["solving_time"] = self.model.solver_model.getRunTime()

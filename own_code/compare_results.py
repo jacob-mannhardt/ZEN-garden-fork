@@ -146,87 +146,120 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier):
             data.append(KPI)
     return data, positions, labels, color_mapping
 
-def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type="storage", capacity_type="energy", carrier="electricity"):
-    """
 
+def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type="storage", capacity_type="energy",
+             carrier="electricity", subplots=False):
     """
-    data, positions, labels, color_mapping = get_KPI_data(results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier)
-    fig, ax = plt.subplots()
-    # Create an array of equidistant positions for the x-axis
-    unique_positions = sorted(set(positions))  # Get unique positions
-    equidistant_positions = np.linspace(0, len(unique_positions) - 1, len(unique_positions))  # Create equidistant positions
-    # Map the original positions to the equidistant positions
+    Plot KPI data with optional subplots.
+
+    Args:
+        results: Input results data.
+        KPI_name: Name of the KPI to plot.
+        plot_type: Plot type ('whiskers' or 'violins').
+        reference: Reference scenario for benchmarking (e.g., "ZEN").
+        tech_type: Technology type to filter (e.g., "storage").
+        capacity_type: Capacity type to filter (e.g., "energy").
+        carrier: Energy carrier (e.g., "electricity").
+        subplots: Whether to create subplots.
+        num_subplots: Number of subplots to create if `subplots=True`.
+    """
+    data, positions, labels, color_mapping = get_KPI_data(
+        results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier)
+
+    if subplots:
+        if isinstance(next(iter(next(iter(data)))), pd.Series):
+            data_dict = {ind: [] for ind in next(iter(next(iter(data)))).index}
+            for run in data:
+                for ind in next(iter(run)).index:
+                    data_dict[ind].append([pd.Series(series[ind]) for series in run])
+            subplot_labels = [key for key in data_dict.keys()]
+        else:
+            raise NotImplementedError
+
+        num_subplots = len(data_dict)
+        # Determine grid size for subplots
+        num_rows = int(np.ceil(np.sqrt(num_subplots)))
+        num_cols = int(np.ceil(num_subplots / num_rows))
+        fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 8), sharex=True, sharey=False)
+
+        # Flatten the axes array for easier handling
+        if num_rows > 1 or num_cols > 1:
+            axs = axs.flatten()
+        else:
+            axs = [axs]  # Single plot case
+
+        # Ensure the number of axes matches `num_subplots`
+        for idx, ax in enumerate(axs):
+            if idx < num_subplots:
+                # Reuse the single-plot logic for each subplot
+                _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, color_mapping, KPI_name, plot_type, reference)
+            else:
+                ax.axis('off')  # Hide unused subplots
+
+        plt.tight_layout()
+    else:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference)
+
+    plt.show()
+
+def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference):
+    """
+    Helper function to plot a single KPI on a given axis.
+    """
+    unique_positions = sorted(set(positions))
+    equidistant_positions = np.linspace(0, len(unique_positions) - 1, len(unique_positions))
     position_map = {pos: equidistant_positions[i] for i, pos in enumerate(unique_positions)}
     label_offsets = {label: i for i, label in enumerate(color_mapping.keys())}
     num_labels = len(color_mapping)
-    # Plot with offsets
+
     for dat, pos, label in zip(data, positions, labels):
-        base_pos = position_map[pos]  # Get base position for this time step
-        offset = (label_offsets[label] - (num_labels - 1) / 2) * 0.2  # Calculate offset
-        plot_pos = base_pos + offset  # Adjust position with offset
+        base_pos = position_map[pos]
+        offset = (label_offsets[label] - (num_labels - 1) / 2) * 0.2
+        plot_pos = base_pos + offset
 
         if all(isinstance(d, pd.Series) for d in dat):
-            # Handle list of Series for stacked bar plot
-            # Combine all Series in `dat` into a DataFrame (each Series is a column)
             combined = pd.concat(dat, axis=1)
-
-            # Calculate the mean and std for each index (across all Series for each index)
-            mean_vals = combined.mean(axis=1)  # Mean for each index across all Series
-            std_devs = combined.std(axis=1)  # Standard deviation for each index across all Series
-
-            # Initialize the bottom of the stack
+            mean_vals = combined.mean(axis=1)
+            std_devs = combined.std(axis=1)
             bottom = 0
-
-            # Plot each mean as a stacked bar segment, and add error bars
             for idx, (mean, std) in enumerate(zip(mean_vals, std_devs)):
                 ax.bar(plot_pos, mean, color=color_mapping[label], edgecolor="black", width=0.15,
                        bottom=bottom, label=None if idx > 0 else label)
-
-                # Add error bar for each segment
                 ax.errorbar(plot_pos, bottom + mean, yerr=std, fmt='none', ecolor='black', capsize=4)
-
-                bottom += mean  # Update bottom for stacking the next bar segment
-
+                bottom += mean
         else:
             if plot_type == "violins":
                 violin = ax.violinplot([dat], positions=[plot_pos], widths=0.15, showmeans=True, showextrema=False)
-                # Set custom color for this violin
                 for pc in violin['bodies']:
                     pc.set_facecolor(color_mapping[label])
                     pc.set_edgecolor(color_mapping[label])
                     pc.set_alpha(0.7)
             else:
-                # Calculate statistics
                 mean_val = np.mean(dat)
-                lower_whisker = np.percentile(dat, 5)  # 5th percentile
-                upper_whisker = np.percentile(dat, 95)  # 95th percentile
-                # Plot the mean as a marker
+                lower_whisker = np.percentile(dat, 5)
+                upper_whisker = np.percentile(dat, 95)
                 ax.scatter([plot_pos], [mean_val], color=color_mapping[label], zorder=3)
-                # Plot the whiskers
                 ax.vlines(plot_pos, lower_whisker, upper_whisker, color=color_mapping[label], linewidth=2)
-    # Add vertical lines to separate groups
+
     for i in range(1, len(unique_positions)):
-        ax.axvline(x=(equidistant_positions[i - 1] + equidistant_positions[i]) / 2, color='gray', linestyle='--', linewidth=0.8, alpha=0.7)
-    # Set x-axis ticks to show original positions
+        ax.axvline(x=(equidistant_positions[i - 1] + equidistant_positions[i]) / 2, color='gray', linestyle='--',
+                   linewidth=0.8, alpha=0.7)
+
     ax.set_xticks(equidistant_positions)
     ax.set_xticklabels([str(pos) for pos in unique_positions])
-    # Adjust x-axis limits to reflect the new spacing
     ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
+
     legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
     ax.legend(handles=legend_handles, title="Labels", loc='best')
 
-    if KPI_name == "objective_value":
-        if reference == "ZEN":
-            rRef = Results(path="../data/outputs/operation_fully_resolved_ZEN")
-        elif reference == "Kot":
-            rRef = Results(path="../data/outputs/operation_fully_resolved_Kot")
-        else:
-            raise NotImplementedError
+    if KPI_name == "objective_value" and reference:
+        rRef = Results(path=f"../data/outputs/operation_fully_resolved_{reference}")
         benchmarking = next(iter(rRef.solution_loader.scenarios.values())).benchmarking
-        plt.axhline(y=benchmarking[KPI_name], label="Reference")
-    plt.xlabel("Hours per Period")
-    plt.ylabel(KPI_name)
-    plt.show()
+        ax.axhline(y=benchmarking[KPI_name], label="Reference")
+
+    ax.set_xlabel("Hours per Period")
+    ax.set_ylabel(KPI_name)
 
 def get_capacities(results, rs, tech_type, capacity_type, carrier):
     """
@@ -263,14 +296,24 @@ def get_cycles_per_year(results, rs, method="max_min"):
     cycles_per_year = cycles_per_year.groupby(level="technology").mean()
     return cycles_per_year
 
-#snap_ZEN_f = Results(path="../data/outputs/snapshot_fully_resolved_ZEN")
-#snap_Kot_f = Results(path="../data/outputs/snapshot_fully_resolved_Kot")
-#rRep2 = Results(path="../data/outputs/operation_multiRepTs_384to768")
-#plot_KPI(rRep2,"storage_cycles")
-rRep_r1 = Results(path="../data/outputs/operation_multiRepTs_24to192_r1")
-plot_KPI(rRep_r1, "storage_cycles")
-rRep3 = Results(path="../data/outputs/operation_multiRepTs_1536to1536")
-rRep_r2 = Results(path="../data/outputs/operation_multiRepTs_24to192_r2")
-r_ZEN_f = Results(path="../data/outputs/operation_fully_resolved_ZEN")
-r_Kot_f = Results(path="../data/outputs/operation_fully_resolved_Kot")
+def load_results(ts="all", reps=False):
+    """
+
+    """
+    results = []
+    if ts == "all":
+        results.append(Results(path="../data/outputs/operation_multiRepTs_24to192_r1"))
+        results.append(Results(path="../data/outputs/operation_multiRepTs_384to768"))
+        results.append(Results(path="../data/outputs/operation_multiRepTs_1536to1536"))
+        results.append(Results(path="../data/outputs/operation_multiRepTs_3072to3072"))
+        results.append(Results(path="../data/outputs/operation_multiRepTs_6144to6144_r1"))
+
+
+
+
+r1 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r2")
+plot_KPI(r1, "storage_cycles", subplots=True)
+r2 = Results(path="../data/outputs/operation_multiRepTs_384to768")
+plot_KPI([r1, r2],"storage_cycles", subplots=True)
+r3 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r3")
 a = 1

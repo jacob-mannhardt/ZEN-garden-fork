@@ -1,12 +1,11 @@
-from sqlalchemy.testing.plugin.plugin_base import warnings
+from networkx.algorithms.bipartite.basic import color
 
-from zen_garden.postprocess.results.multi_hdf_loader import file_names_maps
 from zen_garden.postprocess.results.results import Results
-from zen_garden.postprocess.comparisons import compare_model_values, compare_configs, compare_component_values
-import os
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import MaxNLocator
+import os
 
 def post_compute_storage_level(result, scenario_name=None):
     """
@@ -122,17 +121,31 @@ def plot_obj_err_vs_solving_time(results):
     plt.legend()
     plt.show()
 
-def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_ts=None):
+def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_ts, rep_methods, reference):
     """
 
     """
     if isinstance(results, Results):
         results = [results]
     rep_settings = sort_scenarios(results)
-    color_mapping = {label: col for label, col in zip(rep_settings.keys(), plt.cm.Set1.colors)}
+    color_mapping = {label: col for label, col in zip(rep_settings.keys(), plt.cm.tab20b.colors)}
     data = []
     positions = []
     labels = []
+    dataset_name = next(iter([results] if isinstance(results, Results) else results)).name.split("_")[0]
+    rRef = Results(path=f"../data/outputs/{dataset_name}_fully_resolved_{reference}")
+    ref_bench = next(iter(rRef.solution_loader.scenarios.values())).benchmarking
+    unit_mapping = {"capacity": next(iter(results)).get_unit("capacity")[0], "storage_cycles": "-",
+                    "objective_value": next(iter(results)).get_unit("cost_shed_demand")[0],
+                    "solving_time": "s", "construction_time": "s", "number_of_storage_constraints": "-",
+                    "number_of_storage_variables": "-"}
+    unit_factors = {key: 1 for key in unit_mapping.keys()}
+    if unit_mapping["objective_value"] == "MEURO":
+        unit_factors["objective_value"] = 1e6
+        unit_mapping["objective_value"] = "€"
+        ref_bench["objective_value"] = ref_bench["objective_value"] * 1e6
+    if rep_methods == "minimal":
+        rep_settings = {key: value for key, value in rep_settings.items() if "ZEN" in key or "kot" in key}
     for rs_name, rss in rep_settings.items():
         for ag_ts, rss_identical in rss.items():
             if ag_ts == drop_ag_ts:
@@ -142,19 +155,19 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_t
             KPI = []
             for rs in rss_identical:
                 if KPI_name == "capacity":
-                    KPI.append(get_capacities(results, rs, tech_type, capacity_type, carrier))
+                    KPI.append(get_capacities(results, rs, tech_type, capacity_type, carrier) * unit_factors[KPI_name])
                 elif KPI_name == "storage_cycles":
                     KPI.append(get_cycles_per_year(results, rs))
                 else:
-                    KPI.append(rs[0].benchmarking[KPI_name])
+                    KPI.append(rs[0].benchmarking[KPI_name] * unit_factors[KPI_name])
             data.append(KPI)
-    return data, positions, labels, color_mapping
+    return data, positions, labels, color_mapping, unit_mapping[KPI_name], ref_bench
 
 
 def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type="storage", capacity_type="energy",
-             carrier="electricity", subplots=False, drop_ag_ts=None):
+             carrier="electricity", subplots=False, drop_ag_ts=None, relative_scale_flag=False, rep_methods=None, use_log=False, title="", file_format=None):
     """
-    Plot KPI data with optional subplots.
+    Plot KPI data with optional subplots and an optional secondary y-axis for relative scale.
 
     Args:
         results: Input results data.
@@ -165,25 +178,28 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         capacity_type: Capacity type to filter (e.g., "energy").
         carrier: Energy carrier (e.g., "electricity").
         subplots: Whether to create subplots.
+        drop_ag_ts: Whether to drop aggregate timeseries data.
+        relative_scale_flag: Whether to include a secondary y-axis for relative scale.
+        reference_value: The value for normalizing data on the secondary y-axis.
     """
-    data, positions, labels, color_mapping = get_KPI_data(
-        results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier, drop_ag_ts=drop_ag_ts)
+    data, positions, labels, color_mapping, unit, ref_bench = get_KPI_data(
+        results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier, drop_ag_ts=drop_ag_ts, rep_methods=rep_methods, reference=reference)
 
     if subplots:
         if isinstance(next(iter(next(iter(data)))), pd.Series):
             data_dict = {ind: [] for ind in next(iter(next(iter(data)))).index}
-            for run in data:
-                for ind in next(iter(run)).index:
-                    data_dict[ind].append([pd.Series(series[ind]) for series in run])
+            for idx, run in enumerate(data):
+                for ind_name in next(iter(run)).index:
+                    data_dict[ind_name].append({(labels[idx], positions[idx]): [pd.Series(series[ind_name]) for series in run]})
             subplot_labels = [key for key in data_dict.keys()]
         else:
             raise NotImplementedError
 
         num_subplots = len(data_dict)
         # Determine grid size for subplots
-        num_rows = int(np.ceil(np.sqrt(num_subplots)))
+        num_rows = 1#int(np.ceil(np.sqrt(num_subplots)))
         num_cols = int(np.ceil(num_subplots / num_rows))
-        fig, axs = plt.subplots(num_rows, num_cols, sharex=True, sharey=False)
+        fig, axs = plt.subplots(num_rows, num_cols, sharex=True, sharey=False, figsize=(num_cols * 9, num_rows * 8))
 
         # Flatten the axes array for easier handling
         if num_rows > 1 or num_cols > 1:
@@ -195,8 +211,8 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         for idx, ax in enumerate(axs):
             if idx < num_subplots:
                 # Reuse the single-plot logic for each subplot
-                _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, color_mapping, KPI_name,
-                                 plot_type, reference, add_legend=False)
+                _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, color_mapping, unit, KPI_name,
+                                 plot_type, reference, add_legend=False, ref_bench=ref_bench, use_log=use_log)
                 ax.set_title(subplot_labels[idx])
             else:
                 ax.axis('off')  # Hide unused subplots
@@ -205,16 +221,31 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
         fig.legend(handles=legend_handles)
         plt.tight_layout()
+        fig.subplots_adjust(top=0.85)
     else:
         fig, ax = plt.subplots(figsize=(8, 6))
-        _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference, add_legend=True)
+        secondary_ax = None
 
+        # Create a secondary y-axis if relative scale is enabled
+        if relative_scale_flag:
+            secondary_ax = ax.twinx()
+
+        _plot_single_KPI(ax, data, positions, labels, color_mapping, unit, KPI_name, plot_type, reference,
+                         ref_bench=ref_bench, add_legend=True, secondary_ax=secondary_ax,
+                         relative_scale_flag=relative_scale_flag, use_log=use_log)
+    fig.suptitle(title)
+    if file_format:
+        path = os.path.join(os.getcwd(), "plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path,f"{title}.svg"), format=file_format)
     plt.show()
 
 
-def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_type, reference, add_legend=True):
+def _plot_single_KPI(ax, data, positions, labels, color_mapping, unit, KPI_name, plot_type, reference, ref_bench, use_log,
+                     add_legend=True, secondary_ax=None, relative_scale_flag=False):
     """
-    Helper function to plot a single KPI on a given axis.
+    Helper function to plot a single KPI on a given axis, with an optional secondary axis.
     """
     unique_positions = sorted(set(positions))
     equidistant_positions = np.linspace(0, len(unique_positions) - 1, len(unique_positions))
@@ -222,12 +253,15 @@ def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_
     label_offsets = {label: i for i, label in enumerate(color_mapping.keys())}
     num_labels = len(color_mapping)
 
-    flat_data = [item for sublist in data for item in sublist]
-    val_ratio = np.max(flat_data) / np.min(flat_data)
-    if val_ratio > 20:
+    if use_log:
         ax.set_yscale("log")
 
     for dat, pos, label in zip(data, positions, labels):
+        if isinstance(dat, dict):
+            label_pos = [key for key in dat.keys()][0]
+            label = label_pos[0]
+            pos = label_pos[1]
+            dat = [val for val in dat.values()][0]
         base_pos = position_map[pos]
         offset = (label_offsets[label] - (num_labels - 1) / 2) * 0.2
         plot_pos = base_pos + offset
@@ -256,27 +290,43 @@ def _plot_single_KPI(ax, data, positions, labels, color_mapping, KPI_name, plot_
                 ax.scatter([plot_pos], [mean_val], color=color_mapping[label], zorder=3)
                 ax.vlines(plot_pos, lower_whisker, upper_whisker, color=color_mapping[label], linewidth=2)
 
+        # Plot on the secondary axis if enabled
+        if relative_scale_flag and secondary_ax:
+            reference_value = ref_bench[KPI_name]
+            relative_dat = [d / reference_value for d in dat]
+            mean_rel = np.mean(relative_dat)
+            secondary_ax.scatter([plot_pos], [mean_rel], color=color_mapping[label], linestyle='--', zorder=3, alpha=0)
+
+    # Ensure vertical lines are drawn correctly on the primary axis
     for i in range(1, len(unique_positions)):
         ax.axvline(x=(equidistant_positions[i - 1] + equidistant_positions[i]) / 2, color='gray', linestyle='--',
-                   linewidth=0.8, alpha=0.7)
+                   linewidth=0.8, alpha=0.7, zorder=1)
 
     ax.set_xticks(equidistant_positions)
     ax.set_xticklabels([str(pos) for pos in unique_positions])
     ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
+    if KPI_name == "objective_value":
+        ax.ticklabel_format(axis='y', style='sci', scilimits=(9, 9))
 
     if add_legend:
-        legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items()]
+        legend_handles = [plt.Line2D([0], [0], color=col, lw=4, label=label) for label, col in color_mapping.items() if label in labels]
         ax.legend(handles=legend_handles, loc='best')
 
+    # Plot reference line for "objective_value"
     if KPI_name == "objective_value" and reference:
-        rRef = Results(path=f"../data/outputs/operation_fully_resolved_{reference}")
-        benchmarking = next(iter(rRef.solution_loader.scenarios.values())).benchmarking
-        ax.axhline(y=benchmarking[KPI_name], label="Reference")
+        reference_value = ref_bench[KPI_name]  # Get reference value
+        ax.axhline(y=reference_value, label=f"{reference} {KPI_name} Benchmark", color='grey', linestyle='-')
 
-    ax.set_xlabel("Hours per Period")
-    ax.set_ylabel(KPI_name)
+    name_dict = {"objective_value": "Objective Value", "storage_cycles": "Number of Storage Cycles",
+                 "capacity": "Installed Capacity", "number_of_storage_variables": "Number of Storage Variables",
+                 "number_of_storage_constraints": "Number of Storage Constraints", "solving_time": "Solving Time",
+                 "construction_time": "Construction Time"}
+    # Set secondary axis labels if enabled
+    if relative_scale_flag and secondary_ax:
+        secondary_ax.set_ylabel(f"Relative {name_dict[KPI_name]}")
 
-
+    ax.set_xlabel("Aggregated Time Steps [h]")
+    ax.set_ylabel(f"{name_dict[KPI_name]} [{unit}]")
 
 def get_capacities(results, rs, tech_type, capacity_type, carrier):
     """
@@ -318,28 +368,115 @@ def get_cycles_per_year(results, rs, method="max_min"):
     # drop entries with capacity approx. zero
     mean_capacity = capacity.groupby(level='technology').transform('mean')
     mask = abs(abs((capacity-mean_capacity) / mean_capacity) - 1) > 1e-3
-    mask2 = capacity > 1e-5
+    mask2 = capacity > 1e-1
     cycles_per_year = cycles_per_year.where(mask&mask2).dropna()
     cycles_per_year = cycles_per_year.groupby(level="technology").mean()
     return cycles_per_year
 
-def load_results(ts="all", reps=False):
+def representation_comparison_plots(r, file_format=None):
     """
 
     """
-    results = []
-    if ts == "all":
-        results.append(Results(path="../data/outputs/operation_multiRepTs_24to192_r1"))
-        results.append(Results(path="../data/outputs/operation_multiRepTs_384to768"))
-        results.append(Results(path="../data/outputs/operation_multiRepTs_1536to1536"))
-        results.append(Results(path="../data/outputs/operation_multiRepTs_3072to3072"))
-        results.append(Results(path="../data/outputs/operation_multiRepTs_6144to6144_r1"))
+    full_ts = r.get_full_ts("demand", scenario_name="scenario_ZEN-garden_rep_hours_8760_1").T["heat", "DE"]
+    single_day = full_ts[0:24]
+    weekly_rolling_average = full_ts.groupby(np.arange(len(full_ts)) // 168).mean()
+    full_ts_kotzur = r.get_full_ts("demand", scenario_name="scenario_kotzur_24_1").T["heat", "DE"]
+    single_day_kotzur = full_ts_kotzur[0:24]
+    weekly_rolling_average_kotzur = full_ts_kotzur.groupby(np.arange(len(full_ts)) // 168).mean()
+    full_ts_ZEN = r.get_full_ts("demand", scenario_name="scenario_ZEN-garden_rep_hours_24_1").T["heat", "DE"]
+    single_day_ZEN = full_ts_ZEN[0:24]
+    weekly_rolling_average_ZEN = full_ts_ZEN.groupby(np.arange(len(full_ts)) // 168).mean()
+
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10), sharey=False)
+    tab20b_colors = plt.cm.tab20b(np.linspace(0, 0.5, 3))
+    # Plot the first row (single days)
+    axs[0, 0].plot(single_day, label="Fully resolved", color=tab20b_colors[0])
+    axs[0, 0].set_title('Daily Profile: Fully Resolved')
+    axs[0, 0].set_ylabel("Heat Demand [GW]")
+    axs[0, 0].set_xlabel("Time [hours]")
+    axs[0, 1].plot(single_day_kotzur, label="Representative Days", color=tab20b_colors[1])
+    axs[0, 1].set_title('Daily Profile: Single Representative Day')
+    axs[0, 1].set_ylabel("Heat Demand [GW]")
+    axs[0, 1].set_xlabel("Time [hours]")
+    axs[0, 2].plot(single_day_ZEN, label="Scenario ZEN", color=tab20b_colors[2])
+    axs[0, 2].set_title('Daily Profile: 24 Representative Hours')
+    axs[0, 2].set_ylabel("Heat Demand [GW]")
+    axs[0, 2].set_xlabel("Time [hours]")
+
+    # Plot the second row (weekly averages)
+    axs[1, 0].plot(weekly_rolling_average, label="Fully resolved", color=tab20b_colors[0])
+    axs[1, 0].set_title('Yearly Profile: Fully Resolved')
+    axs[1, 0].set_ylabel("Heat Demand [GW]")
+    axs[1, 0].set_xlabel("Time [weeks]")
+    axs[1, 1].plot(weekly_rolling_average_kotzur, label="Representative Days", color=tab20b_colors[1])
+    axs[1, 1].set_title('Yearly Profile: Single Representative Day')
+    axs[1, 1].set_ylabel("Heat Demand [GW]")
+    axs[1, 1].set_xlabel("Time [weeks]")
+    axs[1, 2].plot(weekly_rolling_average_ZEN, label="Scenario ZEN", color=tab20b_colors[2])
+    axs[1, 2].set_title('Yearly Profile: 24 Representative Hours')
+    axs[1, 2].set_ylabel("Heat Demand [GW]")
+    axs[1, 2].set_xlabel("Time [weeks]")
+
+    # Adjust layout for better spacing
+    plt.tight_layout()
+    if file_format:
+        path = os.path.join(os.getcwd(), "plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path, f"representation_comparison_plots.svg"), format=file_format)
+    # Show the plot
+    plt.show()
+
+
+def kotzur_representation_plot(r, all=True, file_format=None):
+    """
+
+    """
+    storage_level = post_compute_storage_level_kotzur(r, scenario_name="scenario_kotzur_3072_1")["battery", "BE"]
+    storage_level_intra = r.get_full_ts("storage_level_intra", scenario_name="scenario_kotzur_3072_1").T["battery", "BE"]
+    storage_level_inter_w_self_discharge = storage_level-storage_level_intra
+    storage_level_inter_w_self_discharge_cut = storage_level_inter_w_self_discharge[24*38:24*41].reset_index(drop=True)[[0,23,24,47,48,71]]
+    storage_level_intra_cut = storage_level_intra[24*38:24*41].reset_index(drop=True)
+    storage_level_cut = storage_level[24*38:24*41].reset_index(drop=True)
+
+    plt.figure(figsize=(9,4.8)) #, axs = plt.subplots(1, 2, figsize=(18, 6))
+
+    # Plot the first series in the left subplot
+    storage_level_cut.plot(label='Fully Resolved Storage Level', color='black', marker="o")
+    plt.xlabel('Time')
+    plt.ylabel('Storage Level')
+
+    x = range(72)
+    plt.xticks(x, labels=[str(tick) if tick in [0, 12, 24, 36, 48, 60, 71] else "" for tick in x])
+
+    if all:
+        # Plot the second series in the right subplot (primary y-axis for intra values)
+        storage_level_intra_cut[:24].plot(label='Intra Storage Level', color=plt.get_cmap('tab20b')(2/19), marker="o")
+        storage_level_intra_cut[24:48].plot(label="", color=plt.get_cmap('tab20b')(2/19), marker="o")
+        storage_level_intra_cut[48:].plot(label="", color=plt.get_cmap('tab20b')(2/19), marker="o")
+        # Create a secondary y-axis for the inter values
+        storage_level_inter_w_self_discharge_cut[:2].plot(label='Inter Storage Level', color=plt.get_cmap('tab20b')(10/19), marker="o")
+        storage_level_inter_w_self_discharge_cut[2:4].plot(label="", color=plt.get_cmap('tab20b')(10/19), marker="o")
+        storage_level_inter_w_self_discharge_cut[4:].plot(label="", color=plt.get_cmap('tab20b')(10/19), marker="o")
+
+    # Adjust layout for better spacing
+    #plt.tight_layout()
+    plt.legend()
+    if file_format:
+        path = os.path.join(os.getcwd(), "plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path, f"kotzur_representation_plot.svg"), format=file_format)
+
+    # Show the plot
+    plt.show()
 
 
 
-r1 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r2")
-plot_KPI(r1, "capacity", subplots=True, tech_type="conversion", capacity_type="power")
-
-plot_KPI([r1, r2],"storage_cycles", subplots=True)
-r3 = Results(path="../data/outputs/operation_multiRepTs_6144to6144_r3")
-a = 1
+if __name__ == "__main__":
+    r = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r1")
+    r2 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r2")
+    r3 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r3")
+    r4 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r4")
+    r5 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r5")
+    a = 1

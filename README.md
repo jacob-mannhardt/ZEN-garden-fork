@@ -61,7 +61,7 @@ If on the other hand the NPC decomposition is desired, functions that double cer
 
 ### WACC calculation inside ZEN-garden
 The code also includes a configuration that allows to calculate the WACC values inside ZEN-garden. This is done based on following formula based on https://www.nature.com/articles/s41560-024-01606-7,
-```math
+```
 WACC = debt_ratio * (1-tax_rate) * (interest_rate +technology_premium) + (1-debt_ratio) * (interest_rate + equity_margin + technology_premium)
 ```
 where the `debt_ratio`, `tax_rate`, `interest_rate`, `equity_margin`, and `technology_premium` are additional input parameters of the technologies and energy system.

@@ -481,7 +481,7 @@ def europe_plot(set_nodes, values,title = "Uniform vs. variable CoC", y_axis = "
     data = pd.DataFrame({'ISO_A2_EH': set_nodes, 'value': values})
 
     # Load Europe shapefile
-    world = gpd.read_file("../../../countries.zip") # path to shapefile
+    world = gpd.read_file("countries.zip") # path to shapefile
 
     # Filter for Europe
     europe = world[(world['CONTINENT'] == 'Europe') & (world['ISO_A2_EH'].isin(set_nodes))]

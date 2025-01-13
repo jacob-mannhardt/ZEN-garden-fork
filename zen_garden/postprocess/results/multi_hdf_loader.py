@@ -1,3 +1,6 @@
+"""
+This module contains the implementation of a SolutionLoader that reads the solution.
+"""
 import re
 
 from zen_garden.postprocess.results.solution_loader import (
@@ -12,6 +15,7 @@ from zen_garden.model.default_config import Analysis, System, Solver
 import json
 import os
 import h5py  # type: ignore
+import pint
 from typing import Optional, Any,Literal
 import pandas as pd
 import numpy as np
@@ -136,6 +140,7 @@ class Scenario(AbstractScenario):
         self._analysis: Analysis = self._read_analysis()
         self._system: System = self._read_system()
         self._solver: Solver = self._read_solver()
+        self._ureg = self._read_ureg()
         self.name = name
         self.base_name = base_scenario
 
@@ -157,6 +162,13 @@ class Scenario(AbstractScenario):
         with open(solver_path, "r") as f:
             return Solver(**json.load(f))
 
+    def _read_ureg(self) -> pint.UnitRegistry:
+        ureg = pint.UnitRegistry()
+        unit_path = os.path.join(self.path, "unit_definitions.txt")
+        if os.path.exists(unit_path):
+            ureg.load_definitions(unit_path)
+        return ureg
+
     @property
     def analysis(self) -> Analysis:
         return self._analysis
@@ -173,6 +185,9 @@ class Scenario(AbstractScenario):
     def system(self) -> System:
         return self._system
 
+    @property
+    def ureg(self) -> pint.UnitRegistry:
+        return self._ureg
 
 class MultiHdfLoader(AbstractLoader):
     """
@@ -290,12 +305,19 @@ class MultiHdfLoader(AbstractLoader):
         if self.has_rh:
             # If solution has rolling horizon, load the values for all the foresight
             # steps and combine them.
-            pattern = re.compile(r'^MF_\d+$')
+            pattern = re.compile(r'^MF_\d+(_.*)?$')
             subfolder_names = list(filter(lambda x: pattern.match(x), os.listdir(scenario.path)))
             pd_series_dict = {}
 
             for subfolder_name in subfolder_names:
-                mf_idx = int(subfolder_name.replace("MF_", ""))
+                sf_stripped = subfolder_name.replace("MF_", "")
+                if not sf_stripped.isnumeric():
+                    if keep_raw:
+                        mf_idx = subfolder_name.replace("MF_", "")
+                    else:
+                        continue
+                else:
+                    mf_idx = int(subfolder_name.replace("MF_", ""))
                 file_path = os.path.join(
                     scenario.path, subfolder_name, component.file_name
                 )

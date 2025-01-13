@@ -1,0 +1,89 @@
+{
+    "capacity_addition_min": {
+        "default_value": 0,
+        "unit": "GW"
+    },
+    "capacity_addition_max": {
+        "default_value": "inf",
+        "unit": "GW"
+    },
+    "capacity_addition_unbounded": {
+        "default_value": 0,
+        "unit": "GW"
+    },
+    "capacity_existing": {
+        "default_value": 0,
+        "unit": "GW"
+    },
+    "capacity_limit": {
+        "default_value": "inf",
+        "unit": "GW"
+    },
+    "min_load": {
+        "default_value": 0,
+        "unit": "1"
+    },
+    "max_load": {
+        "default_value": 1,
+        "unit": "1"
+    },
+    "lifetime": {
+        "default_value": 30,
+        "unit": "1"
+    },
+    "opex_specific_variable": {
+        "default_value": 0.8092049870833242,
+        "unit": "Euro/MWh"
+    },
+    "carbon_intensity_technology": {
+        "default_value": 0,
+        "unit": "kilotons/GWh"
+    },
+    "construction_time": {
+        "default_value": 0,
+        "unit": "1"
+    },
+    "capacity_investment_existing": {
+        "default_value": 0,
+        "unit": "GW"
+    },
+    "opex_specific_fixed": {
+        "default_value": 2.056049122938816,
+        "unit": "Euro/kW"
+    },
+    "max_diffusion_rate": {
+        "default_value": "inf",
+        "unit": "1"
+    },
+    "capex_specific_conversion": {
+        "default_value": 219.00074315846672,
+        "unit": "Euro/kW"
+    },
+    "reference_carrier": {
+        "default_value": [
+            "district_heat"
+        ]
+    },
+    "input_carrier": {
+        "default_value": [
+            "hard_coal"
+        ]
+    },
+    "output_carrier": {
+        "default_value": [
+            "district_heat"
+        ]
+    },
+    "conversion_factor": [
+        {
+            "hard_coal": {
+                "default_value": 1.2246631960889565,
+                "unit": "GW/GW"
+            }
+        }
+    ],
+    "WACC": {
+        "default_value": 0.06,
+        "unit": "1"
+    }
+}

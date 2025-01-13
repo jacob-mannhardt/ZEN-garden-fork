@@ -1,0 +1,40 @@
+{"technology_convergence": {
+        "analysis": {
+            "variable_CoC": true
+        },
+        "set_conversion_technologies": {
+            "WACC": {
+                "file": "WACC_technology_convergence"
+            }
+        },
+        "set_storage_technologies": {
+            "WACC": {
+                "file": "WACC_technology_convergence"
+            }
+        }
+    },
+    "country_convergence": {
+        "analysis": {
+            "variable_CoC": true
+        },
+        "EnergySystem": {
+            "interest_rate": {
+                "file": "interest_rate_country_convergence"
+            }
+        },
+        "set_conversion_technologies": {
+            "WACC": {
+                "file": "WACC_country_convergence"
+            }
+        },
+        "set_storage_technologies": {
+            "WACC": {
+                "file": "WACC_country_convergence"
+            }
+        }
+    },"uniform_CoC": {
+        "analysis": {
+            "variable_CoC": false
+        }
+    }
+}

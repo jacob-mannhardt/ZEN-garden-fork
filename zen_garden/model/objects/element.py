@@ -314,77 +314,47 @@ class GenericRule(object):
 
     # helper methods for constraint rules
     def get_discount_factor(self,calling_class,get_WACC=False):
-        """ returns discount factor """
+        """ returns discount factor. Depending on the calling class and function either the series of yearly discount factors for the entire planning horizon
+        is returned (for NPC calculations) or the discount rate is returned by itself (for calculations of the annuity factor).
+
+        :param calling_class: class that calls the function
+        :param get_WACC: boolean indicating if WACC should be returned
+
+        :return discount_factor: discount factor (if get_WACC == true) or series of yearly discount factors
+        """
+        #check if discount factor needs to be returned for annuity factor calculation
         if self.analysis.variable_CoC:
-            #calculate the discount factor
+            #return discount rate only for technologies as only here annuity factor is calculated
             if calling_class == "Technology":
+                #check if WACC should be calculated based on decomposition into equity and debt
                 if self.optimization_setup.analysis["calculate_WACC"]:
                     discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
                 else:
                     discount_factor = self.parameters.WACC
                 if get_WACC:
                     return discount_factor
-            elif calling_class == "Carrier":
-                discount_factor = self.parameters.interest_rate.sel(set_location=self.energy_system.set_nodes)
-                discount_factor = discount_factor.rename({'set_location': 'set_nodes'})
-            elif calling_class == "EnergySystem":
-                discount_factor = self.parameters.discount_rate
         else:
             discount_factor = self.parameters.discount_rate
             if get_WACC:
                 return discount_factor
 
-        # Create the xarray.DataArray for the discount factor
+
+        #From here on the discount factor is calculated for the entire planning horizon
+        # Get yearly time steps
         time_steps = self.energy_system.set_time_steps_yearly
 
-        #ToDO delete later
+        #get discount rate of system
         discount_factor=self.parameters.discount_rate
-        #Get the dimensions and indices of the factor xarray
-        # Get indexes of discount factor
-        try:
-            dim = list(discount_factor.indexes)
-        except:
-            dim = []
-
-        coord = {}
-        for i in dim:
-            if i == "set_location":
-                coord[i] = self.variables["cost_capex_yearly"].indexes["set_location"]
-            else:
-                coord[i] = list(self.sets[i])
-
-        if "set_time_steps_yearly" not in dim:
-            dim.append("set_time_steps_yearly")
-            coord["set_time_steps_yearly"] = time_steps
-
-        # Create a 3D DataArray for the discount factor (time, technology, location)
-        factor = xr.DataArray(
-            dims=dim,
-            coords=coord,
-        )
-
-        # Loop over the years and calculate the discount factor for each year, technology, and location
+        #create series for discount factors
+        factor = pd.Series(index=time_steps)
+        # Loop over the years and calculate the discount factor for each year
         for year in time_steps:
             if year == self.energy_system.set_time_steps_yearly_entire_horizon[-1]:
                 interval_between_years = 1
             else:
                 interval_between_years = self.system["interval_between_years"]
 
-            # Vectorized calculation over technologies and locations
-            # Broadcasting the discount factor calculation for each combination of tech and loc
-            #if calling_class == "EnergySystem" or not self.analysis.variable_CoC:
-            #    factor.loc[{"set_time_steps_yearly": year}] = sum(
-            #        ((1 / (1 + discount_factor)) **
-            #         (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-            #        for _intermediate_time_step in range(interval_between_years)
-            #    )
-            #else:
-            #    factor.loc[{"set_time_steps_yearly": year}] = sum(
-            #        ((1 / (1 + discount_factor.loc[{"set_time_steps_yearly": year}])) **
-            #         (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
-            #        for _intermediate_time_step in range(interval_between_years)
-            #    )
-            factor.loc[{"set_time_steps_yearly": year}] = sum(
+            factor[year] = sum(
                 ((1 / (1 + discount_factor)) **
                  (self.system["interval_between_years"] * (year - time_steps[0]) + _intermediate_time_step))
                 for _intermediate_time_step in range(interval_between_years))

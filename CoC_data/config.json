@@ -1,0 +1,26 @@
+{
+  "analysis": {
+    "dataset": "PI_yearly",
+    "variable_CoC": true,
+    "calculate_WACC": false
+  },
+  "solver": {
+    "name": "gurobi",
+    "solver_options": {
+      "Method": 2,
+      "NodeMethod": 2,
+      "BarHomogeneous": 1,
+      "DualReductions": 0,
+      "Threads": 128,
+      "Crossover": 0,
+      "ScaleFlag": 2
+    },
+    "add_duals": true,
+    "use_scaling": false,
+    "scaling_include_rhs": false
+  },
+  "system": {
+    "conduct_scenario_analysis": false
+  }
+}
+

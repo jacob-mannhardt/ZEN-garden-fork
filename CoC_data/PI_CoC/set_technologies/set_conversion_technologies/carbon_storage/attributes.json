@@ -1,0 +1,80 @@
+{
+    "capacity_addition_min": {
+        "default_value": 0,
+        "unit": "kilotCO2eq/hour"
+    },
+    "capacity_addition_max": {
+        "default_value": "inf",
+        "unit": "kilotCO2eq/hour"
+    },
+    "capacity_addition_unbounded": {
+        "default_value": 0,
+        "unit": "kilotCO2eq/hour"
+    },
+    "capacity_existing": {
+        "default_value": 0,
+        "unit": "kilotCO2eq/hour"
+    },
+    "capacity_limit": {
+        "default_value": 0,
+        "unit": "kilotCO2eq/hour"
+    },
+    "min_load": {
+        "default_value": 0,
+        "unit": "1"
+    },
+    "max_load": {
+        "default_value": 1,
+        "unit": "1"
+    },
+    "lifetime": {
+        "default_value": 40,
+        "unit": "1"
+    },
+    "opex_specific_variable": {
+        "default_value": 4,
+        "unit": "Euro/tCO2eq"
+    },
+    "carbon_intensity_technology": {
+        "default_value": -1,
+        "unit": "ton/tCO2eq"
+    },
+    "construction_time": {
+        "default_value": 0,
+        "unit": "1"
+    },
+    "capacity_investment_existing": {
+        "default_value": 0,
+        "unit": "kilotCO2eq/hour"
+    },
+    "opex_specific_fixed": {
+        "default_value": 0.0,
+        "unit": "Euro/tCO2eq*hour"
+    },
+    "max_diffusion_rate": {
+        "default_value": "inf",
+        "unit": "1"
+    },
+    "capex_specific_conversion": {
+        "default_value": 871620.0,
+        "unit": "Euro/tCO2eq*hour"
+    },
+    "reference_carrier": {
+        "default_value": [
+            "carbon"
+        ]
+    },
+    "input_carrier": {
+        "default_value": [
+            "carbon"
+        ]
+    },
+    "output_carrier": {
+        "default_value": []
+    },
+    "conversion_factor": [],
+    "WACC": {
+        "default_value": 0.06,
+        "unit": "1"
+    }
+}

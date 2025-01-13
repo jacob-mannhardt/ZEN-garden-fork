@@ -174,9 +174,6 @@ class Analysis(Subscriptable):
     calculate_WACC: bool = False
 
 class Config(Subscriptable):
-    """
-    Class which contains the configuration of the model. This includes the configuratins of the system, solver, and analysis as well as the dictionary of scenarios.
-    """
     analysis: Analysis = Analysis()
     solver: Solver = Solver()
     system: System = System()

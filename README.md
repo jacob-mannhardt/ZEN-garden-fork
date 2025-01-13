@@ -1,63 +1,81 @@
-# ZEN-garden
-![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FZEN-universe%2FZEN-garden%2Fmain%2Fpyproject.toml)
+# Technology - and Location-Specific Cost of Capital in ZEN-garden
+This repository contains the code and data used to calculate the technology- and location-specific cost of capital (modeled through WACC) in the ZEN-garden optimization framework. 
+This enables a more precise representation of the financing costs of technologies in the modeling framework. 
+Following adjustments must be made to use variable CoC:
+1. Select the variable CoC in the `analysis.json` file.
+2. Add the WACC input parameter to the technologies' attributes in your input dataset.
 
-[![GitHub Release](https://img.shields.io/github/v/release/ZEN-universe/ZEN-garden)](https://github.com/ZEN-universe/ZEN-garden/releases)
-[![PyPI - Version](https://img.shields.io/pypi/v/zen-garden)](https://pypi.org/project/zen-garden/)
+## How is it modelled? How does it effect the model outcome?
+We reflect the influence of the cost of capital on the investment costs of technologies by making 
+the annuity factor dependent on the weighted average cost of capital (WACC). The annuity factor annualizes the 
+investment costs (including capital costs) of a technology over its lifetime and, thus, determines the annual CAPEX costs. 
+With a rising WACC, the annuity factor increases, leading to higher annual CAPEX costs.
 
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/ZEN-universe/ZEN-garden/pytest_with_conda.yml)](https://github.com/ZEN-universe/ZEN-garden/actions)
-[![Endpoint Badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jacob-mannhardt/30d479a5b4c591a63b7b0f41abbce6a0/raw/zen_garden_coverage.json)](https://github.com/ZEN-universe/ZEN-garden/actions)
-[![Read the Docs](https://img.shields.io/readthedocs/zen-garden?logo=readthedocs)](https://zen-garden.readthedocs.io/en/latest/index.html)
-
-[![GitHub forks](https://img.shields.io/github/forks/ZEN-universe/ZEN-garden)](https://github.com/ZEN-universe/ZEN-garden/forks)
-
-<img src="https://github.com/ZEN-universe/ZEN-garden/assets/114185605/d6a9aca9-74b0-4a82-8295-43e6a78b8450" alt="drawing" width="200"/>
-
-Welcome to the ZEN-garden! ZEN-garden is an optimization model of energy systems and value chains. 
-It is currently used to model the electricity system, hydrogen value chains, and carbon capture, storage and utilization (CCUS) value chains. 
-However, it is designed to be modular and flexible, and can be extended to model other types of energy systems, value chains or other network-based systems. 
-
-ZEN-garden is developed by the [Reliability and Risk Engineering Laboratory](https://www.rre.ethz.ch/) at ETH Zurich.
-<hr style="height: 5px; background-color: black;">
-
-## Quick Start
-To get started with ZEN-garden, you can follow the instructions in the [installation guide](https://zen-garden.readthedocs.io/en/latest/files/user_guide/installation.html).
-
-If you want to use ZEN-garden without working on the codebase, run the following command:
+## How to select variable CoC modeling approach
+To select a variable CoC, you need make following adjustments to the analysis settings summarized in `analysis.json`:
 ```bash
-pip install zen-garden
+"analysis": {"variable_CoC": true}
 ```
-If you want to work on the codebase, fork and clone the repository and install the package in editable mode. More information on how to install the package in editable mode can be found in the [installation guide](https://zen-garden.readthedocs.io/en/latest/files/user_guide/installation.html).
 
-## Documentation
-Please refer to the documentation of the ZEN-garden framework [on Read-the-Docs](https://zen-garden.readthedocs.io/en/latest/). 
+## How to add WACC input parameter to the technologies' attributes
+For all technologies (i.e. conversion, storage, and transport technologies) the `attributes.json` file now requires an 
+additional input parameter `WACC` to be added. The `WACC` parameter is the weighted average cost of capital for the technology.
+If the `WACC` also varies by location (e.g. country), country-technology specific WACC values may be provided through a 
+csv file called `WACC.csv` in the subfolder of the respective technology. The `WACC.csv` file should have the following columns:
+- `node`: The nodes for which the WACC value is provided.
+- `WACC`: WACC values for the respective nodes.
 
-In the file `documentation/how_to_ZEN-garden.md`, you can find additional information on how to use the framework. 
-The `documentation/dataset_creation_tutorial.md` file contains a tutorial on how to create a simple dataset for the framework. 
-Additionally, example datasets are available in the `dataset_examples` folder.
+Consequently, WACC values may be implemented that vary by technology and location.
 
-More in-depth manuals are available in the [discussions forum](https://github.com/ZEN-universe/ZEN-garden/discussions) of our repo.
+## Changes to current ZEN-garden version
+The changes to the current version of ZEN-garden are made in the following files:
 
-## News
-Review recent modifications outlined in the [changelog](https://github.com/ZEN-universe/ZEN-garden/blob/main/CHANGELOG.md).
+##### `element.py`:
+- The function `get_discount_factor(self, calling_class, get_WACC=False)` is added. This function either returns the yearly series of discount factors for deriving the Net Present Costs of technologies, carriers, and the system, or the (location-technology-specific) WACC value(s) for calculating the annuity factor.
 
-## Citing ZEN-garden
-If you use ZEN-garden for research please cite
+##### `technology.py`:
+- Input parameter `WACC` is added to `params` and `store_input_data` functions.
+- The function/technology rule `constraint_cost_capex_yearly(self)` is modified such that the discount rate used in the calculation of the annuity factor is obtained from the `get_discount_factor` function and corresponds to the (location-technology-specific) WACC. 
 
-Ganter Alissa, Gabrielli Paolo, Sansavini, Giovanni (2024).
-Near-term infrastructure rollout and investment strategies for net-zero hydrogen supply chains 
-2024. https://doi.org/10.1016/j.rser.2024.114314
+## Dataset example and plot script
+In the folder CoC_data you can find the dataset (`PI_CoC`) used for the semester project. 
+The dataset contains (per default) the variable CoC values (also summarized in the csv file `CoC_completed.csv`) as well as the uniform CoC and policy scenarios for the semester project (defined in the `scenarios.json` file). 
+The script `analyze_results.py` in the `CoC_data` folder can be used to recreate the plots of the semester project report (note `countries.zip` contains the shapefile data for plotting the EU). 
 
-and use the following BibTeX:
+## Further comments
+
+### Net Present Cost decomposition
+As we first used the approach of discounting costs (i.e. NPC) with the variable CoC, instead of just modeling it through its influence on the annuity factor, the code here also 
+decomposes the NPC, which was before only summarized on the total system level, into the individual technologies, carriers, and the system (emission overshoot) NPC components.
+Thus, following variables are added:
+- `net_present_cost_yearly_technology` in `technology.py` that captures the annual NPC of all technologies.
+- `net_present_cost_yearly_carrier` in `carrier.py` that captures the annual NPC of all carriers.
+- `net_present_cost_system` in `system.py` that captures the annual NPC of the system.
+For the analysis of, for instance, LCOE values per country, the NPC decomposition is useful.
+However, the NPC decomposition can also easily be discarded if not needed. For this, following things must be done:
+- Remove the `net_present_cost_yearly_technology`, `net_present_cost_yearly_carrier`, and `net_present_cost_system` variables from the respective classes.
+- Remove the rules `constraint_net_present_cost_carrier(self)` in `carrier.py`, `constraint_net_present_cost_technology()` in `technology.py`, and `constraint_net_present_cost_system(self)` in `energy_system.py`.
+- Remove the rule `constraint_add_net_present_cost(self)` in `energy_system.py` and uncomment the rule `rules.constraint_net_present_cost()` in line 358 in `energy_system.py`.
+
+If on the other hand the NPC decomposition is desired, functions that double certain functionalities (such as `constraint_cost_total`) can be removed instead and are labeled with a comment `#ToDo: can be removed for variable CoC`. (This might throw errors for the visualization platform though.)
+
+### WACC calculation inside ZEN-garden
+The code also includes a configuration that allows to calculate the WACC values inside ZEN-garden. This is done based on following formula based on https://www.nature.com/articles/s41560-024-01606-7,
+```math
+WACC = debt_ratio * (1-tax_rate) * (interest_rate +technology_premium) + (1-debt_ratio) * (interest_rate + equity_margin + technology_premium)
 ```
-@article{GANTER2024114314,
-author = {Alissa Ganter and Paolo Gabrielli and Giovanni Sansavini}
-title = {Near-term infrastructure rollout and investment strategies for net-zero hydrogen supply chains},
-journal = {Renewable and Sustainable Energy Reviews},
-volume = {194},
-pages = {114314},
-year = {2024},
-issn = {1364-0321},
-doi = {https://doi.org/10.1016/j.rser.2024.114314},
-url = {https://www.sciencedirect.com/science/article/pii/S1364032124000376},
-}
+where the `debt_ratio`, `tax_rate`, `interest_rate`, `equity_margin`, and `technology_premium` are additional input parameters of the technologies and energy system.
+Following a table that summarizes the input parameters for this WACC calculation:
+
+| Parameter | Description                          | Input class    | Can vary across            |
+| --- |--------------------------------------|----------------|----------------------------|
+| `debt_ratio` | Debt ratio of the technology         | `Technology`   | Technology,Time            |
+| `tax_rate` | Corporate tax rate                   | `EnergySystem` | Location, Time             |
+| `interest_rate` | Interest rate of location            | `EnergySystem` | Location, Time             |
+| `equity_margin` | Equity margin of the country         | `EnergySystem` | Location, Time             |
+| `technology_premium` | Technology premium of the technology | `Technology`    | Technology, Locatino, Time |
+
+To use this WACC calculation, the following adjustments must be made to the analysis settings summarized in `analysis.json`:
+```bash
+"analysis": {"variable_CoC": true, "calculate_WACC": true}
 ```

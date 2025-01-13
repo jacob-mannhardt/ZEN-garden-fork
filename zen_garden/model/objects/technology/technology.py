@@ -456,7 +456,7 @@ class Technology(Element):
                                    binary=True, doc='installment of a technology at location l and time t', mask=mask, unit_category=None)
 
         #add NPC variable
-        variables.add_variable(model, name="net_present_cost_yearly_technology", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_yearly"], optimization_setup),bounds=(0, np.inf), doc='net present cost for having technology at location l', unit_category={"money": 1})
+        variables.add_variable(model, name="net_present_cost_yearly_technology", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),doc='net present cost for having technology at location l', unit_category={"money": 1})
 
         # add pe.Vars of the child classes
         for subclass in cls.__subclasses__():
@@ -650,12 +650,12 @@ class TechnologyRules(GenericRule):
 
     def constraint_net_present_cost_technology(self):
         """
-        net present cost of technology
+        calculates annual net present cost of technologies
         """
         factor = self.get_discount_factor(calling_class="Technology")
 
         term_discounted_cost_total = (self.variables["cost_opex_yearly"]+self.variables["cost_capex_yearly"].sum(["set_capacity_types"])
-                                      +((self.variables["carbon_emissions_technology"]* self.get_year_time_step_duration_array()).sum(["set_time_steps_operation"])*self.parameters.price_carbon_emissions)) * factor
+                                      +((self.variables["carbon_emissions_technology"]* self.get_year_time_step_duration_array()).sum(["set_time_steps_operation"])*self.parameters.price_carbon_emissions)).sum(["set_technologies","set_location"]) * factor
 
         lhs = self.variables["net_present_cost_yearly_technology"] - term_discounted_cost_total
         rhs = 0

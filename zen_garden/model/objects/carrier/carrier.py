@@ -128,8 +128,7 @@ class Carrier(Element):
                                doc="shed demand of carrier", unit_category={"money": 1, "time": -1})
 
         # net present cost of carrier
-        variables.add_variable(model, name="net_present_cost_yearly_carrier", index_sets=cls.create_custom_set(["set_nodes", "set_time_steps_yearly"], optimization_setup),
-                               doc="net present cost of carrier",bounds=(0, np.inf), unit_category={"money": 1})
+        variables.add_variable(model, name="net_present_cost_yearly_carrier", index_sets=sets["set_time_steps_yearly"], doc="net present cost of carrier",bounds=(0, np.inf), unit_category={"money": 1})
 
         # add pe.Sets of the child classes
         for subclass in cls.__subclasses__():
@@ -195,13 +194,13 @@ class CarrierRules(GenericRule):
 
     def constraint_net_present_cost_carrier(self):
         """
-        net present cost of carrier
+        calculates annual net present cost of all carrier
         """
         factor = self.get_discount_factor(calling_class="Carrier")
 
         times = self.get_year_time_step_duration_array()
         term_summed_cost_carrier = ((self.variables["cost_carrier"].broadcast_like(times) + self.variables["cost_shed_demand"].broadcast_like(times))*times).sum(["set_carriers","set_time_steps_operation"])
-        term_discounted_cost_total = (term_summed_cost_carrier+((self.variables["carbon_emissions_carrier"] * self.get_year_time_step_duration_array()).sum(["set_carriers","set_time_steps_operation"]))*self.parameters.price_carbon_emissions) * factor
+        term_discounted_cost_total = (term_summed_cost_carrier+((self.variables["carbon_emissions_carrier"] * self.get_year_time_step_duration_array()).sum(["set_carriers","set_time_steps_operation"]))*self.parameters.price_carbon_emissions).sum(["set_nodes"]) * factor
 
         lhs = self.variables["net_present_cost_yearly_carrier"] - term_discounted_cost_total
         rhs = 0

@@ -60,7 +60,7 @@ However, the NPC decomposition can also easily be discarded if not needed. For t
 If on the other hand the NPC decomposition is desired, functions that double certain functionalities (such as `constraint_cost_total`) can be removed instead and are labeled with a comment `#ToDo: can be removed for variable CoC`. (This might throw errors for the visualization platform though.)
 
 ### WACC calculation inside ZEN-garden
-The code also includes a configuration that allows to calculate the WACC values inside ZEN-garden. This is done based on following formula based on https://www.nature.com/articles/s41560-024-01606-7,
+The code also includes a configuration that allows to calculate location-technology-specific WACC values inside ZEN-garden. This is done based on following formula based on https://www.nature.com/articles/s41560-024-01606-7,
 ```
 WACC = debt_ratio * (1-tax_rate) * (interest_rate +technology_premium) + (1-debt_ratio) * (interest_rate + equity_margin + technology_premium)
 ```

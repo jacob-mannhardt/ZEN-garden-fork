@@ -278,8 +278,8 @@ class ConversionTechnology(Technology):
         # renewable capacity target
         rules.constraint_renewable_capacity_target()
         # renewable production target
-        if (optimization_setup.system.renewables_gen_targets != "{}" and
-                len(optimization_setup.system.renewables_gen_targets) > 0) :
+        if (optimization_setup.system.renewables_gen_targets != {} and
+                len(optimization_setup.system.renewables_gen_targets) > 0):
             rules.constraint_renewable_generation_target()
 
         # capex
@@ -593,7 +593,7 @@ class ConversionTechnologyRules(GenericRule):
         # define the renewable capacity percentage and the year by which it must hold
         capacity_addition = self.variables["capacity_addition"]
 
-        renewables_capacity_targets = eval(self.system.renewables_cap_targets)
+        renewables_capacity_targets = self.system.renewables_cap_targets
         cap_add_constraints = {}
 
         for sector, (target, target_year) in renewables_capacity_targets.items():
@@ -669,7 +669,7 @@ class ConversionTechnologyRules(GenericRule):
             renewables_reference_carriers.append(self.sets["set_reference_carriers"][t].items[0])
         renewables_reference_carriers = set(renewables_reference_carriers)
         flow_conversion_output = self.variables["flow_conversion_output"]
-        renewables_generation_targets = eval(self.system.renewables_gen_targets)
+        renewables_generation_targets = self.system.renewables_gen_targets
 
         gen_constraints = {}
         for sector, (target, target_year) in renewables_generation_targets.items():

@@ -113,6 +113,8 @@ class System(Subscriptable):
     years_in_rolling_horizon: int = 1
     years_in_decision_horizon: int = 1
     use_capacities_existing: bool = True
+    renewables_cap_targets: dict[str, float] = {}
+    renewables_gen_targets: dict[str, float] = {}
 
 class SolverOptions(Subscriptable):
     pass

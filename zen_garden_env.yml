@@ -1,4 +1,4 @@
-name: zen-garden
+name: zen-garden-2MF
 channels:
   - conda-forge
   - gurobi

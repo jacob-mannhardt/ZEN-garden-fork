@@ -3,31 +3,10 @@ channels:
   - conda-forge
   - gurobi
 dependencies:
-  - python=3.11
-  - xarray
-  - pytest
   - pip
-  - numpy
-  - pandas
-  - scipy
-  - coverage
-  - glpk
-  - pint
-  - matplotlib
-  - gurobi
-  - pytables
-  - pydantic
+  - python=3.11
   - pip:
-      - tsam
-      - h5py
-      - filelock
-      - ordered-set
-      - pyogrio
-      - psutil
-      - linopy<=0.3.10
-      - sphinx
-      - myst-parser
-      - -e .
+      - -e .[dev,vis,gurobipy,docs]
 
 # conda env create -f zen_garden_env.yml
 # conda remove --name zen-garden --all

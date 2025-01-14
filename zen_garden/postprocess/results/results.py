@@ -1,3 +1,6 @@
+"""
+This module contains the Results class, which is used to extract and process the results of a model run.
+"""
 import pandas as pd
 from typing import Optional, Any, Literal
 from zen_garden.postprocess.results.solution_loader import (
@@ -18,12 +21,21 @@ from pathlib import Path
 
 
 class Results:
+    """
+    The Results class is used to extract and process the results of a model run.
+    """
     def __init__(self, path: str):
+        """
+        Initializes the Results class.
+
+        :param path: Path to the results folder
+        """
         self.solution_loader: SolutionLoader = MultiHdfLoader(path)
         self.has_scenarios = len(self.solution_loader.scenarios) > 1
         self.has_rh = self.solution_loader.has_rh
         first_scenario = next(iter(self.solution_loader.scenarios.values()))
         self.name = Path(first_scenario.analysis.dataset).name
+        self.ureg = first_scenario.ureg
 
     def __str__(self) -> str:
         first_scenario = next(iter(self.solution_loader.scenarios.values()))
@@ -80,6 +92,7 @@ class Results:
         :param year: year of which full time series is selected
         :param element_name: Filter results by a given element
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :return: Full timeseries of the element
         """
         assert component.timestep_type is not None, "Component has no timestep type."
 
@@ -149,7 +162,8 @@ class Results:
             hours_of_year = list(
                 range(year * _total_hours_per_year, (year + 1) * _total_hours_per_year)
             )
-
+            if output_df.empty:
+                return pd.DataFrame(index=[],columns=hours_of_year)
             output_df = output_df[hours_of_year]
         return output_df
 
@@ -170,6 +184,7 @@ class Results:
         :param year: year of which full time series is selected
         :param element_name: Filter results by a given element
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :return: Full timeseries of the element
         """
         if scenario_name is None:
             scenario_names = list(self.solution_loader.scenarios)
@@ -211,6 +226,7 @@ class Results:
         :param element_name: Filter the results by a given element
         :param year: Filter the results by a given year
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :return: Total values of the component
         """
         series = self.solution_loader.get_component_data(scenario, component, keep_raw)
 
@@ -270,6 +286,7 @@ class Results:
         :param year: Filter the results by a given year
         :param scenario_name: Filter the results by a given scenario
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :return: Total values of the component
         """
         if scenario_name is None:
             scenario_names = list(self.solution_loader.scenarios)
@@ -300,6 +317,7 @@ class Results:
         Concatenates a dict of the form str: Data to one dataframe.
 
         :param scenarios_dict: Dict containing the scenario names as key and the values as values.
+        :return: Concatenated dataframe
         """
         scenario_names = list(scenarios_dict.keys())
 
@@ -327,7 +345,7 @@ class Results:
 
         :param discount_to_first_step: apply annuity to first year of interval or entire interval
         :param scenario: scenario name whose results are assessed
-        :return: #TODO describe parameter/return
+        :return: annuity of the duals
         """
         system = scenario.system
         discount_rate_component = self.solution_loader.components["discount_rate"]
@@ -336,7 +354,7 @@ class Results:
             scenario, discount_rate_component
         ).squeeze()
 
-        years = list(range(0, system["optimized_years"]))
+        years = list(range(0, system.optimized_years))
         optimized_years = self.solution_loader.get_optimized_years(scenario)
         annuity = pd.Series(index=years, dtype=float)
         for year in years:
@@ -397,6 +415,7 @@ class Results:
         :param year: Year
         :param discount_to_first_step: apply annuity to first year of interval or entire interval
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :return: Duals of the component
         """
         if not self.get_solver(scenario_name=scenario_name).add_duals:
             logging.warning("Duals are not calculated. Skip.")
@@ -422,6 +441,7 @@ class Results:
         component_name: str,
         scenario_name: Optional[str] = None,
         droplevel: bool = True,
+        is_total: bool = True,
     ) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
         """
         Extracts the unit of a given Component. If no scenario is given, a random one is taken.
@@ -429,6 +449,7 @@ class Results:
         :param component_name: Name of the component
         :param scenario_name: Name of the scenario
         :param droplevel: Drop the location and time levels of the multiindex
+        :return: The corresponding unit
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -448,8 +469,27 @@ class Results:
                 "set_time_steps_operation",
             ]
             drop_idx = pd.Index(loc_idx + time_idx).intersection(units.index.names)
-            units.index = units.index.droplevel(drop_idx.to_list())
-            units = units[~units.index.duplicated()]
+            if len(units.index.names.difference(drop_idx)) == 0:
+                units = units.iloc[0]
+            else:
+                units.index = units.index.droplevel(drop_idx.to_list())
+                units = units[~units.index.duplicated()]
+        # convert to pint units
+        for i in units.index:
+            try:
+                u = units[i]
+                u = self.ureg.parse_expression(u)
+                if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+                    u = u * self.ureg.h
+                units[i] = f"{u.u:~D}"
+            # if the unit is not in the pint registry, change the string manually (normally, when the unit_definition.txt is not saved)
+            except Exception:
+                if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+                    if units[i].endswith(" / hour"):
+                        units[i] = units[i].replace(" / hour", "")
+                    else:
+                        units[i] = f"{units[i]} * hour"
+
         return units
 
     def get_system(self, scenario_name: Optional[str] = None) -> System:
@@ -457,6 +497,7 @@ class Results:
         Extracts the System config of a given Scenario. If no scenario is given, a random one is taken.
 
         :param scenario_name: Name of the scenario
+        :return: The corresponding System config
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -467,6 +508,7 @@ class Results:
         Extracts the Analysis config of a given Scenario. If no scenario is given, a random one is taken.
 
         :param scenario_name: Name of the scenario
+        :return: The corresponding Analysis config
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -477,6 +519,7 @@ class Results:
         Extracts the Solver config of a given Scenario. If no scenario is given, a random one is taken.
 
         :param scenario_name: Name of the scenario
+        :return: The corresponding Solver config
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -487,6 +530,7 @@ class Results:
         Extracts the documentation of a given Component.
 
         :param component: Name of the component
+        :return: The corresponding documentation
         """
         return self.solution_loader.components[component].doc
 
@@ -495,6 +539,7 @@ class Results:
         Extracts the years of a given Scenario. If no scenario is given, a random one is taken.
 
         :param scenario_name: Name of the scenario
+        :return: List of years
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -507,6 +552,7 @@ class Results:
         Extracts the System config of a given Scenario. If no scenario is given, a random one is taken.
 
         :param scenario_name: Name of the scenario
+        :return: The corresponding System config
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -640,7 +686,8 @@ class Results:
                 transport_loss = self.get_full_ts(
                     "flow_transport_loss", scenario_name=scenario_name, year=year
                 )
-
+                if full_ts.empty or transport_loss.empty:
+                    continue
                 full_ts = self.edit_carrier_flows(
                     full_ts - transport_loss, node, "in", scenario_name
                 )
@@ -648,11 +695,18 @@ class Results:
                 full_ts = self.get_full_ts(
                     "flow_transport", scenario_name=scenario_name, year=year
                 )
+                if full_ts.empty:
+                    continue
                 full_ts = self.edit_carrier_flows(full_ts, node, "out", scenario_name)
             else:
-                full_ts = self.get_full_ts(
-                    component, scenario_name=scenario_name, year=year
-                )
+                try:
+                    full_ts = self.get_full_ts(
+                        component, scenario_name=scenario_name, year=year
+                    )
+                    if full_ts.empty:
+                        continue
+                except KeyError:
+                    continue
             carrier_df = self.extract_carrier(full_ts, carrier, scenario_name)
             if carrier_df is not None:
                 if "node" in carrier_df.index.names:
@@ -661,6 +715,14 @@ class Results:
 
         return ans
 
+    def get_component_names(self, component_type:str) -> list[str]:
+        """ Returns the names of all components of a given type
+
+        :param component_type: Type of the component
+        :return: List of component names
+        """
+        assert component_type in ComponentType.get_component_type_names(), f"Invalid component type: {component_type}. Valid types are: {ComponentType.get_component_type_names()}"
+        return [component for component in self.solution_loader.components if self.solution_loader.components[component].component_type.name == component_type]
 
 if __name__ == "__main__":
     try:
@@ -670,11 +732,11 @@ if __name__ == "__main__":
         config = module.config
     except FileNotFoundError:
         with open("config.json") as f:
-            config = Config(json.load(f))
+            config = Config(**json.load(f))
 
-    model_name = os.path.basename(config.analysis["dataset"])
+    model_name = os.path.basename(config.analysis.dataset)
     if os.path.exists(
-        out_folder := os.path.join(config.analysis["folder_output"], model_name)
+        out_folder := os.path.join(config.analysis.folder_output, model_name)
     ):
         r = Results(out_folder)
     else:

@@ -1235,4 +1235,4 @@ class TechnologyRules(GenericRule):
         constraints = lhs == rhs
 
         ### return
-        self.constraints.add_constraint("constraint_capacity_addition_from_investment",constraints)
+        self.constraints.add_constraint("constraint_capacity_investment_from_investment",constraints)

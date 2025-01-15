@@ -250,7 +250,7 @@ class MultiHdfLoader(AbstractLoader):
                 next_year = year + 1
             decision_horizon = tuple(range(year, next_year))
             # (new quick fix: int to string):
-            current_mf = pd_dict[str(year)]
+            current_mf = pd_dict[year]
             if component.timestep_type is TimestepType.yearly:
                 year_series = current_mf[
                     current_mf.index.get_level_values("year").isin(decision_horizon)

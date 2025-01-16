@@ -57,7 +57,7 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
     # spec = importlib.util.spec_from_file_location("module", system_path)
     # module = importlib.util.module_from_spec(spec)
     # spec.loader.exec_module(module)
-    system_comp =config.system
+    system_comp = config.system
     # config.system_comp.update(system_comp)
 
     input_data_checks.check_technology_selections()
@@ -80,6 +80,10 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
         # iterate through horizon steps
         for step in steps_horizon:
             StringUtils.print_optimization_progress(scenario,steps_horizon,step,system=config.system)
+            # 1) Investment optimization (fs_type = investment):
+            logging.info(f"--- Investment Opt --- \n")
+            # set foresight horizon to investment
+            optimization_setup.set_fs_type("Investment")
             # overwrite time indices
             optimization_setup.overwrite_time_indices(step)
             # create optimization problem

@@ -1015,6 +1015,17 @@ class TechnologyRules(GenericRule):
         # if all tdr are inf, we can skip the constraint
         if (~mask_inf_tdr).all():
             return
+        # create a mask for all technologies and years which are determined by previous capacity investments (through construction time)
+        investment_time = pd.Series(
+            {(t, y, Technology.get_investment_time_step(self.optimization_setup, t, y)): 1 for t, y in
+             itertools.product(self.sets["set_technologies"], self.sets["set_time_steps_yearly"])})
+        investment_time.index.names = ["set_technologies", "set_time_steps_yearly", "set_time_steps_construction"]
+        # select masks: mask_existing_time_steps is True for all technologies and years which are NOT determined by previous capacity investments
+        mask_current_time_steps = investment_time.index.get_level_values("set_time_steps_construction").isin(
+            self.sets["set_time_steps_yearly"])
+        mask_existing_time_steps = ~(investment_time.isin(
+            self.sets["set_time_steps_yearly_entire_horizon"]) & ~mask_current_time_steps)
+        mask_existing_time_steps = mask_existing_time_steps.groupby(["set_technologies", "set_time_steps_yearly"]).any().to_xarray()
         # create mask for knowledge spillover rate (sr) to exclude transport technologies
         mask_technology_type = pd.Series(index=xr.DataArray(self.sets["set_technologies"]), data=1)
         mask_technology_type.index.name = "set_technologies"
@@ -1092,9 +1103,9 @@ class TechnologyRules(GenericRule):
         lhs_sn = lp.merge(1*capacity_addition,-1*term_knowledge_no_spillover,-1*term_unbounded_addition, compat="broadcast_equals").sum("set_location")
         rhs_sn = (tdr * (capacity_existing_total_nosr * kdr_existing).sum("set_technologies_existing") + capacity_addition_unbounded).sum("set_location")
         rhs_sn = rhs_sn.broadcast_like(lhs_sn.const)
-        # mask for tdr == inf
-        lhs_sn = self.align_and_mask(lhs_sn, mask_inf_tdr_sum)
-        rhs_sn = self.align_and_mask(rhs_sn, mask_inf_tdr_sum)
+        # mask for tdr == inf and if capacity_addition is not determined by previous capacity investments (through construction times)
+        lhs_sn = self.align_and_mask(lhs_sn, mask_inf_tdr_sum*mask_existing_time_steps)
+        rhs_sn = self.align_and_mask(rhs_sn, mask_inf_tdr_sum*mask_existing_time_steps)
         # combine constraint
         constraints_sn = lhs_sn <= rhs_sn
         self.constraints.add_constraint("constraint_technology_diffusion_limit_total", constraints_sn)
@@ -1106,9 +1117,9 @@ class TechnologyRules(GenericRule):
             lhs_an = lp.merge(1*capacity_addition,-1*term_knowledge,-1*term_unbounded_addition, compat="broadcast_equals")
             rhs_an = tdr * (capacity_existing_total * kdr_existing).sum("set_technologies_existing") + capacity_addition_unbounded
             rhs_an = rhs_an.broadcast_like(lhs_an.const)
-            # mask for tdr == inf
-            lhs_an = self.align_and_mask(lhs_an, mask_inf_tdr)
-            rhs_an = self.align_and_mask(rhs_an, mask_inf_tdr)
+            # mask for tdr == inf and if capacity_addition is not determined by previous capacity investments (through construction times)
+            lhs_an = self.align_and_mask(lhs_an, mask_inf_tdr*mask_existing_time_steps)
+            rhs_an = self.align_and_mask(rhs_an, mask_inf_tdr*mask_existing_time_steps)
             # combine constraint
             constraints_an = lhs_an <= rhs_an
             self.constraints.add_constraint("constraint_technology_diffusion_limit",constraints_an)

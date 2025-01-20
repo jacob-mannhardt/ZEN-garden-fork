@@ -84,6 +84,8 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
             logging.info(f"--- Investment Opt --- \n")
             # set foresight horizon to investment
             optimization_setup.set_fs_type("Investment")
+            # get rolling horizon years
+            optimization_setup.get_optimization_horizon()
             # overwrite time indices
             optimization_setup.overwrite_time_indices(step)
             # create optimization problem

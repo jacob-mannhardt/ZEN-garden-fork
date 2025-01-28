@@ -44,7 +44,16 @@ def sort_scenarios(results):
     for result in results:
         scenarios = get_scenarios_with_unique_representation_settings(result)
         for scen_name, scen in scenarios.items():
-            key = scen.analysis.time_series_aggregation.storageRepresentationMethod + "_" + str(scen.analysis.time_series_aggregation.hoursPerPeriod)
+            #key = scen.analysis.time_series_aggregation.storageRepresentationMethod + "_" + str(scen.analysis.time_series_aggregation.hoursPerPeriod)
+            key = scen.analysis.time_series_aggregation.storageRepresentationMethod
+            if "ZEN" not in key:
+                key = key.capitalize()
+            if "Gabrielli" in key:
+                if scen.analysis.time_series_aggregation.hoursPerPeriod == 24:
+                    key += " RD"
+                else:
+                    key += " RH"
+
             if key not in rep_settings:
                 rep_settings[key] = {scen.system.aggregated_time_steps_per_year: [(s, result.name) for s_n, s in result.solution_loader.scenarios.items() if s.analysis.time_series_aggregation.storageRepresentationMethod
                                           == scen.analysis.time_series_aggregation.storageRepresentationMethod
@@ -111,8 +120,10 @@ def plot_obj_err_vs_solving_time(results, logx=False, logy=False, rep_methods=No
     ref_name = ref_base + "_fully_resolved_ZEN"
     r_ref = Results(path="../data/outputs/"+ref_name)
     ref_obj_val = next(iter(r_ref.solution_loader.scenarios.values())).benchmarking["objective_value"]
-    style_mapping = {"ZEN-garden_1":{"color": plt.cm.tab20b.colors[2], "marker": "o"}, "gabrielli_24":{"color": plt.cm.tab20b.colors[6], "marker": "v"},
-                     "gabrielli_1":{"color": plt.cm.tab20b.colors[14], "marker": "s"}, "kotzur_24":{"color": plt.cm.tab20b.colors[10], "marker": "X"}}
+    style_mapping = {"ZEN-garden": {"color": eth_c.getColor("petrol"), "marker": "o"},
+                     "Gabrielli RD": {"color": eth_c.getColor("green"), "marker": "v"},
+                     "Gabrielli RH": {"color": eth_c.getColor("purple"), "marker": "s"},
+                     "Kotzur": {"color": eth_c.getColor("yellow"), "marker": "X"}}
     plt.figure()
     for rs_name, rss in rep_settings.items():
         solving_time = []
@@ -123,7 +134,7 @@ def plot_obj_err_vs_solving_time(results, logx=False, logy=False, rep_methods=No
         data = pd.DataFrame({"solving_time": solving_time, "relative_objective_error": relative_objective_error})
         data = data.sort_values(by=["solving_time"])
         plt.scatter(data["relative_objective_error"],data["solving_time"], label=rs_name, color=style_mapping[rs_name]["color"], marker=style_mapping[rs_name]["marker"])
-    plt.xlabel("Relative Objective Error [-]")
+    plt.xlabel("Relative objective error [-]")
     plt.ylabel("Solving Time [s]")
     if logy and not logx:
         plt.semilogy()
@@ -136,19 +147,24 @@ def plot_obj_err_vs_solving_time(results, logx=False, logy=False, rep_methods=No
         path = os.path.join(os.getcwd(), "plots")
         if not os.path.exists(path):
             os.makedirs(path)
-        plt.savefig(os.path.join(path, f"obj_err_vs_solving_time.svg"), format=file_format)
+        plt.savefig(os.path.join(path, f"obj_err_vs_solving_time.{file_format}"), format=file_format)
     plt.show()
 
-def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_ts, rep_methods, reference, storage_name, conv_names):
+def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_ts, rep_methods, reference, storage_name, conv_names, ts_name=None):
     """
 
     """
     if isinstance(results, Results):
         results = [results]
     rep_settings = sort_scenarios(results)
-    style_mapping = {"ZEN-garden_1":{"color": plt.cm.tab20b.colors[2], "marker": "o"}, "gabrielli_24":{"color": plt.cm.tab20b.colors[6], "marker": "v"},
-                     "gabrielli_1":{"color": plt.cm.tab20b.colors[14], "marker": "s"}, "kotzur_24":{"color": plt.cm.tab20b.colors[10], "marker": "X"},
-                     "Representative Hours": {"color": plt.cm.tab20b.colors[2], "marker": "o"}, "Representative Days": {"color": plt.cm.tab20b.colors[10], "marker": "X"}}
+    style_mapping = {"ZEN-garden":{"color": eth_c.getColor("petrol"), "marker": "o"}, "Gabrielli RD":{"color": eth_c.getColor("green"), "marker": "v"},
+                     "Gabrielli RH":{"color": eth_c.getColor("purple"), "marker": "s"}, "Kotzur":{"color": eth_c.getColor("yellow"), "marker": "X"},
+                     "Representative hours": {"color": eth_c.getColor("red"), "marker": "h"}, "Representative days": {"color": eth_c.getColor("bronze"), "marker": "d"}}
+    stor_vars_min = next(iter(results)).solution_loader.scenarios["scenario_kotzur_24_1"].benchmarking["number_of_storage_variables"]
+    bench_max = next(iter(results)).solution_loader.scenarios["scenario_kotzur_8760_1"].benchmarking
+    identical_limits = {"min": stor_vars_min, "max": bench_max["number_of_storage_constraints"], "ref": max(bench_max["number_of_variables"], bench_max["number_of_constraints"]), "scaling": 0.05}
+    if "time" in KPI_name:
+        identical_limits = {"min": 1, "max": bench_max["solving_time"], "scaling": 0.2}
     data = []
     positions = []
     labels = []
@@ -163,21 +179,25 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_t
                                  "energy": next(iter(results)).get_unit("capacity").loc[pd.IndexSlice[:,"energy"]][0].replace(" ","").replace("*","")},
                     "storage_cycles": "-", "objective_value": next(iter(results)).get_unit("cost_shed_demand")[0],
                     "solving_time": "s", "construction_time": "s", "number_of_storage_constraints": "-",
-                    "number_of_storage_variables": "-"}
+                    "number_of_storage_variables": "-", "RMSE": "%"}
     unit_factors = {key: 1 for key in unit_mapping.keys()}
     if unit_mapping["objective_value"] == "MEURO":
         if ref_bench["objective_value"] > 1e3:
             unit_factors["objective_value"] = 1e-3
-            unit_mapping["objective_value"] = "Trillion Euros"
+            unit_mapping["objective_value"] = "billion euros"
             ref_bench["objective_value"] = ref_bench["objective_value"] * 1e-3
         else:
             raise NotImplementedError
+    if unit_mapping["capacity"]["energy"] == "GWh":
+        unit_factors["capacity"] = 1e-3
+        unit_mapping["capacity"]["energy"] = "TWh"
+        unit_mapping["capacity"]["power"] = "TW"
     if rep_methods == "minimal":
-        rep_settings = {key: value for key, value in rep_settings.items() if "ZEN" in key or "kot" in key}
+        rep_settings = {key: value for key, value in rep_settings.items() if "ZEN" in key or "Kot" in key}
     elif rep_methods == "reduced":
-        rep_settings = {key: value for key, value in rep_settings.items() if "ZEN" in key or "kot" in key or "gabrielli_24" in key}
+        rep_settings = {key: value for key, value in rep_settings.items() if "ZEN" in key or "Kot" in key or "RD" in key}
     elif rep_methods == "hours/days":
-        rep_settings = {"Representative Hours": value for key, value in rep_settings.items() if "ZEN" in key} | {"Representative Days": value for key, value in rep_settings.items() if "kot" in key}
+        rep_settings = {"Representative hours": value for key, value in rep_settings.items() if "ZEN" in key} | {"Representative days": value for key, value in rep_settings.items() if "Kot" in key}
     style_mapping = {key: value for key, value in style_mapping.items() if key in rep_settings}
     for rs_name, rss in rep_settings.items():
         for ag_ts, rss_identical in rss.items():
@@ -191,17 +211,19 @@ def get_KPI_data(results, KPI_name, tech_type, capacity_type, carrier, drop_ag_t
                     KPI.append(get_capacities(results, rs, tech_type, capacity_type, carrier, conv_names) * unit_factors[KPI_name])
                 elif KPI_name == "storage_cycles":
                     KPI.append(get_cycles_per_year(results, rs, storage_name))
+                elif KPI_name == "RMSE":
+                    KPI.append(compute_RMSE(results, rs, rRef, ts_name))
                 else:
                     KPI.append(rs[0].benchmarking[KPI_name] * unit_factors[KPI_name])
             data.append(KPI)
     unit = unit_mapping[KPI_name]
     if KPI_name == "capacity" and (storage_name or (tech_type=="storage" and capacity_type=="energy")):
         unit = unit["energy"]
-    return data, positions, labels, style_mapping, unit, ref_bench
+    return data, positions, labels, style_mapping, unit, ref_bench, identical_limits
 
 
 def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type="storage", capacity_type="energy",
-             carrier="electricity", subplots=False, drop_ag_ts=None, relative_scale_flag=False, rep_methods=None, use_log=False, title="", file_format=None, storage_name=None, conv_names=None):
+             carrier="electricity", subplots=False, drop_ag_ts=None, relative_scale_flag=False, rep_methods=None, use_log=False, title="", file_format=None, storage_name=None, conv_names=None, ts_name=None):
     """
     Plot KPI data with optional subplots and an optional secondary y-axis for relative scale.
 
@@ -218,9 +240,9 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
         relative_scale_flag: Whether to include a secondary y-axis for relative scale.
         reference_value: The value for normalizing data on the secondary y-axis.
     """
-    data, positions, labels, style_mapping, unit, ref_bench = get_KPI_data(
+    data, positions, labels, style_mapping, unit, ref_bench, identical_limits = get_KPI_data(
         results=results, KPI_name=KPI_name, tech_type=tech_type, capacity_type=capacity_type, carrier=carrier,
-        drop_ag_ts=drop_ag_ts, rep_methods=rep_methods, reference=reference, storage_name=storage_name, conv_names=conv_names)
+        drop_ag_ts=drop_ag_ts, rep_methods=rep_methods, reference=reference, storage_name=storage_name, conv_names=conv_names, ts_name=ts_name)
     data_dict = {}
     stacked_colors = {}
     if isinstance(next(iter(next(iter(data)))), pd.Series):
@@ -253,7 +275,7 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
             if idx < num_subplots:
                 # Reuse the single-plot logic for each subplot
                 _plot_single_KPI(ax, data_dict[subplot_labels[idx]], positions, labels, style_mapping, unit, KPI_name,
-                                 plot_type, reference, add_legend=False, ref_bench=ref_bench, use_log=use_log, stacked_colors=stacked_colors)
+                                 plot_type, reference, add_legend=False, ref_bench=ref_bench, use_log=use_log, identical_limits=identical_limits, stacked_colors=stacked_colors)
                 ax.set_title(subplot_labels[idx])
             else:
                 ax.axis('off')  # Hide unused subplots
@@ -274,26 +296,28 @@ def plot_KPI(results, KPI_name, plot_type="whiskers", reference="ZEN", tech_type
             data = data_dict[storage_name]
             split = storage_name.split('_')
             if len(split) == 2:
-                storage_name = storage_name.split('_')[0].capitalize() + " " + storage_name.split('_')[1].capitalize()
+                storage_name = storage_name.split('_')[0] + " " + storage_name.split('_')[1]
             else:
-                storage_name = storage_name.capitalize()
-            title = f"Storage Cycles {storage_name}" if KPI_name == "storage_cycles" else f"Installed {storage_name} Capacity"
+                storage_name = storage_name
+            title = f"Storage cycles {storage_name}" if KPI_name == "storage_cycles" else f"Installed {storage_name} capacity"
         _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name, plot_type, reference,
                          ref_bench=ref_bench, add_legend=True, secondary_ax=secondary_ax,
-                         relative_scale_flag=relative_scale_flag, use_log=use_log, stacked_colors=stacked_colors)
-    fig.suptitle(title)
+                         relative_scale_flag=relative_scale_flag, use_log=use_log, identical_limits=identical_limits, stacked_colors=stacked_colors)
+    #fig.suptitle(title)
     if file_format:
         path = os.path.join(os.getcwd(), "plots")
         if not os.path.exists(path):
             os.makedirs(path)
+        if KPI_name == "RMSE":
+            title = ts_name
         if title:
-            plt.savefig(os.path.join(path, f"{title}.svg"), format=file_format)
+            plt.savefig(os.path.join(path, f"{title}.{file_format}"), format=file_format)
         else:
-            plt.savefig(os.path.join(path,f"{KPI_name}.svg"), format=file_format)
+            plt.savefig(os.path.join(path,f"{KPI_name}.{file_format}"), format=file_format)
     plt.show()
 
 
-def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name, plot_type, reference, ref_bench, use_log,
+def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name, plot_type, reference, ref_bench, use_log, identical_limits,
                      add_legend=True, secondary_ax=None, relative_scale_flag=False, stacked_colors=None):
     """
     Helper function to plot a single KPI on a given axis, with an optional secondary axis.
@@ -347,7 +371,14 @@ def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name,
                 upper_whisker = np.percentile(dat, 95)
                 ax.scatter([plot_pos], [mean_val], color=style_mapping[label]["color"], zorder=3, marker=style_mapping[label]["marker"])
                 ax.vlines(plot_pos, lower_whisker, upper_whisker, color=style_mapping[label]["color"], linewidth=2)
-
+                if "number_of_storage" in KPI_name and 1 or "time" in KPI_name:
+                    padding = (identical_limits["max"] - identical_limits["min"]) * identical_limits["scaling"]
+                    ax.set_ylim(ymin=identical_limits["min"]-padding,ymax=identical_limits["max"]+padding)
+                    #ax.axhline(y=0, color='grey', linestyle='-')
+                    if "number_of_storage" in KPI_name:
+                        ax.axhspan(identical_limits["min"]-padding, 0, color='grey', alpha=0.5)
+                if KPI_name=="RMSE":
+                    ax.axhline(y=0, color='grey', linestyle='-')
         # Plot on the secondary axis if enabled
         if relative_scale_flag and secondary_ax:
             if KPI_name == "number_of_storage_variables":
@@ -359,6 +390,9 @@ def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name,
             relative_dat = [d / reference_value for d in dat]
             mean_rel = np.mean(relative_dat)
             secondary_ax.scatter([plot_pos], [mean_rel], color=style_mapping[label]["color"], linestyle='--', zorder=3, alpha=0)
+            if "number_of_storage" in KPI_name and 0:
+                padding = (identical_limits["max"]- identical_limits["min"]) * identical_limits["scaling"]
+                secondary_ax.set_ylim(ymin=(identical_limits["min"] - padding)/identical_limits["ref"]*100, ymax=(identical_limits["max"] + padding)/identical_limits["ref"]*100)
 
     # Ensure vertical lines are drawn correctly on the primary axis
     for i in range(1, len(unique_positions)):
@@ -368,6 +402,12 @@ def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name,
     ax.set_xticks(equidistant_positions)
     ax.set_xticklabels([str(pos) for pos in unique_positions])
     ax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
+    ax.yaxis.offsetText.set_x(-0.05)
+    secondary_xax = ax.twiny()
+    secondary_xax.set_xticks(equidistant_positions)
+    secondary_xax.set_xticklabels([str(pos//24) for pos in unique_positions])
+    secondary_xax.set_xlabel("Number of aggregated representative days [d]")
+    secondary_xax.set_xlim(min(equidistant_positions) - 0.5, max(equidistant_positions) + 0.5)
 
     if add_legend:
         if KPI_name in ["capacity", "storage_cycles"]:
@@ -384,21 +424,21 @@ def _plot_single_KPI(ax, data, positions, labels, style_mapping, unit, KPI_name,
         reference_value = ref_bench[KPI_name]  # Get reference value
         ax.axhline(y=reference_value, label=f"{reference} {KPI_name} Benchmark", color='grey', linestyle='-')
 
-    name_dict = {"objective_value": "Objective Value", "storage_cycles": "Number of Storage Cycles",
-                 "capacity": "Installed Capacity", "number_of_storage_variables": "Number of Storage Variables",
-                 "number_of_storage_constraints": "Number of Storage Constraints", "solving_time": "Solving Time",
-                 "construction_time": "Construction Time"}
+    name_dict = {"objective_value": "Objective value", "storage_cycles": "Number of storage cycles",
+                 "capacity": "Installed capacity", "number_of_storage_variables": "Number of storage variables",
+                 "number_of_storage_constraints": "Number of storage constraints", "solving_time": "Solving time",
+                 "construction_time": "Construction time", "RMSE": "NRMSE"}
     # Set secondary axis labels if enabled
     if relative_scale_flag and secondary_ax:
         if KPI_name == "number_of_storage_variables":
-            st = "Share of all Variables [%]"
+            st = "share of all variables [%]"
         elif KPI_name == "number_of_storage_constraints":
-            st = "Share of all Constraints [%]"
+            st = "share of all constraints [%]"
         else:
-            st = name_dict[KPI_name] + "[-]"
+            st = name_dict[KPI_name].lower() + "[-]"
         secondary_ax.set_ylabel(f"Relative {st}")
 
-    ax.set_xlabel("Number of Aggregated Time Steps [h]")
+    ax.set_xlabel("Number of aggregated time steps [h]")
     ax.set_ylabel(f"{name_dict[KPI_name]} [{unit}]")
 
 def get_capacities(results, rs, tech_type, capacity_type, carrier, conv_names):
@@ -453,7 +493,31 @@ def get_cycles_per_year(results, rs, storage_name, method="max_min"):
             cycles_per_year = pd.Series([])
     return cycles_per_year
 
-def representation_comparison_plots(r, file_format=None):
+def tsa_demonstration_plot(r, file_format=None, step=False, agg_ts=24, rounding=10):
+    """
+
+    """
+    full_ts = r.get_full_ts("demand", scenario_name="scenario_gabrielli_rep_hours_8760_1").T["heat", "DE"]
+    single_day = full_ts[0:24]
+    full_ts_ZEN = r.get_full_ts("demand", scenario_name=f"scenario_ZEN-garden_rep_hours_{agg_ts}_1").T["heat", "DE"]
+    single_day_ZEN = full_ts_ZEN[0:24].apply(lambda x: round(x / rounding) * rounding)
+    plt.figure()
+    if step:
+        plt.step(np.arange(24), single_day_ZEN, color=eth_c.getColor("red"))
+        plt.step(np.arange(24), single_day, color=eth_c.getColor("blue"))
+    else:
+        single_day.plot(color=eth_c.getColor("blue"))
+        single_day_ZEN.plot(color=eth_c.getColor("red"))
+    plt.gca().xaxis.set_visible(False)
+    plt.gca().yaxis.set_visible(False)
+    if file_format:
+        path = os.path.join(os.getcwd(), "plots")
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(os.path.join(path, f"tsa_demo.svg"), format=file_format)
+    plt.show()
+
+def representation_comparison_plots(r, file_format=None, show_full_ts=False):
     """
 
     """
@@ -467,37 +531,60 @@ def representation_comparison_plots(r, file_format=None):
     single_day_ZEN = full_ts_ZEN[0:24]
     weekly_rolling_average_ZEN = full_ts_ZEN.groupby(np.arange(len(full_ts)) // 168).mean()
 
+    if show_full_ts:
+        plt.figure(figsize=(20, 4))
+        full_ts.plot(linewidth=0.5, color=eth_c.getColor("blue"))
+        plt.gca().xaxis.set_visible(False)
+        plt.gca().yaxis.set_visible(False)
+        if file_format:
+            path = os.path.join(os.getcwd(), "plots")
+            if not os.path.exists(path):
+                os.makedirs(path)
+            plt.savefig(os.path.join(path, f"full_ts.svg"), format=file_format)
+        plt.show()
+
     fig, axs = plt.subplots(2, 3, figsize=(15, 10), sharey=False)
-    tab20b_colors = plt.cm.tab20b(np.linspace(0, 0.5, 3))
+
     # Plot the first row (single days)
-    axs[0, 0].plot(single_day, label="Fully resolved", color=eth_c.getColor("blue"))
+    ymin, ymax = min(min(single_day), min(single_day_kotzur), min(single_day_ZEN)), max(max(single_day), max(single_day_kotzur), max(single_day_ZEN))
+    padding = (ymax-ymin)*0.05
+    ymin, ymax = ymin - padding, ymax + padding
+    axs[0, 0].plot(single_day, label="Fully resolved", color=eth_c.getColor("blue"), linewidth=3)
     axs[0, 0].set_title('Daily Profile: Fully Resolved')
-    axs[0, 0].set_ylabel("Heat Demand [GW]")
     axs[0, 0].set_xlabel("Time [hours]")
-    axs[0, 1].plot(single_day_kotzur, label="Representative Days", color=eth_c.getColor("purple"))
-    axs[0, 1].set_title('Daily Profile: Single Representative Day')
-    axs[0, 1].set_ylabel("Heat Demand [GW]")
+    axs[0, 1].plot(single_day_kotzur, label="Representative days", color=eth_c.getColor("bronze"), linewidth=3)
+    axs[0, 1].set_title('Daily profile: Single representative day')
     axs[0, 1].set_xlabel("Time [hours]")
-    axs[0, 2].plot(single_day_ZEN, label="Scenario ZEN", color=eth_c.getColor("yellow"))
-    axs[0, 2].set_title('Daily Profile: 24 Representative Hours')
-    axs[0, 2].set_ylabel("Heat Demand [GW]")
+    axs[0, 1].set_ylim(ymin, ymax)
+    axs[0, 2].plot(single_day_ZEN, label="Scenario ZEN", color=eth_c.getColor("red"), linewidth=3)
+    axs[0, 2].set_title('Daily profile: 24 representative hours')
     axs[0, 2].set_xlabel("Time [hours]")
+    axs[0, 2].set_ylim(ymin, ymax)
 
     # Plot the second row (weekly averages)
-    axs[1, 0].plot(weekly_rolling_average, label="Fully resolved", color=eth_c.getColor("blue"))
-    axs[1, 0].set_title('Yearly Profile: Fully Resolved')
-    axs[1, 0].set_ylabel("Heat Demand [GW]")
+    ymin, ymax = min(min(weekly_rolling_average), min(weekly_rolling_average_kotzur), min(weekly_rolling_average_ZEN)), max(max(weekly_rolling_average), max(weekly_rolling_average_kotzur), max(weekly_rolling_average_ZEN))
+    padding = (ymax-ymin)*0.05
+    ymin, ymax = ymin - padding, ymax + padding
+    axs[1, 0].plot(weekly_rolling_average, label="Fully resolved", color=eth_c.getColor("blue"), linewidth=3)
+    axs[1, 0].set_title('Yearly profile: Fully resolved')
     axs[1, 0].set_xlabel("Time [weeks]")
-    axs[1, 1].plot(weekly_rolling_average_kotzur, label="Representative Days", color=eth_c.getColor("purple"))
-    axs[1, 1].set_title('Yearly Profile: Single Representative Day')
-    axs[1, 1].set_ylabel("Heat Demand [GW]")
+    axs[1, 1].plot(weekly_rolling_average_kotzur, label="Representative days", color=eth_c.getColor("bronze"), linewidth=3)
+    axs[1, 1].set_title('Yearly profile: Single representative day')
     axs[1, 1].set_xlabel("Time [weeks]")
-    axs[1, 2].plot(weekly_rolling_average_ZEN, label="Scenario ZEN", color=eth_c.getColor("yellow"))
-    axs[1, 2].set_title('Yearly Profile: 24 Representative Hours')
-    axs[1, 2].set_ylabel("Heat Demand [GW]")
+    axs[1, 1].set_ylim(ymin, ymax)
+    axs[1, 2].plot(weekly_rolling_average_ZEN, label="Scenario ZEN", color=eth_c.getColor("red"), linewidth=3)
+    axs[1, 2].set_title('Yearly profile: 24 representative hours')
     axs[1, 2].set_xlabel("Time [weeks]")
+    axs[1, 2].set_ylim(ymin, ymax)
 
     # Adjust layout for better spacing
+    axs[0,0].yaxis.set_visible(False)
+    axs[0,1].yaxis.set_visible(False)
+    axs[0,2].yaxis.set_visible(False)
+    axs[1,0].yaxis.set_visible(False)
+    axs[1,1].yaxis.set_visible(False)
+    axs[1,2].yaxis.set_visible(False)
+
     plt.tight_layout()
     if file_format:
         path = os.path.join(os.getcwd(), "plots")
@@ -508,7 +595,7 @@ def representation_comparison_plots(r, file_format=None):
     plt.show()
 
 
-def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", start=936, end=936+72, zoom=None):
+def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", start=936, end=936+72, zoom=None, rh_title="ZEN-garden", gab="RD"):
     """
     zoom = 35
     """
@@ -544,12 +631,12 @@ def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", star
     if zoom:
         for i in [23,47]:
             plt.vlines(x=i+1/2, ymin=ymin, ymax=ymax, color='gray', linestyle='--', alpha=0.7)
-        plt.step(np.arange(data_kot.size), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="red"), linewidth=2)
-        #plt.step(np.arange(data_kot.size), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="red"), linewidth=2)
+        plt.step(np.arange(data_kot.size), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="bronze"), linewidth=2)
+        #plt.step(np.arange(data_kot.size), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="bronze"), linewidth=2)
 
     else:
-        plt.step(np.arange(72), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="red"), linewidth=2)
-        plt.step(np.arange(72), data_original, label="Fully Resolved time series", where="mid", alpha=0.7, linewidth=2)
+        plt.step(np.arange(72), data_kot, label="Aggregated time series", where="mid", color=eth_c.getColor(color="bronze"), linewidth=2)
+        plt.step(np.arange(72), data_original, label="Fully resolved time series", where="mid", alpha=0.7, linewidth=2)
     plt.ylim(ymin,ymax)
     plt.title("Representative days")
     plt.legend()
@@ -577,8 +664,8 @@ def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", star
             linewidth_or = 3
 
         plt.step(np.arange(data_kot.size), data_kot, label="Aggregated time series", where="mid",
-                 color=eth_c.getColor(color="red"), linewidth=linewidth)
-        plt.step(np.arange(data_original.size), data_original, label="Fully Resolved time series", where="mid", alpha=0.7,
+                 color=eth_c.getColor(color="bronze"), linewidth=linewidth)
+        plt.step(np.arange(data_original.size), data_original, label="Fully resolved time series", where="mid", alpha=0.7,
                  linewidth=linewidth_or, color=eth_c.getColor(color="blue"))
         plt.ylim(ymin, ymax)
         plt.title("Representative days")
@@ -605,18 +692,24 @@ def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", star
         linewidth_or = 3
 
     plt.step(np.arange(data_zen.size),data_zen, label="Aggregated time series", where="mid", color=eth_c.getColor(color="red"), linewidth=linewidth)
-    plt.step(np.arange(data_original.size), data_original, label="Fully Resolved time series", where="mid", alpha=0.7, linewidth=linewidth_or, color=eth_c.getColor(color="blue"))
+    plt.step(np.arange(data_original.size), data_original, label="Fully resolved time series", where="mid", alpha=0.7, linewidth=linewidth_or, color=eth_c.getColor(color="blue"))
     plt.ylim(ymin,ymax)
-    plt.title("Representative hours")
+    if zoom:
+        plt.title(f"{rh_title}")
+    else:
+        plt.title("Representative hours")
     plt.legend()
     #plt.rcParams.update(font_params)
     if file_format:
-        plt.savefig(os.path.join(path, f"tree3.svg"), format=file_format)
+        plt.savefig(os.path.join(path, f"tree3{rh_title}.svg"), format=file_format)
     plt.show()
 
 
     # storage level gabrielli rep days
-    storage_level = post_compute_storage_level_kotzur(r, scenario_name=f"scenario_kotzur_{agg_ts}_1")["battery", "BE"][start:end].reset_index(drop=True)
+    if gab == "RD":
+        storage_level = post_compute_storage_level_kotzur(r, scenario_name=f"scenario_kotzur_{agg_ts}_1")["battery", "BE"][start:end].reset_index(drop=True)
+    else:
+        storage_level = r.get_full_ts("storage_level", scenario_name=f"scenario_gabrielli_rep_hours_{agg_ts}_1").T["battery", "BE"][start:end].reset_index(drop=True)
     plt.figure(figsize=(7, 4))
     ymin = min(r.get_full_ts("storage_level_intra", scenario_name=f"scenario_kotzur_{agg_ts}_1").T["battery", "BE"][start:end])
     ymax = max(storage_level)
@@ -628,11 +721,11 @@ def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", star
         for i in [23,47]:
             plt.vlines(x=i+1/2, ymin=ymin, ymax=ymax, color='gray', linestyle='--', alpha=0.7)
         storage_level.plot(marker=".", color="black")
-    plt.title(f"Storage level representation Gabrielli representative days")
+    plt.title(f"Storage level representation Gabrielli {gab}")
     plt.gca().xaxis.set_visible(False)
     plt.gca().yaxis.set_visible(False)
     if file_format:
-        plt.savefig(os.path.join(path, f"tree_Gabrielli representative days.svg"), format=file_format)
+        plt.savefig(os.path.join(path, f"tree_Gabrielli_{gab}.svg"), format=file_format)
     plt.show()
 
     # storage level kotzur
@@ -652,13 +745,13 @@ def kotzur_representation_plot(r, all=True, file_format=None, agg_ts="768", star
 
     if all:
         # Plot the second series in the right subplot (primary y-axis for intra values)
-        storage_level_intra_cut[:24].plot(label='Intra storage level', color=eth_c.getColor("purple"), marker=".")
-        storage_level_intra_cut[24:48].plot(label="", color=eth_c.getColor("purple"), marker=".")
-        storage_level_intra_cut[48:].plot(label="", color=eth_c.getColor("purple"), marker=".")
+        storage_level_intra_cut[:24].plot(label='Intra storage level', color=eth_c.getColor("bronze", shade=60), marker=".")
+        storage_level_intra_cut[24:48].plot(label="", color=eth_c.getColor("bronze", shade=60), marker=".")
+        storage_level_intra_cut[48:].plot(label="", color=eth_c.getColor("bronze", shade=60), marker=".")
         # Create a secondary y-axis for the inter values
-        storage_level_inter_w_self_discharge_cut[:2].plot(label='Inter storage level', color=eth_c.getColor("yellow"), marker=".")
-        storage_level_inter_w_self_discharge_cut[2:4].plot(label="", color=eth_c.getColor("yellow"), marker=".")
-        storage_level_inter_w_self_discharge_cut[4:].plot(label="", color=eth_c.getColor("yellow"), marker=".")
+        storage_level_inter_w_self_discharge_cut[:2].plot(label='Inter storage level', color=eth_c.getColor("grey"), marker=".")
+        storage_level_inter_w_self_discharge_cut[2:4].plot(label="", color=eth_c.getColor("grey"), marker=".")
+        storage_level_inter_w_self_discharge_cut[4:].plot(label="", color=eth_c.getColor("grey"), marker=".")
     for i in [23, 47]:
         plt.vlines(x=i + 1 / 2, ymin=ymin, ymax=ymax, color='gray', linestyle='--', alpha=0.7)
     plt.gca().xaxis.set_visible(False)
@@ -687,14 +780,101 @@ def get_results(dataset, cluster_method=""):
         results.append(Results(path=f"../data/outputs/outputs_euler/{dataset}_multiRepTs_24to8760_{cluster_method}r{run+1}"))
     return results
 
+def kotzur_proof(r, carrier):
+    plt.figure()
+    r.get_full_ts("demand", scenario_name="scenario_kotzur_8760_1").groupby("carrier").sum().T[carrier].groupby(
+        np.arange(8760) // 168).mean().plot(label="8760")
+    r.get_full_ts("demand", scenario_name="scenario_kotzur_6144_1").groupby("carrier").sum().T[carrier].groupby(
+        np.arange(8760) // 168).mean().plot(label="6144")
+    r.get_full_ts("demand", scenario_name="scenario_kotzur_3072_1").groupby("carrier").sum().T[carrier].groupby(
+        np.arange(8760) // 168).mean().plot(label="3072")
+    plt.legend()
+    plt.show()
+
+
+def compute_RMSE(results, rs, rRef, ts_name="all"):
+    """
+
+    """
+    scen, result_name = rs[0], rs[1]
+    r = [r for r in results if r.name == result_name][0]
+    if ts_name == "all":
+        agg_ts = {"demand": {"atts": ["electricity", "heat"], "ind_name": "carrier"},
+              "max_load": {"atts": ["photovoltaics"], "ind_name": "technology"}}
+    elif ts_name == "reduced":
+        agg_ts = {"demand": {"atts": ["electricity"], "ind_name": "carrier"},
+              "max_load": {"atts": ["photovoltaics"], "ind_name": "technology"}}
+    elif ts_name == "electricity":
+        agg_ts = {"demand": {"atts": ["electricity"], "ind_name": "carrier"}}
+    elif ts_name == "heat":
+        agg_ts = {"demand": {"atts": ["heat"], "ind_name": "carrier"}}
+    elif ts_name == "max_load":
+        agg_ts = {"max_load": {"atts": ["photovoltaics"], "ind_name": "technology"}}
+    RMSE_sum = 0
+    for param, specs in agg_ts.items():
+            for att in specs["atts"]:
+                ts_original = rRef.get_full_ts(param).groupby(specs["ind_name"]).sum().T[att]
+                ts_agg = r.get_full_ts(param, scenario_name=scen.name).groupby(specs["ind_name"]).sum().T[att]
+                RMSE_sum += (((ts_original - ts_agg)/ (ts_original.max()-ts_original.min())) ** 2).sum()
+    num_atts = sum(len(val["atts"]) for val in agg_ts.values())
+    num_ts = 8760
+    RMSE = np.sqrt(RMSE_sum / (num_atts * num_ts))
+    return RMSE
+
+def agg_demo_plots(file_format=None):
+    """
+
+    """
+    r = Results(path="../data/outputs/agg_demo_plots")
+
+    agg_ts = {"demand": {"atts": ["electricity", "heat"], "ind_name": "carrier"},
+              "max_load": {"atts": ["photovoltaics"], "ind_name": "technology"}}
+    for param, specs in agg_ts.items():
+            for att in specs["atts"]:
+                ts_original = r.get_full_ts(param, scenario_name="scenario_original")
+                if "capacity_type" in ts_original.index.names:
+                    ts_original = ts_original.droplevel("capacity_type")
+                ts_original = ts_original.T[att, "DE"].squeeze()
+                ymin = ts_original.min() - 0.05 * ts_original.mean()
+                ymax = ts_original.max() + 0.05 * ts_original.mean()
+                plt.figure()
+                plt.ylim(ymin, ymax)
+                for i in range(0, len(ts_original) - 1):
+                    plt.vlines(x=i + 1 / 2, ymin=ymin, ymax=ymax, color='gray', linestyle='-', alpha=0.6, linewidth=0.9)
+                ts_original.plot(linewidth=3)
+                plt.xticks([])
+                plt.yticks([])
+                if file_format:
+                    path = os.path.join(os.getcwd(), "plots")
+                    if not os.path.exists(path):
+                        os.makedirs(path)
+                    plt.savefig(os.path.join(path, f"agg_demo_or_{param}_{att}.svg"), format=file_format)
+                plt.show()
+                ts_agg = r.get_full_ts(param, scenario_name="scenario_")
+                if "capacity_type" in ts_agg.index.names:
+                    ts_agg = ts_agg.droplevel("capacity_type")
+                plt.figure()
+                ts_agg = ts_agg.T[att, "DE"].squeeze()
+                ts_agg.plot(linewidth=3)
+                plt.ylim(ymin, ymax)
+                for i in range(0, len(ts_agg) - 1):
+                    plt.vlines(x=i + 1 / 2, ymin=ymin, ymax=ymax, color='gray', linestyle='-', alpha=0.6, linewidth=0.9)
+                plt.xticks([])
+                plt.yticks([])
+                if file_format:
+                    path = os.path.join(os.getcwd(), "plots")
+                    if not os.path.exists(path):
+                        os.makedirs(path)
+                    plt.savefig(os.path.join(path, f"agg_demo_ag_{param}_{att}.svg"), format=file_format)
+                plt.show()
+
 
 
 if __name__ == "__main__":
     eth_c = ETHColors()
-    r1 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r1")
-    kotzur_representation_plot(r1, agg_ts="768", zoom=35)
-    r2 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r2")
-    r3 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r3")
-    r4 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r4")
-    r5 = Results(path="../data/outputs/outputs_euler/snapshot_multiRepTs_24to8760_r5")
+    r1 = Results(path="../data/outputs/outputs_euler/operation_new_multiRepTs_24to8760_r1")
+    r2 = Results(path="../data/outputs/outputs_euler/operation_new_multiRepTs_24to8760_r2")
+    r3 = Results(path="../data/outputs/outputs_euler/operation_new_multiRepTs_24to8760_r3")
+    r4 = Results(path="../data/outputs/outputs_euler/operation_new_multiRepTs_24to8760_r4")
+    r5 = Results(path="../data/outputs/outputs_euler/operation_new_multiRepTs_24to8760_r5")
     a = 1

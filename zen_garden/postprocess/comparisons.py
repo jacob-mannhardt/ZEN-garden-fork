@@ -273,7 +273,17 @@ def compare_component_values(
     else:
         val_0 = results_0.get_full_ts(component_name, scenario_name=scenario_0)
         val_1 = results_1.get_full_ts(component_name, scenario_name=scenario_1)
+    return _get_comparison_df(val_0, val_1, result_names, component_name, rtol)
 
+def _get_comparison_df(val_0, val_1, result_names, component_name, rtol):
+    """
+    :param val_0:
+    :param val_1:
+    :param result_names:
+    :param component_name:
+    :param rtol:
+    :return:
+    """
     mismatched_index = False
     mismatched_shape = False
     if isinstance(val_0, pd.DataFrame):
@@ -294,7 +304,7 @@ def compare_component_values(
             mismatched_index = True
     else:
         logging.info(
-            f"Component {component_name} changed shape from {val_0.shape} ({results_0.solution_loader.name}) to {val_1.shape} ({results_0.solution_loader.name})"
+            f"Component {component_name} changed shape from {val_0.shape} ({result_names[0]}) to {val_1.shape} ({result_names[1]})"
         )
         mismatched_shape = True
         if not val_0.index.equals(val_1.index):
@@ -305,21 +315,16 @@ def compare_component_values(
         logging.info(
             f"Component {component_name} does not have matching index or columns"
         )
+        missing_index = val_0.index.difference(val_1.index) if len(val_0.index) > len(val_1.index) else val_1.index.difference(val_0.index)
         common_index = val_0.index.intersection(val_1.index)
-        different_index = val_0.index.symmetric_difference(val_1.index)
-        comparison_df_index = pd.concat(
-            [val_0, val_1],
-            keys=result_names,
-            axis=1,
-        ).loc[different_index]
-        comparison_df_index = comparison_df_index.sort_index(axis=1, level=1)
-        val_0 = val_0.loc[common_index]
-        val_1 = val_1.loc[common_index]
-        # if the shape is still not the same, return the full comparison_df
-        if val_1.shape != val_0.shape:
-            mismatched_shape = True
-        else:
-            mismatched_shape = False
+        val_0_aligned = val_0.loc[common_index]
+        val_1_aligned = val_1.loc[common_index]
+        comparison_df_aligned = _get_different_vals(val_0_aligned, val_1_aligned, result_names, rtol)
+        wrong_index = comparison_df_aligned.index.union(missing_index)
+        comparison_df = pd.concat([val_0, val_1], keys=result_names, axis=1)
+        comparison_df = comparison_df.sort_index(axis=1, level=1)
+        comparison_df = comparison_df.loc[wrong_index]
+        return comparison_df
     # if not mismatched_shape:
     if not mismatched_shape:
         comparison_df = _get_different_vals(val_0, val_1, result_names, rtol)

@@ -7,8 +7,9 @@ import json
 import logging
 import os
 from pathlib import Path
-import sys
-import zlib
+
+import numpy as np
+import pint
 from tables import NaturalNameWarning
 import warnings
 import pandas as pd
@@ -28,7 +29,7 @@ class Postprocess:
     """
     Class is defining the postprocessing of the results
     """
-    def __init__(self, model: OptimizationSetup, scenarios, model_name, subfolder=None, scenario_name=None, param_map=None, include_year2operation=True):
+    def __init__(self, optimization_setup: OptimizationSetup, scenarios, model_name, subfolder=None, scenario_name=None, param_map=None, include_year2operation=True):
         """postprocessing of the results of the optimization
 
         :param model: optimization model
@@ -40,18 +41,19 @@ class Postprocess:
         """
         logging.info("--- Postprocess results ---")
         # get the necessary stuff from the model
-        self.model = model.model
+        self.optimization_setup = optimization_setup
+        self.model = optimization_setup.model
         self.scenarios = scenarios
-        self.system = model.system
-        self.analysis = model.analysis
-        self.solver = model.solver
-        self.energy_system = model.energy_system
-        self.params = model.parameters
-        self.vars = model.variables
-        self.sets = model.sets
-        self.constraints = model.constraints
+        self.system = optimization_setup.system
+        self.analysis = optimization_setup.analysis
+        self.solver = optimization_setup.solver
+        self.energy_system = optimization_setup.energy_system
+        self.params = optimization_setup.parameters
+        self.vars = optimization_setup.variables
+        self.sets = optimization_setup.sets
+        self.constraints = optimization_setup.constraints
         self.param_map = param_map
-        self.scaling = model.scaling
+        self.scaling = optimization_setup.scaling
 
         # get name or directory
         self.model_name = model_name
@@ -86,13 +88,16 @@ class Postprocess:
         self.save_analysis()
         self.save_scenarios()
         self.save_solver()
+        self.save_unit_definitions()
         self.save_param_map()
         if self.analysis.save_benchmarking_results:
             self.save_benchmarking_data()
 
         # extract and save sequence time steps, we transform the arrays to lists
         self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict())
-        self.dict_sequence_time_steps["optimized_time_steps"] = model.optimized_time_steps
+        self.dict_sequence_time_steps["optimized_time_steps"] = optimization_setup.optimized_time_steps
+        self.dict_sequence_time_steps["time_steps_operation_duration"] = self.energy_system.time_steps.time_steps_operation_duration
+        self.dict_sequence_time_steps["time_steps_storage_duration"] = self.energy_system.time_steps.time_steps_storage_duration
         if include_year2operation:
             self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
             self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
@@ -149,6 +154,15 @@ class Postprocess:
             with FileLock(f_name + ".lock").acquire(timeout=300):
                 HDFPandasSerializer.serialize_dict(file_name=f_name, dictionary=dictionary, overwrite=self.overwrite)
 
+        elif format == "txt":
+            f_name = f"{name}.txt"
+            f_mode = "w+"
+
+            # write if necessary
+            if self.overwrite or not os.path.exists(f_name):
+                with FileLock(f_name + ".lock").acquire(timeout=300):
+                    with open(f_name, f_mode, encoding="utf-8") as outfile:
+                        outfile.write(dictionary)
         else:
             raise AssertionError(f"The specified output format {format}, chosen in the config, is not supported")
 
@@ -169,10 +183,13 @@ class Postprocess:
         benchmarking_data["scaling_time"] = self.scaling.scaling_time
 
         #get numerical range
-        range_lhs, range_rhs, cond = self.scaling.print_numerics(0, False, True)
+        range_lhs, range_rhs, cond = self.scaling.print_numerics(0, False, True, False)
         benchmarking_data["numerical_range_lhs"] = range_lhs
         benchmarking_data["numerical_range_rhs"] = range_rhs
         benchmarking_data["condition_number"] = cond
+        #for this crossover must be on!
+        #edited out for now as this can be very slow
+        #benchmarking_data["condition_number_gurobi"] = self.model.solver_model.Kappa
 
 
         fname = self.name_dir.joinpath('benchmarking')
@@ -230,10 +247,15 @@ class Postprocess:
     def save_param(self):
         """ Saves the Param values to a json file which can then be
         post-processed immediately or loaded and postprocessed at some other time"""
+        if not self.solver.save_parameters:
+            logging.info("Parameters are not saved")
+            return
 
         # dataframe serialization
         data_frames = {}
         for param in self.params.docs.keys():
+            if self.solver.selected_saved_parameters and param not in self.solver.selected_saved_parameters:
+                continue
             # get the values
             vals = getattr(self.params, param)
             doc = self.params.docs[param]
@@ -264,6 +286,8 @@ class Postprocess:
         # dataframe serialization
         data_frames = {}
         for name, arr in self.model.solution.items():
+            if self.solver.selected_saved_variables and name not in self.solver.selected_saved_variables:
+                continue
             if name in self.vars.docs:
                 doc = self.vars.docs[name]
                 units = self.vars.units[name]
@@ -290,7 +314,8 @@ class Postprocess:
     def save_duals(self):
         """ Saves the dual variable values to a json file which can then be
         post-processed immediately or loaded and postprocessed at some other time"""
-        if not self.solver.add_duals:
+        if not self.solver.save_duals:
+            logging.info("Duals are not saved")
             return
 
         # dataframe serialization
@@ -372,6 +397,27 @@ class Postprocess:
             fname = self.name_dir.joinpath('solver')
         self.write_file(fname, self.solver, format="json")
 
+    def save_unit_definitions(self):
+        """
+        Saves the user-defined units as txt
+        """
+        if self.system.use_rolling_horizon:
+            fname = self.name_dir.parent.joinpath('unit_definitions')
+        else:
+            fname = self.name_dir.joinpath('unit_definitions')
+
+        lines = []
+        ureg = self.energy_system.unit_handling.ureg
+        # Only save user-defined units (skip base units like 'meter')
+        all_units = ureg._units
+        default_units = pint.UnitRegistry()._units
+        user_units = list(set(all_units.items()).difference(default_units.items()))
+        for name, unit in user_units:
+            if hasattr(unit, "raw") and f"{unit.raw}\n" not in lines:
+                lines.append(f"{unit.raw}\n")
+        txt = "".join(lines)
+        self.write_file(fname, txt, format="txt")
+
     def save_param_map(self):
         """
         Saves the param_map dict as yaml
@@ -403,7 +449,18 @@ class Postprocess:
             fname = self.name_dir.parent.joinpath(f'dict_all_sequence_time_steps{add_on}')
         else:
             fname = self.name_dir.joinpath(f'dict_all_sequence_time_steps{add_on}')
-        self.write_file(fname, self.dict_sequence_time_steps)
+        dict_sequence_time_steps = self.dict_sequence_time_steps
+        dict_formatted = {}
+        for k,v in dict_sequence_time_steps.items():
+            if isinstance(v, np.ndarray):
+                dict_formatted[k] = v.tolist()
+            elif isinstance(v, dict):
+                dict_formatted[k] = {str(kk): vv.tolist() if isinstance(vv, np.ndarray) else str(vv) for kk, vv in v.items()}
+            elif isinstance(v, list):
+                dict_formatted[k] = v
+            else:
+                NotImplementedError(f"Type {type(v)} not supported for key {k}")
+        self.write_file(fname, dict_formatted, format="json")
 
     def _transform_df(self, df, doc, units=None):
         """we transform the dataframe to a json string and load it into the dictionary as dict

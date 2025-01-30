@@ -275,7 +275,7 @@ In addition, annual carrier import limits can be applied:
 Similarly, the carrier export :math:`\overline{U}_{c,n,t,y}` is limited by the carrier export availability :math:`\overline{a}_{c,n,t,y}` for all carriers :math:`c\in\mathcal{C}` in all nodes :math:`n\in\mathcal{N}` and time steps :math:`t\in\mathcal{T}`:
 
 .. math::
-    :label: carrier_import
+    :label: carrier_export
 
     0 \leq \overline{U}_{c,n,t,y} \leq \overline{a}_{c,n,t,y}.
 
@@ -390,15 +390,15 @@ The conversion factor :math:`\eta_{i,c,t,y}` describes the ratio between the car
 
 .. math::
 
-    \eta_{i,c,t,y} = \frac{\underline{G}_{c,i,n,t,y}^{\mathrm{d}}{G_{i,n,t,y}^\mathrm{r}}.
+    \eta_{i,c,t,y} = \frac{\underline{G}_{c,i,n,t,y}^{\mathrm{d}}}{G_{i,n,t,y}^\mathrm{r}}.
 
 If the carrier flow is an output carrier, i.e. :math:`c\in\overline{\mathcal{C}}_i`:
 
 .. math::
 
-    \eta_{i,c,t,y} = \frac{\overline{G}_{c,i,n,t,y}^{\mathrm{d}}{G_{i,n,t,y}^\mathrm{r}}.
+    \eta_{i,c,t,y} = \frac{\overline{G}_{c,i,n,t,y}^{\mathrm{d}}}{G_{i,n,t,y}^\mathrm{r}}.
 
-All carrier flows that are not reference carrier flows are called dependent carrier flows :math:`G_{c,i,n,t,y}^{\mathrm{d}`.
+All carrier flows that are not reference carrier flows are called dependent carrier flows :math:`G_{c,i,n,t,y}^{\mathrm{d}}`.
 
 The transport flow losses :math:`F_{j,e,t,y}^\mathrm{l}` through a transport technology :math:`j\in\mathcal{J}` on edge :math:`e\in\mathcal{E}` are expressed by the loss function :math:`\rho_{j,e}` and the transported quantity:
 
@@ -411,14 +411,14 @@ The loss function is described through a linear or an exponential loss factor, :
 .. math::
     :label: transport_flow_loss_linear
 
-    \rho_{j,e} = h_{j,e} \rho^\mathrm{exp}_{j,e}
+    \rho_{j,e} = h_{j,e} \rho^\mathrm{lin}_{j}
 
-For transport technologies where transport flow losses are approximated by an exponential loss factor it follows:
+For transport technologies where transport flow losses are approximated by an exponential loss factor following `Gabrielli et al. (2020) <https://doi.org/10.1016/j.apenergy.2020.115245>`_:
 
 .. math::
     :label: transport_flow_loss_exponential
 
-    \rho_{j,e} =  h_{j,e}^{\rho^\mathrm{exp}_{j,e}}
+    \rho_{j,e} =  1-e^{-h_{j,e} \rho^\mathrm{exp}_{j}}
 
 The flow of the reference carrier :math:`c_h^\mathrm{r}` of all technologies :math:`h\in\mathcal{H}` is constrained by the maximum load :math:`m^\mathrm{max}_{h,p,t,y}` and the installed capacity :math:`S_{h,p,y}`. For conversion technologies :math:`i\in\mathcal{I}`, it follows:
 
@@ -538,7 +538,7 @@ The derivative of Eq. :eq:`storage_level_selfdisch` follows as:
 
     \frac{\mathrm{d}L(t)}{\mathrm{d}t} = \underbrace{\left(L_0-\frac{\Delta H}{1-\kappa}\right)\ln(\kappa)}_{= \text{ constant }\forall t\in[1,\tau^\mathrm{k}_{t^\mathrm{k}}]}\kappa^t.
 
-With :math:`\kappa^t>0`, it follows that \cref{eq:storage_level_simpl} is monotonous for :math:`0<\varphi<1`.
+With :math:`\kappa^t>0`, it follows that Eq. :eq:`storage_level_simpl` is monotonous for :math:`0<\varphi<1`.
 
 Investment constraints
 ----------------------
@@ -677,8 +677,8 @@ Two more constraints are added to ensure that :math:`S^\mathrm{approx}_{h,p,y}` 
 .. math::
     :label: binary_constraint_on
 
-    S^\mathrm{approx}_{i,p,y} \leq S_{i,n,y} \\\\
-    S^\mathrm{approx}_{i,p,y} \geq (1-b_{h,p,t}) M + S_{i,p,t}
+    S^\mathrm{approx}_{i,p,y} \leq S_{i,p,y} \\\\
+    S^\mathrm{approx}_{i,p,y} \geq (1-b_{h,p,t}) M + S_{i,p,y}
 
 where a sufficiently large :math:`M` is selected. Here :math:`M` could be represented by the maximum technology capacity :math:`s^\mathrm{max}_{h,p,y}`.
 

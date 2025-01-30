@@ -35,6 +35,7 @@ class Results:
         self.has_rh = self.solution_loader.has_rh
         first_scenario = next(iter(self.solution_loader.scenarios.values()))
         self.name = Path(first_scenario.analysis.dataset).name
+        self.ureg = first_scenario.ureg
 
     def __str__(self) -> str:
         first_scenario = next(iter(self.solution_loader.scenarios.values()))
@@ -190,6 +191,10 @@ class Results:
         else:
             scenario_names = [scenario_name]
 
+        if component_name not in self.solution_loader.components:
+            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+            return None
+
         component = self.solution_loader.components[component_name]
 
         scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"] = {}
@@ -292,6 +297,10 @@ class Results:
         else:
             scenario_names = [scenario_name]
 
+        if component_name not in self.solution_loader.components:
+            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+            return None
+
         component = self.solution_loader.components[component_name]
 
         scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"] = {}
@@ -364,19 +373,6 @@ class Results:
                 interval_between_years_this_year = 1
             else:
                 interval_between_years_this_year = system.interval_between_years
-            # if self.solution_loader.has_rh:
-            #     if discount_to_first_step:
-            #         annuity[year] = interval_between_years_this_year * (
-            #             1 / (1 + discount_rate)
-            #         )
-            #     else:
-            #         annuity[year] = sum(
-            #             ((1 / (1 + discount_rate)) ** (_intermediate_time_step))
-            #             for _intermediate_time_step in range(
-            #                 0, interval_between_years_this_year
-            #             )
-            #         )
-            # else:
             if discount_to_first_step:
                 annuity[year] = interval_between_years_this_year * (
                     (1 / (1 + discount_rate))
@@ -416,7 +412,7 @@ class Results:
         :param keep_raw: Keep the raw values of the rolling horizon optimization
         :return: Duals of the component
         """
-        if not self.get_solver(scenario_name=scenario_name).add_duals:
+        if not self.get_solver(scenario_name=scenario_name).save_duals:
             logging.warning("Duals are not calculated. Skip.")
             return None
 
@@ -440,6 +436,7 @@ class Results:
         component_name: str,
         scenario_name: Optional[str] = None,
         droplevel: bool = True,
+        is_total: bool = True,
     ) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
         """
         Extracts the unit of a given Component. If no scenario is given, a random one is taken.
@@ -472,6 +469,22 @@ class Results:
             else:
                 units.index = units.index.droplevel(drop_idx.to_list())
                 units = units[~units.index.duplicated()]
+        # convert to pint units
+        for i in units.index:
+            try:
+                u = units[i]
+                u = self.ureg.parse_expression(u)
+                if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+                    u = u * self.ureg.h
+                units[i] = f"{u.u:~D}"
+            # if the unit is not in the pint registry, change the string manually (normally, when the unit_definition.txt is not saved)
+            except Exception:
+                if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+                    if units[i].endswith(" / hour"):
+                        units[i] = units[i].replace(" / hour", "")
+                    else:
+                        units[i] = f"{units[i]} * hour"
+
         return units
 
     def get_system(self, scenario_name: Optional[str] = None) -> System:

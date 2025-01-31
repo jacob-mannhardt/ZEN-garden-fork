@@ -63,11 +63,11 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
     input_data_checks.check_technology_selections()
     input_data_checks.check_year_definitions()
     # overwrite default system and scenario dictionaries
-    scenarios,elements = ScenarioUtils.get_scenarios(config,job_index)
+    scenarios, elements = ScenarioUtils.get_scenarios(config, job_index)
     # get the name of the dataset
-    model_name, out_folder = StringUtils.setup_model_folder(config.analysis,config.system)
+    model_name, out_folder = StringUtils.setup_model_folder(config.analysis, config.system)
     # clean sub-scenarios if necessary
-    ScenarioUtils.clean_scenario_folder(config,out_folder)
+    ScenarioUtils.clean_scenario_folder(config, out_folder)
     ### ITERATE THROUGH SCENARIOS
     for scenario, scenario_dict in zip(scenarios, elements):
         # FORMULATE THE OPTIMIZATION PROBLEM
@@ -90,9 +90,9 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
             optimization_setup.overwrite_time_indices(step)
             # create optimization problem
             optimization_setup.construct_optimization_problem()
-            if config.solver.use_scaling:
+            if optimization_setup.solver.use_scaling:
                 optimization_setup.scaling.run_scaling()
-            elif config.solver.analyze_numerics:
+            elif optimization_setup.solver.analyze_numerics:
                 optimization_setup.scaling.analyze_numerics()
             # SOLVE THE OPTIMIZATION PROBLEM
             optimization_setup.solve()
@@ -101,7 +101,7 @@ def main(config, dataset_path=None, job_index=None, folder_output_path=None):
                 # write IIS
                 optimization_setup.write_IIS()
                 raise OptimizationError(optimization_setup.model.termination_condition)
-            if config.solver.use_scaling:
+            if optimization_setup.solver.use_scaling:
                 optimization_setup.scaling.re_scale()
             # EVALUATE RESULTS
             # create scenario name, subfolder and param_map for postprocessing

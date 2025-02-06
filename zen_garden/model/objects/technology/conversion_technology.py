@@ -276,7 +276,8 @@ class ConversionTechnology(Technology):
         # conversion factor
         rules.constraint_carrier_conversion()
         # renewable capacity target
-        rules.constraint_renewable_capacity_target()
+        if not optimization_setup.fs_type_operation:
+            rules.constraint_renewable_capacity_target()
         # renewable production target
         if (optimization_setup.system.renewables_gen_targets != {} and
                 len(optimization_setup.system.renewables_gen_targets) > 0):

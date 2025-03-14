@@ -7,6 +7,7 @@ Key;Type;Default Value;Description
 ``use_capacities_existing``;``bool``;``True``;per default a brownfield optimization is conducted, by setting this parameter to ``False`` existing technology capacities are ignored and a greenfield optimization is conducted
 ``double_capex_transport``;``bool``;``False``;per default the capex for transport is not separated into the capacity- and the distance-dependent term, as this introduces binary variables
 ``set_nodes``;``list[str]``;``[]``;per default all nodes are selected, however, by overwriting the empty list value you can conduct the optimization for a subset of subset of nodes
+``coords``;dict[str, dict[str, float]];``{}``;dictionary with the coordinates of the nodes, is filled by ZEN-garden
 ``unaggregated_time_steps_per_year``;``int``;``8760``;per default the total hours per year are set to 8760, overwrite this parameter if you want to investigate a shorter period
 ``conduct_time_series_aggregation``;``bool``;``False``;per default the time-series-aggregation is not conducted, set to ``True`` to enable the timeseries aggregation
 ``total_hours_per_year``;``int``;``8760``;defines the definition of a year. Do not change this value unless you know what you are doing
@@ -23,5 +24,6 @@ Key;Type;Default Value;Description
 ``set_transport_technologies_loss_exponential``;``list[str]``;``[]``;list of transport technologies for which exponential transport loss function is used
 ``double_capex_transport``;``bool``;``False``;per default only distance dependent capital expenditures are applied to transport tech, if true, apply both fix capital expenditures (capex) and distance dependent capex to installation of transport technologies
 ``storage_periodicity``;``bool``;``True``;enable storage periodicity
+``multiyear_periodicity``;``bool``;``False``;enable storage periodicity over multiple years
 ``exclude_parameters_from_TSA``;``bool``;``True``;exclude selected parameters from the timeseries aggregation
 ``knowledge_depreciation_rate``;``float``;``0.1``;knowledge deprecation rate to be used in the technology expansion constraint

@@ -17,7 +17,6 @@ import xarray as xr
 import shutil
 from copy import deepcopy
 from pathlib import Path
-import tables
 
 def setup_logger(level=logging.INFO):
     """ set up logger
@@ -112,6 +111,153 @@ def copy_dataset_example(example):
         logging.warning("Example jupyter notebook could not be downloaded from the dataset examples!")
     logging.info(f"Example dataset {example} downloaded to {local_example_path}")
     return local_example_path, os.path.join(local_dataset_path, "config.json")
+
+
+# linopy helpers
+# --------------
+
+def lp_sum(exprs, dim='_term'):
+    """Sum of linear expressions with lp.expressions.merge, returns 0 if list is emtpy
+
+    :param exprs: The expressions to sum
+    :param dim: Along which dimension to merge
+    :return: The sum of the expressions
+    """
+
+    # emtpy sum
+    if len(exprs) == 0:
+        return 0
+    # no sum
+    if len(exprs) == 1:
+        return exprs[0]
+    # normal sum
+    return lp.expressions.merge(exprs, dim=dim)
+
+
+def align_like(da, other, fillna=0.0, astype=None):
+    """Aligns a data array like another data array
+
+    :param da: The data array to align
+    :param other: The data array to align to
+    :param fillna: The value to fill na values with
+    :param astype: The type to cast the data array to
+    :return: The aligned data array
+    """
+    if isinstance(other, lp.Variable):
+        other = other.lower
+    elif isinstance(other, lp.LinearExpression):
+        other = other.const
+    elif isinstance(other, xr.DataArray):
+        other = other
+    else:
+        raise TypeError(f"other must be a Variable, LinearExpression or DataArray, not {type(other)}")
+    da = xr.align(da, other, join="right")[0]
+    da = da.broadcast_like(other)
+    if fillna is not None:
+        da = da.fillna(fillna)
+    if astype is not None:
+        da = da.astype(astype)
+    return da
+
+
+def linexpr_from_tuple_np(tuples, coords, model):
+    """Transforms tuples of (coeff, var) into a linopy linear expression, but uses numpy broadcasting
+
+    :param tuples: Tuple of (coeff, var)
+    :param coords: The coordinates of the final linear expression
+    :param model: The model to which the linear expression belongs
+    :return: A linear expression
+    """
+
+    # get actual coords
+    if not isinstance(coords, xr.core.dataarray.DataArrayCoordinates):
+        coords = xr.DataArray(coords=coords).coords
+
+    # numpy stack everything
+    coefficients = []
+    variables = []
+    for coeff, var in tuples:
+        var = var.labels.data
+        if isinstance(coeff, (float, int)):
+            coeff = np.full(var.shape, 1.0 * coeff)
+        coefficients.append(coeff)
+        variables.append(var)
+
+    # to linear expression
+    variables = xr.DataArray(np.stack(variables, axis=0), coords=coords, dims=["_term", *coords])
+    coefficients = xr.DataArray(np.stack(coefficients, axis=0), coords=coords, dims=["_term", *coords])
+    xr_ds = xr.Dataset({"coeffs": coefficients, "vars": variables}).transpose(..., "_term")
+
+    return lp.LinearExpression(xr_ds, model)
+
+
+def xr_like(fill_value, dtype, other, dims):
+    """Creates an xarray with fill value and dtype like the other object but only containing the given dimensions
+
+    :param fill_value: The value to fill the data with
+    :param dtype: dtype of the data
+    :param other: The other object to use as base
+    :param dims: The dimensions to use
+    :return: An object like the other object but only containing the given dimensions
+    """
+
+    # get the coords
+    coords = {}
+    for dim in dims:
+        coords[dim] = other.coords[dim]
+
+    # create the data array
+    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords,
+                      dims=dims)
+
+    # return
+    return da
+
+def reformat_slicing_index(index, component) -> tuple[str]:
+        """ reformats the slicing index to a tuple of strings that is readable by pytables
+        :param index: slicing index of the resulting dataframe
+        :param component: component for which the index is reformatted
+        :return: reformatted index
+        """
+        if index is None:
+            return tuple()
+        index_names = component.index_names
+        if isinstance(index, str) or isinstance(index, float) or isinstance(index, int):
+            index_name = index_names[0]
+            ref_index = (f"{index_name} == {index}",)
+        elif isinstance(index, list):
+            index_name = index_names[0]
+            ref_index = (f"{index_name} in {index}",)
+        elif isinstance(index, dict):
+            ref_index = []
+            for key, value in index.items():
+                if key not in index_names:
+                    logging.warning(f"Invalid index name '{key}' in index. Skipping.")
+                    continue
+                if isinstance(value, list):
+                    ref_index.append(f"{key} in {value}")
+                else:
+                    ref_index.append(f"{key} == {value}")
+            ref_index = tuple(ref_index)
+        elif isinstance(index, tuple):
+            ref_index = []
+            if len(index) > len(index_names):
+                logging.warning(f"Index length {len(index)} is longer than the number of index dimensions {len(index_names)}. Check selected index.")
+            for i, index_name in enumerate(index_names):
+                if i >= len(index):
+                    break
+                if index[i] is None:
+                    continue
+                elif isinstance(index[i], list):
+                    ref_index.append(f"{index_name} in {index[i]}")
+                else:
+                    ref_index.append(f"{index_name} == {index[i]}")
+            ref_index = tuple(ref_index)
+        else:
+            logging.warning(f"Invalid index type {type(index)}. Skipping.")
+            ref_index = tuple()
+
+        return ref_index
 
 # This functionality is for the IIS constraints
 # ---------------------------------------------
@@ -312,8 +458,9 @@ class ScenarioDict(dict):
     This is a dictionary for the scenario analysis that has some convenience functions
     """
 
-    _param_dict_keys = {"file", "file_op", "default", "default_op"}
-    _special_elements = ["system", "analysis", "solver", "base_scenario", "sub_folder", "param_map"]
+    _param_dict_keys = {"file", "file_op", "default", "default_op", "value"}
+    _special_elements = ["base_scenario", "sub_folder", "param_map"]
+    _setting_elements = ["system", "analysis", "solver"]
 
     def __init__(self, init_dict, optimization_setup, paths):
         """Initializes the dictionary from a normal dictionary
@@ -415,8 +562,18 @@ class ScenarioDict(dict):
             # we do not expand these
             if element in ScenarioDict._special_elements:
                 continue
+            # check for dict items in settings elements
+            # if element in ScenarioDict._setting_elements and dict not in [type(v) for v in element_dict.values()]:
+            #     continue
 
+            # check for 'system' analysis' and 'solver' keys and see whether they are dicts and have a list in them,
+            # on ly then do the list expansion, otherwise proceed as always.
             for param, param_dict in sorted(element_dict.items(), key=lambda x: x[0]):
+                if element in ScenarioDict._setting_elements:
+                    if not isinstance(param_dict, dict):
+                        continue
+                    elif isinstance(param_dict, dict) and not isinstance(param_dict['value'], list):
+                        scenario[element][param] = param_dict['value']
                 for key in sorted(ScenarioDict._param_dict_keys):
                     if key in param_dict and isinstance(param_dict[key], list):
                         # get the old param dict entry
@@ -431,7 +588,10 @@ class ScenarioDict(dict):
                             new_scenario = deepcopy(scenario)
 
                             # set the new value
-                            new_scenario[element][param][key] = value
+                            if element in ScenarioDict._setting_elements:
+                                new_scenario[element][param] = value
+                            else:
+                                new_scenario[element][param][key] = value
 
                             # create the name
                             if key + "_fmt" in param_dict:
@@ -440,7 +600,8 @@ class ScenarioDict(dict):
                                                       "placeholder '{}' for its value! No placeholder found in "
                                                       f"for {key} in {param} in {element} in {scenario['base_scenario']}")
                                 name = param_dict[key + "_fmt"].format(value)
-                                del new_scenario[element][param][key + "_fmt"]
+                                if element not in ScenarioDict._setting_elements:
+                                    del new_scenario[element][param][key + "_fmt"]
                                 # we don't need to increment the param for the next expansion
                                 param_up = 0
                             else:
@@ -460,7 +621,10 @@ class ScenarioDict(dict):
                                 param_map[new_scenario["sub_folder"]][element] = dict()
                             if param not in param_map[new_scenario["sub_folder"]][element]:
                                 param_map[new_scenario["sub_folder"]][element][param] = dict()
-                            param_map[new_scenario["sub_folder"]][element][param][key] = value
+                            if element in ScenarioDict._setting_elements:
+                                param_map[new_scenario["sub_folder"]][element][param] = value
+                            else:
+                                param_map[new_scenario["sub_folder"]][element][param][key] = value
 
                             # set the param_map of the scenario
                             new_scenario["param_map"] = param_map
@@ -520,7 +684,7 @@ class ScenarioDict(dict):
         """
 
         for element, element_dict in vali_dict.items():
-            if element in self._special_elements:
+            if element in self._special_elements or element in self._setting_elements:
                 continue
 
             if not isinstance(element_dict, dict):
@@ -562,7 +726,7 @@ class ScenarioDict(dict):
             default_f_name = param_dict.get("default", default_f_name)
             default_f_name = self.validate_file_name(default_f_name)
             default_factor = param_dict.get("default_op", default_factor)
-            self._check_if_numeric_default_factor(default_factor,element=element,param=param,default_f_name=default_f_name,op_type="default_op")
+            self._check_if_numeric_default_factor(default_factor, element=element, param=param, default_f_name=default_f_name, op_type="default_op")
 
         return default_f_name, default_factor
 
@@ -584,228 +748,17 @@ class ScenarioDict(dict):
             default_f_name = param_dict.get("file", default_f_name)
             default_f_name = self.validate_file_name(default_f_name)
             default_factor = param_dict.get("file_op", default_factor)
-            self._check_if_numeric_default_factor(default_factor,element=element,param=param,default_f_name=default_f_name,op_type="file_op")
+            self._check_if_numeric_default_factor(default_factor, element=element, param=param, default_f_name=default_f_name, op_type="file_op")
 
         return default_f_name, default_factor
 
-    def _check_if_numeric_default_factor(self, default_factor,element,param,default_f_name,op_type):
+    def _check_if_numeric_default_factor(self, default_factor, element, param, default_f_name, op_type):
         """Check if the default factor is numeric
 
         :param default_factor: The default factor to check
         """
         if not isinstance(default_factor, (int, float)):
             raise ValueError(f"Default factor {default_factor} of type {type(default_factor)} in {op_type} ({element} -> {param} -> {default_f_name}) is not numeric!")
-
-# linopy helpers
-# --------------
-
-def lp_sum(exprs, dim='_term'):
-    """Sum of linear expressions with lp.expressions.merge, returns 0 if list is emtpy
-
-    :param exprs: The expressions to sum
-    :param dim: Along which dimension to merge
-    :return: The sum of the expressions
-    """
-
-    # emtpy sum
-    if len(exprs) == 0:
-        return 0
-    # no sum
-    if len(exprs) == 1:
-        return exprs[0]
-    # normal sum
-    return lp.expressions.merge(exprs, dim=dim)
-
-
-def align_like(da, other, fillna=0.0, astype=None):
-    """Aligns a data array like another data array
-
-    :param da: The data array to align
-    :param other: The data array to align to
-    :param fillna: The value to fill na values with
-    :param astype: The type to cast the data array to
-    :return: The aligned data array
-    """
-    if isinstance(other, lp.Variable):
-        other = other.lower
-    elif isinstance(other, lp.LinearExpression):
-        other = other.const
-    elif isinstance(other, xr.DataArray):
-        other = other
-    else:
-        raise TypeError(f"other must be a Variable, LinearExpression or DataArray, not {type(other)}")
-    da = xr.align(da, other, join="right")[0]
-    da = da.broadcast_like(other)
-    if fillna is not None:
-        da = da.fillna(fillna)
-    if astype is not None:
-        da = da.astype(astype)
-    return da
-
-
-def linexpr_from_tuple_np(tuples, coords, model):
-    """Transforms tuples of (coeff, var) into a linopy linear expression, but uses numpy broadcasting
-
-    :param tuples: Tuple of (coeff, var)
-    :param coords: The coordinates of the final linear expression
-    :param model: The model to which the linear expression belongs
-    :return: A linear expression
-    """
-
-    # get actual coords
-    if not isinstance(coords, xr.core.dataarray.DataArrayCoordinates):
-        coords = xr.DataArray(coords=coords).coords
-
-    # numpy stack everything
-    coefficients = []
-    variables = []
-    for coeff, var in tuples:
-        var = var.labels.data
-        if isinstance(coeff, (float, int)):
-            coeff = np.full(var.shape, 1.0 * coeff)
-        coefficients.append(coeff)
-        variables.append(var)
-
-    # to linear expression
-    variables = xr.DataArray(np.stack(variables, axis=0), coords=coords, dims=["_term", *coords])
-    coefficients = xr.DataArray(np.stack(coefficients, axis=0), coords=coords, dims=["_term", *coords])
-    xr_ds = xr.Dataset({"coeffs": coefficients, "vars": variables}).transpose(..., "_term")
-
-    return lp.LinearExpression(xr_ds, model)
-
-
-def xr_like(fill_value, dtype, other, dims):
-    """Creates an xarray with fill value and dtype like the other object but only containing the given dimensions
-
-    :param fill_value: The value to fill the data with
-    :param dtype: dtype of the data
-    :param other: The other object to use as base
-    :param dims: The dimensions to use
-    :return: An object like the other object but only containing the given dimensions
-    """
-
-    # get the coords
-    coords = {}
-    for dim in dims:
-        coords[dim] = other.coords[dim]
-
-    # create the data array
-    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords,
-                      dims=dims)
-
-    # return
-    return da
-
-
-# This is to lazy load h5 file most of it is taken from the hdfdict package
-###########################################################################
-
-class HDFPandasSerializer:
-    """
-    This class saves dictionaries with a pandas store as a hdf file.
-    """
-
-    def __init__(self):
-        """
-        Initializes the class to read a hdf file, potentially lazily. For writing files, use the classmethod
-        "serialize_dict".
-
-        """
-
-        raise NotImplementedError("The HDFPandasSerializer class constructor is not used and so also not implemented. If you arrive here, something went wrong. Please contact the developers.")
-
-    @classmethod
-    def _recurse(cls, store, dictionary, previous_key=""):
-        """
-        Recursively saves the dictionary into the store.
-
-        :param store: The store to save the dictionary into.
-        :param dictionary: The dictionary to save.
-        :param previous_key: The key of the dictionary.
-        """
-
-        for key, value in dictionary.items():
-            if not isinstance(key, str):
-                raise TypeError("All dictionary keys must be strings!")
-            key = f"{previous_key}/{key}"
-            if isinstance(value, dict):
-                input_dict, docstring, has_units = cls._format_dict(value)
-                if not input_dict["dataframe"].empty:
-                    store.put(key, input_dict["dataframe"], format='fixed',data_columns=True)
-                    # add additional attributes
-                    store.get_storer(key).attrs.docstring = docstring
-                    store.get_storer(key).attrs["name"] = key
-                    store.get_storer(key).attrs["has_units"] = has_units
-                    index_names = input_dict["dataframe"].index.names
-                    index_names = ",".join([str(name) for name in index_names])
-                    store.get_storer(key).attrs["index_names"] = index_names
-                    # remove "_i_table" to reduce file size
-                    try:
-                        store.remove(key + "/_i_table")
-                    except KeyError:
-                        pass
-            else:
-                raise TypeError(f"Type {type(value)} is not supported.")
-
-    @classmethod
-    def serialize_dict(cls, file_name, dictionary, overwrite=True,complevel=4,complib="blosc"):
-        """
-        Serialized a dictionary of dataframes and other objects into a hdf file.
-
-        :param file_name: The file name of the hdf file.
-        :param dictionary: The dictionary to serialize
-        :param overwrite: If True, the file will be overwritten.
-        """
-
-        if not overwrite and os.path.exists(file_name):
-            raise FileExistsError("File already exists. Please set overwrite=True to overwrite the file.")
-        with pd.HDFStore(file_name, mode='w') as store:
-            cls._recurse(store, dictionary)
-        # use ptrepack to reduce file size
-        try:
-            tmp_file = file_name.split(".h5")[0] + "_tmp.h5"
-            tmp_file = Path(tmp_file)
-            file = Path(file_name)
-            tmp_file = tmp_file.relative_to(Path(os.getcwd()))
-            file = file.relative_to(Path(os.getcwd()))
-            os.system(f"ptrepack --chunkshape=auto --propindexes --complevel={complevel} --complib={complib} {file} {tmp_file}")
-            os.remove(file_name)
-            os.rename(tmp_file, file_name)
-        except:
-            pass
-
-    @staticmethod
-    def _format_dict(input_dict):
-        """ format the dictionary to be saved in the hdf file
-        :param input_dict: The dictionary to format
-        """
-        expected_keys = ["dataframe", "docstring"]
-        if "dataframe" in input_dict:
-            df = input_dict["dataframe"]
-            if not isinstance(df, pd.Series):
-                if df.shape[1]:
-                    df = df.squeeze(axis=1)
-                else:
-                    a=1
-            input_dict["dataframe"] = df
-        if "docstring" in input_dict:
-            docstring = input_dict["docstring"]
-        else:
-            docstring = None
-        if "units" in input_dict:
-            units = input_dict["units"]
-            assert isinstance(units, pd.Series), f"Units must be a pandas Series, but is {type(units)}"
-            df = input_dict["dataframe"]
-            assert units.index.intersection(df.index).equals(units.index), f"Units index {units.index} does not match dataframe index {df.index}"
-            units.name = "units"
-            df = pd.concat([df, units], axis=1)
-            input_dict["dataframe"] = df
-            has_units = True
-        else:
-            has_units = False
-        if not (set(input_dict.keys()) == set(expected_keys) or set(input_dict.keys()) == set(expected_keys).union(["units"])):
-            raise ValueError(f"Expected keys are {expected_keys}, but got {input_dict.keys()}")
-        return input_dict, docstring, has_units
 
 class InputDataChecks:
     """
@@ -1097,7 +1050,10 @@ class StringUtils:
                 pass
         out_folder = cls.get_output_folder(analysis)
         if not os.path.exists(out_folder):
-            os.mkdir(out_folder)
+            try:
+                os.mkdir(out_folder)
+            except FileExistsError:
+                pass
         else:
             logging.warning(f"The output folder '{out_folder}' already exists")
             if analysis.overwrite_output:

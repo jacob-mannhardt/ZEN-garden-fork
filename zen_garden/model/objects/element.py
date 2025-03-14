@@ -86,8 +86,9 @@ class Element:
         t_start = time.perf_counter()
         cls.construct_sets(optimization_setup)
         t1 = time.perf_counter()
-        logging.info(f"Time to construct Sets: {t1 - t_start:0.1f} seconds")
-        logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
+        if optimization_setup.solver.run_diagnostics:
+            logging.info(f"Time to construct Sets: {t1 - t_start:0.1f} seconds")
+            logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
         # construct Params
         t0 = time.perf_counter()
         # cp = cProfile.Profile()
@@ -96,24 +97,28 @@ class Element:
         # cp.disable()
         # cp.print_stats(sort='cumtime')
         t1 = time.perf_counter()
-        logging.info(f"Time to construct Params: {t1 - t0:0.1f} seconds")
-        logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
+        if optimization_setup.solver.run_diagnostics:
+            logging.info(f"Time to construct Params: {t1 - t0:0.1f} seconds")
+            logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
         # construct Vars
         t0 = time.perf_counter()
         cls.construct_vars(optimization_setup)
         t1 = time.perf_counter()
-        logging.info(f"Time to construct Vars: {t1 - t0:0.1f} seconds")
-        logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
+        if optimization_setup.solver.run_diagnostics:
+            logging.info(f"Time to construct Vars: {t1 - t0:0.1f} seconds")
+            logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
         # construct Constraints
         t0 = time.perf_counter()
         cls.construct_constraints(optimization_setup)
         t1 = time.perf_counter()
-        logging.info(f"Time to construct Constraints: {t1 - t0:0.1f} seconds")
-        logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
+        if optimization_setup.solver.run_diagnostics:
+            logging.info(f"Time to construct Constraints: {t1 - t0:0.1f} seconds")
+            logging.info(f"Memory usage: {psutil.Process(pid).memory_info().rss / 1024 ** 2:0.1f} MB")
         # construct Objective
         optimization_setup.energy_system.construct_objective()
         t_end = time.perf_counter()
-        logging.info(f"Total time to construct model components: {t_end - t_start:0.1f} seconds")
+        if optimization_setup.solver.run_diagnostics:
+            logging.info(f"Total time to construct model components: {t_end - t_start:0.1f} seconds")
 
     @classmethod
     def construct_sets(cls, optimization_setup):
@@ -408,3 +413,32 @@ class GenericRule(object):
         mask = xr.align(mask, aligner, join="right")[0]
         expr = expr.where(mask)
         return expr
+
+    def get_flow_expression_conversion(self,techs, nodes, factor=None, rename=False):
+        """ return the flow expression for conversion technologies """
+        reference_flows = []
+        for t in techs:
+            rc = self.sets["set_reference_carriers"][t][0]
+            if factor is not None:
+                mult = factor.loc[t, nodes]
+            else:
+                mult = 1
+            # TODO can we avoid the indexing here?
+            if rc in self.sets["set_input_carriers"][t]:
+                reference_flows.append(mult * self.variables["flow_conversion_input"].loc[t, rc, nodes, :])
+            else:
+                reference_flows.append(mult * self.variables["flow_conversion_output"].loc[t, rc, nodes, :])
+        if rename:
+            term_reference_flow = lp.merge(reference_flows, dim="set_technologies").rename(
+                {"set_nodes": "set_location"})
+        else:
+            term_reference_flow = lp.merge(reference_flows, dim="set_conversion_technologies")
+        return term_reference_flow
+
+    def get_flow_expression_storage(self,rename=True):
+        """ return the flow expression for storage technologies """
+        term = (self.variables["flow_storage_charge"] + self.variables["flow_storage_discharge"])
+        if rename:
+            return term.rename({"set_storage_technologies": "set_technologies", "set_nodes": "set_location"})
+        else:
+            return term

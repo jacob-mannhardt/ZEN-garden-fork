@@ -1,11 +1,16 @@
+.. _Configurations:
+
 ################
 Configurations
 ################
+
 .. _System, analysis, solver settings:
+
 System, analysis, solver settings
-========
+=================================
 
 .. _system:
+
 System
 ------
 
@@ -31,8 +36,9 @@ To reduce the complexity, timeseries aggregation can be used (``conduct_time_ser
 Per default, the number of timesteps is reduced to 10 (``aggregated_time_steps_per_year``). :ref:`Time series aggregation and representation` and :ref:`time_parameters` provide a detailed description of the time representation and the time parameters.
 
 .. _analysis:
+
 Analysis
--------
+--------
 
 The dataset, the objective function and the solver are selected in the ``analysis.json``. The following table summarizes the settings of the ``analysis.json`` and their default values:
 
@@ -42,7 +48,7 @@ The dataset, the objective function and the solver are selected in the ``analysi
     :widths: 10 10 10 20
     :delim: ;
 
-The settings of the timeseries aggregation algorithm are also specified in the ``analysis.json``. The following table summarizes the available timeseries aggregation settings and their default values. For further information on how to use the timeseries aggregation, see :ref:`use_tsa`. In addition, :ref:`Time series aggregation and representation` and :ref:`time_parameters` provide helpful information on the time representation and the time parameters in ZEN-garden.
+The settings of the timeseries aggregation algorithm are also specified in the ``analysis.json``. The following table summarizes the available timeseries aggregation settings and their default values. For further information on how to use the timeseries aggregation, see :ref:`using_the_tsa`. In addition, :ref:`Time series aggregation and representation` and :ref:`time_parameters` provide helpful information on the time representation and the time parameters in ZEN-garden.
 
 .. csv-table:: Timeseries Aggregation Settings
     :header-rows: 1
@@ -51,6 +57,7 @@ The settings of the timeseries aggregation algorithm are also specified in the `
     :delim: ;
 
 .. _solver:
+
 Solver
 ------
 
@@ -64,11 +71,21 @@ Solver settings are also specified in the ``analysis.json``. The following table
 
 Per default the open-source solver `HiGHS <https://highs.dev/>`_ is used. You can change the solver by modifying the ``solver`` key. Solver-specific settings are passed via the ``solver_settings``. Please refer to the solver documentation for the available solver settings for the solver that you are using.
 
-For linear optimization problems, the dual variables can be computed by selecting ``duals=True``. You can analyze the numerics of your optimization problem via ``analyze_numerics`` and get recommendations on how to improve the selection of your base units ``recommend_base_units``. In addition, a scaling algorithm is available. Per default, four iterations of the scaling algorithm are conducted without including the values of the right-hand-side. :ref:`Scaling` provides a detailed description of the scaling algorithm.
+For linear optimization problems, the dual variables can be computed and saved by selecting ``save_duals=True``. Saving the duals helps understand the optimality of the solution, but it also strongly increases the file size of the output files.
+The parameters of the optimization problem can be saved by selecting ``save_parameters=True``. If you only want to save specific parameters, you can specify them in the ``selected_saved_parameters`` list. The same applies to the variables, which can be specified in the ``selected_saved_variables`` list.
+
+.. note::
+
+    Non-selected parameters and variables are not saved. We recommend to only use the option to skip saving parameters and variables if you are sure that you do not need them.
+    The visualization platform may not work properly if you do not save the parameters and variables.
+
+You can analyze the numerics of your optimization problem via ``analyze_numerics``.
+In addition, a scaling algorithm is available. Per default, four iterations of the scaling algorithm are conducted without including the values of the right-hand-side. :ref:`Scaling` provides a detailed description of the scaling algorithm.
 
 .. _Time series aggregation and representation:
+
 Time series aggregation and representation
-========
+==========================================
 Time steps in ZEN-garden
 ------------------------
 ZEN-garden is a temporally resolved investment and operation optimization model. That means that in general we have three different time indices:
@@ -78,6 +95,7 @@ ZEN-garden is a temporally resolved investment and operation optimization model.
 3. ``set_time_steps_operation``: The operation of built capacities is resolved on a higher resolution than the yearly time steps. For the technologies and the carriers, this is the index ``set_time_steps_operation``.
 
 .. _time_parameters:
+
 The time parameters in ZEN-garden
 ---------------------------------
 
@@ -137,11 +155,35 @@ Disabling the time series aggregation
 Open the ``system.json`` file and set ``"conduct_time_series_aggregation"=False``. This disables the time series aggregation. If you do not want to investigate a full year, set ``"unaggregated_time_steps_per_year"<8760``
 
 .. _using_the_tsa:
+
 Using time series aggregation
 -------------------------------------------------------
 
 Open the ``system.json`` file and set ``"aggregated_time_steps_per_year"`` smaller than ``"unaggregated_time_steps_per_year"``. You are then aggregating ``"unaggregated_time_steps_per_year"`` (e.g., 8760 base time steps) to ``"aggregated_time_steps_per_year"`` (e.g., 200 representative time steps).
 If you mistakingly set ``"aggregated_time_steps_per_year">"unaggregated_time_steps_per_year"``, don't worry, the TSA is disabled and it behaves as if ``"aggregated_time_steps_per_year"="unaggregated_time_steps_per_year"``.
+
+Additionally, you can exclude parameters for specific elements from the clustering process. This is useful if you have time series that should not influence the clustering process. This could, for example, a helper time series to artificially decrease the capacity factor of a technology.
+To exclude parameters from the TSA, create a csv file named ``exclude_parameter_from_TSA.csv`` in the ``energy_system`` folder. In this file, you can specify the elements and parameters that should be excluded from the TSA.
+For example, you can exclude the parameter ``availability_import`` for the element ``natural_gas`` by adding the following line to the ``exclude_parameter_from_TSA.csv`` file:
+
+.. code-block::
+
+    element,parameter
+    natural_gas,availability_import
+
+If you want to exclude the parameter of all elements of a class, e.g., ``set_technologies``, you can use the class name as the element. For example, to exclude the parameter ``max_load`` for all technologies, add the following line to the ``exclude_parameter_from_TSA.csv`` file:
+
+.. code-block::
+
+    element,parameter
+    set_technologies,max_load
+
+Furthermore, you can exclude all parameters for a specific element by setting the parameter to ``nan``. For example, to exclude all parameters for the element ``natural_gas_boiler``, add the following line to the ``exclude_parameter_from_TSA.csv`` file:
+
+.. code-block::
+
+    element,parameter
+    natural_gas_boiler,nan
 
 For an in-depth introduction to TSA, refer to `Hoffmann et al. 2020 <https://www.mdpi.com/1996-1073/13/3/641>`_. The authors at FZ Jülich are also the developers of the TSA package `tsam <https://tsam.readthedocs.io/en/latest/>`_ that we are using in ZEN-garden.
 
@@ -155,7 +197,7 @@ In ZEN-garden, we extend the approach by Gabrielli et al. 2018 to model storages
 In short, every time that the sequence of operational time steps changes, the another storage time step is added. This increases the number of variables, but explicitly enables short- and long-term storages.
 In particular, this storage level representation leads to fewer time steps than the full time series without loss of information.
 
-Additional information!
+Additional information
 ----------------------------------------------------
 
 1. In the ``default_config.py``, you find the class ``TimeSeriesAggregation`` where you can set the ``clusterMethod``, ``solver``, ``extremePeriodMethod`` and ``representationMethod``. Most importantly, the ``clusterMethod`` selects which algorithm is used to determine the clusters of representative time steps. Probably, the most common ones are `k_means <https://en.wikipedia.org/wiki/K-means_clustering>`_ and `k_medoids <https://en.wikipedia.org/wiki/K-medoids>`_. While it is probably not necessary at this point to understand the difference of k-means and k-medoids in detail, it is important to know that k-means averages the input data over the representative time steps, which reduces the extreme period behavior, thus, peaks are smoothened.

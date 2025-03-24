@@ -1,6 +1,6 @@
-################
+###################
 How to contribute 
-################
+###################
 We welcome any contribution to the ZEN-garden package. Many thanks for contributing to the project and helping to maintain our ZEN-garden!
 This document provides guidelines on how to contribute to the project.
 
@@ -19,7 +19,8 @@ This document provides guidelines on how to contribute to the project.
 2. Get started with ZEN-garden
 3. Write your code
 4. Add and run tests
-5. Push your changes to your fork and create a pull request on GitHub
+5. Add documentation
+6. Push your changes to your fork and create a pull request on GitHub
 
 Creating Issues
 =================
@@ -51,33 +52,44 @@ The coverage report is also generated in a similar way by running::
 
 To run the tests, add another Python configuration. The important settings are:
 
-- Change "Script Path" to "Module name" and set it to "coverage"
+- Change "script" to "module" and set it to "coverage"
 - Set the "Parameters" to: ``run --source="zen_garden" -m pytest -v run_test.py``
 - Set the python interpreter to the Conda environment that was used to install the requirements and also has the package installed. **Important**: This setup will only work for Conda environments that were also declared as such in PyCharm; if you set the path to the Python executable yourself, you should create a new proper PyCharm interpreter.
 - Set the "Working directory" to the directory ``tests/testcases`` of the repo.
 
 In the end, your configuration to run the tests should look similar to this:
 
-.. image:: ../images/pycharm_run_tests.png
+.. image:: images/pycharm_run_tests.png
     :alt: run tests
 
 To run the test and also get the coverage report, we use the pipeline settings of the configuration. Add another Python configuration and use the following settings:
 
-- Change "Script Path" to "Module name" and set it to "coverage"
-- Set the "Parameters" to ``report -m``
-- Set the python interpreter to the Conda environment that was used to install the requirements and also has the package installed. *Important*: This setup will only work for Conda environments that were also declared as such in PyCharm; if you set the path to the Python executable yourself, you should create a new proper PyCharm interpreter.
-- Set the "Working directory" to the base directory of the repo.
-- Click on "Modify options", go to the section "Before launch", and select "Add run before launch" where you can now add the "Run Tests" configuration from above.
+- Add a new configuration "Python tests/pytest"
+- Change "script" to "module" and set it to "run_test"
+- Set the python interpreter to the Conda environment that was used to install the requirements and also has the package installed. **Important**: This setup will only work for Conda environments that were also declared as such in PyCharm; if you set the path to the Python executable yourself, you should create a new proper PyCharm interpreter.
+- Set the "Working directory" to the directory ``tests/testcases`` of the repo.
 
 In the end, your configuration to run the coverage should look similar to this:
 
-.. image:: ../images/pycharm_coverage.png
+.. image:: images/pycharm_coverage.png
     :alt: run coverage
+
+Adding documentation
+=================
+
+The documentation, located in the ``docs`` folder, is written in `reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_ and is built using `Sphinx <https://www.sphinx-doc.org/en/master/>`_. All necessary packages are installed when installing the requirements for the developer environment (:ref:`For developers`).
+You can build a local version of the documentation by running the following command in the ``docs`` directory of the repository::
+
+  make html
+
+The documentation is then available in the ``docs/build/html`` folder. Open the ``index.html`` file in your browser to view the documentation.
+
+When adding new features or fixing bugs, make sure to update the documentation accordingly. The documentation should be clear and concise and should contain all the necessary information to understand the new feature or bug fix.
 
 Coding rules
 =================
 
-We follow the `PEP-8 <https://peps.python.org/pep-0008/>`_ coding style.
+We follow the `PEP-8 <https://peps.python.org/pep-0008/>`_ coding style:
 
 **Classes**
 
@@ -122,18 +134,7 @@ We follow the `PEP-8 <https://peps.python.org/pep-0008/>`_ coding style.
 
 **File header**
 
-* all files contain a header which contains the following information:
-
-.. code-block::
-
-    """
-    :Title:        ZEN-GARDEN
-    :Created:      month-20yy
-    :Authors:      Jane Doe (jdoe@ethz.ch)
-    :Organization: Labratory of Reliability and Risk Engineering, ETH Zurich
-
-    Class defining...; the class takes as inputs...; the class returns ...
-    """
+* all files contain a header which the information about the file, e.g., what the class does.
 
 **Variables name**
 
@@ -156,10 +157,16 @@ Defining the unit dimensions when adding a new parameter/variable to the framewo
 
 Parameters
 ----------
-The argument ``unit_category`` specifies the unit dimensions of the parameter and must be passed to the ``extrect_input_data`` function, e.g., for _capacity_addition_min_ the ``unit_category`` is defined as ``{"energy_quantity": 1, "time": -1}`` since a technology capacity is per definition given as energy_quantity (e.g. MWh) per time (hour), i.e. e.g. MW
-``self.capacity_addition_min = self.data_input.extract_input_data("capacity_addition_min", index_sets=[], unit_category={"energy_quantity": 1, "time": -1})``
+The argument ``unit_category`` specifies the unit dimensions of the parameter and must be passed to the ``extract_input_data`` function, e.g., for ``capacity_addition_min`` the ``unit_category`` is defined as ``{"energy_quantity": 1, "time": -1}`` since a technology capacity is per definition given as energy_quantity (e.g. MWh) per time (hour), i.e., MW.
+
+.. code-block::
+
+    self.capacity_addition_min = self.data_input.extract_input_data("capacity_addition_min", index_sets=[], unit_category={"energy_quantity": 1, "time": -1})
 
 Variables
 ---------
 Since the units of variables are not defined by the user but are a consequence of the parameter units as explained above, their unit dimensions are specified in the ``add_variable`` functions of the class ``Variable``. Again, the argument ``unit_category`` is used to define the unit dimensionality.
-``variables.add_variable(model, name="capacity", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), bounds=capacity_bounds, doc='size of installed technology at location l and time t', unit_category={"energy_quantity": 1, "time": -1})``
+
+.. code-block::
+
+    variables.add_variable(model, name="capacity", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), bounds=capacity_bounds, doc='size of installed technology at location l and time t', unit_category={"energy_quantity": 1, "time": -1})

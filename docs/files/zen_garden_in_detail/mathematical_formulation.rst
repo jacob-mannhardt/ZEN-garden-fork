@@ -1,20 +1,21 @@
 Mathematical formulation
-======================
+========================
 
 ZEN-garden optimizes the design and operation of energy system models to investigate transition pathways towards decarbonization.
 The optimization problem is in general formulated as a mixed-integer linear program (MILP), but reduced to a linear program (LP) if the binary variables are not needed.
 In the following, we provide an overview of the objective function and constraints of the optimization problem.
 
 .. _objective-function:
+
 Objective function
------------------
+-------------------
 Two objective functions are available:
 
 1. minimize cumulative net present cost
 2. minimize cumulative emissions
 
 Minimizing net present cost
-^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The net present cost :math:`NPC_y` of the energy system is minimized over the entire planning horizon :math:`y \in {\mathcal{Y}}`.
 
@@ -23,18 +24,25 @@ The net present cost :math:`NPC_y` of the energy system is minimized over the en
 
     \mathrm{min} \quad \sum_{y\in\mathcal{Y}} NPC_y
 
-The net present cost :math:`NPC_y` of each planning period :math:`y\in\mathcal{Y}` are computed by discounting the total energy system cost of each planning period :math:`C_y` with a constant discount rate :math:`r`:
+We define :math:`y` as a planning period rather than an actual year and :math:`dy` as the interval between planning periods. For example, if :math:`dy=2` the optimization is conducted every second year. The net present cost :math:`NPC_y` of each planning period :math:`y\in[y_0,\mathcal{Y}-1]`, where :math:`y_0` is the first planning period, are computed by discounting the total energy system cost of each planning period :math:`C_y` with a constant discount rate :math:`r`:
 
 .. math::
-    :label: net_present_cost
+    :label: net_present_cost_before_last_year
 
-    NPC_y = \sum_{i \in [0,dy(y))-1]} \left( \dfrac{1}{1+r} \right)^{\left(dy (y-y_0) + i \right)} C_y
+    NPC_y = \sum_{i \in [0,dy-1]} \left( \dfrac{1}{1+r} \right)^{\left(dy (y-y_0) + i \right)} C_y
 
-where :math:`y_0` represents the first planning period and :math:`dy` represents the interval between planning periods, e.g., if :math:`dy=2` the optimization is conducted for every second year.
 Hence, we discount each year of the time horizon, also the years for which the optimization is not conducted.
-The interannual time index :math:`y \in {\mathcal{Y}}` therefore describes the planning periods and not the actual years.
 Moreover, we assume that the optimization is only conducted until the end of the first year of the last planning period.
-The last period of the planning horizon :math:`Y=\max(y)` is therefore only counted as a single year regardless of the interval between planning periods (:math:`dy(Y)=1`).
+The last period of the planning horizon :math:`Y=\max(y)` is therefore only counted as a single year regardless of the interval between planning periods and the net present cost :math:`NPC_{\mathcal{Y}}` is defined as:
+
+.. math::
+    :label: net_present_cost_last_year
+
+    NPC_{\mathcal{Y}} = \left( \dfrac{1}{1+r} \right)^{\left(dy (\mathcal{Y}-y_0) \right)} C_{\mathcal{Y}}
+
+For example, suppose :math:`dy=2` meaning that every planning period is 2 years long.
+With an initial planning period :math:`y_0=0`, the energy system costs :math:`C_1` occur in planning period 1, meaning in years 2 and 3.
+Therefore, :math:`C_1` must be discounted according to the years they are incurred, relative to the initial time start, which are years 2 and 3.
 
 The total cost :math:`C_y` includes the annual capital expenditures :math:`CAPEX_y` and the operational expenditures for operating technologies :math:`OPEX_y^{t}`, importing and exporting carriers :math:`OPEX_y^\mathrm{c}`, and the cost of carbon emissions :math:`OPEX_y^\mathrm{e}`. 
 
@@ -97,12 +105,11 @@ For transport technologies :math:`j\in\mathcal{J}`, the unit investment cost :ma
 
     \alpha_{j,e,y} = \alpha^\mathrm{const}_{j,y}
 
-:math:`\alpha_{j,e,y}`
 
 .. math::
     :label: unit_cost_capex_transport_dist
 
-    \alpha_{j,e,y} = alpha^\mathrm{dist}_{j,e,y} h_{j,e}
+    \alpha_{j,e,y} = \alpha^\mathrm{dist}_{j,e,y} h_{j,e}
 
 .. note::
     Are both, a distance independent and a distance dependent unit cost factor defined, the distance dependent unit cost is used to determine the unit investment cost :math:`\alpha_{j,e,y}`.
@@ -176,7 +183,7 @@ Similarly, for transport technologies :math:`j \in \mathcal{J}`, the variable op
 
     O^\mathrm{t}_{j,t,y} = \beta_{j,y} F_{j,e,t,y}
 
-Finally, for storage technologies :math:`k \in \mathcal{K}`, the variable operational expenditure are the product of the charge and discharge cost :math:`\beta^\mathrm{charge}_{j,e,y}` and :math:`\beta^\mathrm{discharge}_{j,e,y}` multiplied by the storage charge :math:`\underline{H}_{k,n,t,y}` and discharge :math:`\overline{H}_{k,n,t,y}`, respectively:
+Finally, for storage technologies :math:`k \in \mathcal{K}`, the variable operational expenditure are the product of the charge and discharge cost :math:`\beta^\mathrm{charge}_{k,y}` and :math:`\beta^\mathrm{discharge}_{k,y}` multiplied by the storage charge :math:`\underline{H}_{k,n,t,y}` and discharge :math:`\overline{H}_{k,n,t,y}`, respectively:
 
 .. math:: 
     :label: cost_opex_storage
@@ -211,8 +218,9 @@ The annual operational emission expenditures :math:`OPEX_y^\mathrm{e}` are compo
 For a detailed description on how to use the annual carbon emission overshoot price and the carbon emission budget overshoot price refer to :ref:`modeling_carbon_emissions`.
 
 .. _emissions_objective:
+
 Minimizing total emissions
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The cumulative carbon emissions at the end of the time horizon :math:`E^{\mathrm{cum}}_Y` of the energy system are minimized.
 
@@ -225,11 +233,14 @@ The cumulative carbon emissions at the end of the time horizon :math:`E^{\mathrm
 
 .. math::
     :label: total_annual_carbon_emissions
+
     E_y = E^\mathrm{carrier}_y + E^\mathrm{tech}_y.
+
 
 For a detailed description of the computation of the total operational emissions for importing and exporting carriers, and for operating for operating technologies refer to :ref:`emissions_constraints`.
 
 .. _energy_balance:
+
 Energy balance
 ---------------
 
@@ -275,7 +286,7 @@ In addition, annual carrier import limits can be applied:
 Similarly, the carrier export :math:`\overline{U}_{c,n,t,y}` is limited by the carrier export availability :math:`\overline{a}_{c,n,t,y}` for all carriers :math:`c\in\mathcal{C}` in all nodes :math:`n\in\mathcal{N}` and time steps :math:`t\in\mathcal{T}`:
 
 .. math::
-    :label: carrier_import
+    :label: carrier_export
 
     0 \leq \overline{U}_{c,n,t,y} \leq \overline{a}_{c,n,t,y}.
 
@@ -300,6 +311,7 @@ Lastly, the following constraint ensures that the shed demand :math:`D_{c,n,t,y}
     Setting the shed demand cost to infinity forces :math:`D_{c,n,t,y}=0` and demand shedding will not be possible. :ref:`demand_shedding` provides a more detailed description on demand shedding.
 
 .. _emissions_constraints:
+
 Emissions constraints
 -----------------------
 
@@ -383,22 +395,23 @@ The cumulative carbon emissions :math:`E_y^\mathrm{cum}` are constrained by the 
 Note that :math:`e^\mathrm{b}` can be infinite, in which case the constraint is skipped. :math:`E_y^\mathrm{bo}` is the cumulative carbon emission overshoot and allows exceeding the carbon emission budget :math:`e^\mathrm{b}`, where exceeding the carbon emission budget in the last year of the planning horizon :math:`\mathrm{Y}=\max(y)` (i.e., :math:`E_\mathrm{Y}^\mathrm{bo}>0`) is penalized with the carbon emissions budget overshoot price :math:`\mu^\mathrm{bo}` in the objective function (compare Eq. :eq:`opex_c`). By setting the carbon emission budget overshoot price to infinite, you can enforce that the cumulative carbon emissions stay below the carbon emission budget :math:`e^\mathrm{b}` across all years (i.e., :math:`E_\mathrm{y}^\mathrm{bo} = 0 ,\forall y\in\mathcal{Y}`).
 
 .. _operational_constraints:
+
 Operational constraints
------------------------
+----------------------------
 
 The conversion factor :math:`\eta_{i,c,t,y}` describes the ratio between the carrier flow :math:`c\in\mathcal{C}` and the reference carrier flow :math:`G_{i,n,t,y}^\mathrm{r}` of a conversion technology :math:`i\in\mathcal{I}`. If the carrier flow is an input carrier, i.e. :math:`c\in\underline{\mathcal{C}}_i`:
 
 .. math::
 
-    \eta_{i,c,t,y} = \frac{\underline{G}_{c,i,n,t,y}^{\mathrm{d}}{G_{i,n,t,y}^\mathrm{r}}.
+    \eta_{i,c,t,y} = \frac{\underline{G}_{c,i,n,t,y}^{\mathrm{d}}}{G_{i,n,t,y}^\mathrm{r}}.
 
 If the carrier flow is an output carrier, i.e. :math:`c\in\overline{\mathcal{C}}_i`:
 
 .. math::
 
-    \eta_{i,c,t,y} = \frac{\overline{G}_{c,i,n,t,y}^{\mathrm{d}}{G_{i,n,t,y}^\mathrm{r}}.
+    \eta_{i,c,t,y} = \frac{\overline{G}_{c,i,n,t,y}^{\mathrm{d}}}{G_{i,n,t,y}^\mathrm{r}}.
 
-All carrier flows that are not reference carrier flows are called dependent carrier flows :math:`G_{c,i,n,t,y}^{\mathrm{d}`.
+All carrier flows that are not reference carrier flows are called dependent carrier flows :math:`G_{c,i,n,t,y}^{\mathrm{d}}`.
 
 The transport flow losses :math:`F_{j,e,t,y}^\mathrm{l}` through a transport technology :math:`j\in\mathcal{J}` on edge :math:`e\in\mathcal{E}` are expressed by the loss function :math:`\rho_{j,e}` and the transported quantity:
 
@@ -411,14 +424,14 @@ The loss function is described through a linear or an exponential loss factor, :
 .. math::
     :label: transport_flow_loss_linear
 
-    \rho_{j,e} = h_{j,e} \rho^\mathrm{exp}_{j,e}
+    \rho_{j,e} = h_{j,e} \rho^\mathrm{lin}_{j}
 
-For transport technologies where transport flow losses are approximated by an exponential loss factor it follows:
+For transport technologies where transport flow losses are approximated by an exponential loss factor following `Gabrielli et al. (2020) <https://doi.org/10.1016/j.apenergy.2020.115245>`_:
 
 .. math::
     :label: transport_flow_loss_exponential
 
-    \rho_{j,e} =  h_{j,e}^{\rho^\mathrm{exp}_{j,e}}
+    \rho_{j,e} =  1-e^{-h_{j,e} \rho^\mathrm{exp}_{j}}
 
 The flow of the reference carrier :math:`c_h^\mathrm{r}` of all technologies :math:`h\in\mathcal{H}` is constrained by the maximum load :math:`m^\mathrm{max}_{h,p,t,y}` and the installed capacity :math:`S_{h,p,y}`. For conversion technologies :math:`i\in\mathcal{I}`, it follows:
 
@@ -465,9 +478,9 @@ The time-coupled equation for the storage level :math:`L_{k,n,t^\mathrm{k},y}` o
 .. math::
     :label: storage_level
 
-    L_{k,n,t^\mathrm{k},y} = L_{k,n,t^\mathrm{k}-1,y}\left(1-\varphi_k\right)^{\tau^\mathrm{k}_{t^\mathrm{k}}}+\left(\underline{\eta}_k\underline{H}_{k,n,\sigma(t^\mathrm{k}),y}-\frac{\overline{H}_{k,n,\sigma(t^\mathrm{k}),y}}{\overline{\eta}_k}\right)\sum_{\tilde{t}^\mathrm{k}=0}^{\tau^\mathrm{k}_{t^\mathrm{k}}-1}\left(1-\varphi_k\right)^{\tilde{t}^\mathrm{k}}
+    L_{k,n,t^\mathrm{k},y} = L_{k,n,t^\mathrm{k}-1,y}\left(1-\varphi_k\right)^{\tau^\mathrm{k}_{t^\mathrm{k}}}+\left(\underline{\eta}_k\underline{H}_{k,n,\sigma(t^\mathrm{k}),y}-\frac{\overline{H}_{k,n,\sigma(t^\mathrm{k}),y}}{\overline{\eta}_k} + \xi_{k,n,\sigma(t^\mathrm{k}),y} - Y_{k,n,\sigma(t^\mathrm{k}),y} \right)\sum_{\tilde{t}^\mathrm{k}=0}^{\tau^\mathrm{k}_{t^\mathrm{k}}-1}\left(1-\varphi_k\right)^{\tilde{t}^\mathrm{k}}
 
-with the self-discharge rate :math:`\varphi_k`, the charge and discharge efficiency, :math:`\underline{\eta}_k` and :math:`\overline{\eta}_k`, and the duration of a storage level time step :math:`\tau^\mathrm{k}_{t^\mathrm{k}}`.
+with the self-discharge rate :math:`\varphi_k`, the charge and discharge efficiency, :math:`\underline{\eta}_k` and :math:`\overline{\eta}_k`, the duration of a storage level time step :math:`\tau^\mathrm{k}_{t^\mathrm{k}}`, the inflow in the storage :math:`\xi_{k,n,\sigma(t^\mathrm{k}),y}`, and the spillage out of the storage :math:`Y_{k,n,\sigma(t^\mathrm{k}),y}`.
 Note that we reformulate :math:`\sum_{\tilde{t}^\mathrm{k}=0}^{\tau^\mathrm{k}_{t^\mathrm{k}}-1}\left(1-\varphi_k\right)^{\tilde{t}^\mathrm{k}}` in the optimization problem with the partial geometric series to avoid constructing an additional summation term:
 
 .. math::
@@ -481,7 +494,7 @@ If storage periodicity is enforced (``system.storage_periodicity = True``), the 
 .. math::
     :label: storage_level_periodicity
 
-    L_{k,n,0,y} = L_{k,n,T^\mathrm{k},y}\left(1-\varphi_k\right)^{\tau^\mathrm{k}_{t^\mathrm{k}}}+\left(\underline{\eta}_k\underline{H}_{k,n,\sigma(0),y}-\frac{\overline{H}_{k,n,\sigma(0),y}}{\overline{\eta}_k}\right)\sum_{\tilde{t}^\mathrm{k}=0}^{\tau^\mathrm{k}_{t^\mathrm{k}}-1}\left(1-\varphi_k\right)^{\tilde{t}^\mathrm{k}}
+    L_{k,n,0,y} = L_{k,n,T^\mathrm{k},y}\left(1-\varphi_k\right)^{\tau^\mathrm{k}_{t^\mathrm{k}}}+\left(\underline{\eta}_k\underline{H}_{k,n,\sigma(0),y}-\frac{\overline{H}_{k,n,\sigma(0),y}}{\overline{\eta}_k} + \xi_{k,n,\sigma(0),y} - Y_{k,n,\sigma(0),y} \right)\sum_{\tilde{t}^\mathrm{k}=0}^{\tau^\mathrm{k}_{t^\mathrm{k}}-1}\left(1-\varphi_k\right)^{\tilde{t}^\mathrm{k}}
 
 Moreover, the :math:`L_{k,n,t^\mathrm{k},y}` is constrained by the energy-rated storage capacity :math:`S^\mathrm{e}_{k,n,y}`:
 
@@ -498,6 +511,13 @@ The storage level at :math:`t^\mathrm{k}=0` can be set to an initial storage lev
 .. math::
 
     L_{k,n,0,y} = \chi_{k,n}S^\mathrm{e}_{k,n,y}
+
+The spillage is a non-negative variable that is constrained by the inflow :math:`\xi_{k,n,t^\mathrm{k},y}`:
+
+.. math::
+    :label: spillage_limit
+
+    0 \leq Y_{k,n,t^\mathrm{k},y} \leq \xi_{k,n,t^\mathrm{k},y}
 
 
 **Proof of storage level monotony**
@@ -538,7 +558,7 @@ The derivative of Eq. :eq:`storage_level_selfdisch` follows as:
 
     \frac{\mathrm{d}L(t)}{\mathrm{d}t} = \underbrace{\left(L_0-\frac{\Delta H}{1-\kappa}\right)\ln(\kappa)}_{= \text{ constant }\forall t\in[1,\tau^\mathrm{k}_{t^\mathrm{k}}]}\kappa^t.
 
-With :math:`\kappa^t>0`, it follows that \cref{eq:storage_level_simpl} is monotonous for :math:`0<\varphi<1`.
+With :math:`\kappa^t>0`, it follows that Eq. :eq:`storage_level_simpl` is monotonous for :math:`0<\varphi<1`.
 
 Investment constraints
 ----------------------
@@ -641,48 +661,50 @@ To avoid the unrealistically excessive use of spillover effects, we constrain th
     K_{h,p,y} = \sum_{\tilde{y}=y_0}^{y-1}\left(1-\delta\right)^{dy (y-\tilde{y})}\Delta S_{h,p,\tilde{y}} + \sum_{\hat{y}=-\infty}^{\psi(y_0)}\left(1-\delta\right)^{\left(dy(y-y_0) + (\psi(y_0)-\hat{y})\right)}\Delta s^\mathrm{ex}_{h,p,\hat{y}}
 
 .. _min_load_constraints:
+
 Minimum load constraints
 ------------------------
 
-A binary variable :math:`b_{h,p,t}` is introduced to model the on-, and off- behaviour of a technology. If :math:`b_{h,p,t}=1`, the technology is on, if :math:`b_{h,p,t}=0` the technology is considered off. With :math:`b_{h,p,t}` the minimum load constraint of a conversion technology can be formulated as follows:
+A binary variable :math:`B_{h,n,t}` is introduced to model the on-, and off- behaviour of a technology. If :math:`B_{h,p,t}=1`, the technology is on, if :math:`B_{h,p,t}=0` the technology is considered off. With :math:`B_{h,p,t}` the minimum load constraint of a conversion technology can be formulated as follows:
 
 .. math::
     :label: min_load_conversion_bilinear
 
-    m^\mathrm{min}_{h,p,t,y} b_{h,p,t}  S_{h,p,y} \leq G_{h,p,t,y}^\mathrm{r}
+    m^\mathrm{min}_{i,p,t,y} B_{i,p,t}  S_{i,p,y} \leq G_{i,p,t,y}^\mathrm{r} \leq B_{i,p,t}  S_{i,p,y}
 
-However, this constraint would introduce a bilinearity. To resolve the bilinearity, we use a big-M formulation and approximate :math:`b_{h,p,t} S_{h,n,y}` with :math:`S^\mathrm{approx}_{h,p,y}`. Thus, Eq. :eq:`min_load_conversion_bilinear` can be rewritten as:
+However, this constraint would introduce a bilinearity. To resolve the bilinearity, we use a big-M formulation and approximate :math:`B_{h,p,t} S_{h,n,y}` with :math:`S^\mathrm{approx}_{h,p,t,y}`. Thus, Eq. :eq:`min_load_conversion_bilinear` can be rewritten as:
 
 .. math::
     :label: min_load_conversion
 
-    G_{h,n,t,y}^\mathrm{r} \geq m^\mathrm{min}_{h,n,t,y} S^\mathrm{approx}_{h,n,y}
+    m^\mathrm{min}_{i,n,t,y} S^\mathrm{approx}_{i,n,t,y} \leq G_{i,n,t,y}^\mathrm{r} \leq S^\mathrm{approx}_{i,n,t,y}
 
 Similarly, for transport technologies it follows:
 
 .. math::
     :label: min_load_transport
 
-    F_{j,e,t,y}^\mathrm{r} \geq m^\mathrm{min}_{j,n,t,y} S^\mathrm{approx}_{j,e,y}
+    m^\mathrm{min}_{j,e,t,y} S^\mathrm{approx}_{j,e,t,y} \leq F_{j,e,t,y}^\mathrm{r} \leq S^\mathrm{approx}_{j,e,t,y}
 
 For storage technologies, the minimum load constraint is formulated as the sum of the charge and discharge flows as storage technologies do not charge and discharge at the same time:
 
 .. math::
     :label: min_load_storage
 
-    \underline{H}_{k,n,t,y} + \overline{H}_{k,n,t,y} \geq m^\mathrm{min}_{k,n,t,y} S^\mathrm{approx}_{k,e,y}
+    m^\mathrm{min}_{k,n,t,y} S^\mathrm{approx}_{k,e,t,y} \leq \underline{H}_{k,n,t,y} + \overline{H}_{k,n,t,y} \leq S^\mathrm{approx}_{k,n,t,y}
 
-Two more constraints are added to ensure that :math:`S^\mathrm{approx}_{h,p,y}` equals the installed capacity if the technology is on (i.e., :math:`b_{h,p,t}=1`), and that :math:`S^\mathrm{approx}_{h,p,y}` equals zero if the technology is off (i.e., :math:`b_{h,p,t}=0`):
+Two more constraints are added to ensure that :math:`S^\mathrm{approx}_{h,p,t,y}` equals the installed capacity if the technology is on (i.e., :math:`B_{h,p,t}=1`), and that :math:`S^\mathrm{approx}_{h,p,t,y}` equals zero if the technology is off (i.e., :math:`B_{h,p,t}=0`):
 
 .. math::
     :label: binary_constraint_on
 
-    S^\mathrm{approx}_{i,p,y} \leq S_{i,n,y} \\\\
-    S^\mathrm{approx}_{i,p,y} \geq (1-b_{h,p,t}) M + S_{i,p,t}
+    0 \leq S^\mathrm{approx}_{h,p,t,y} \leq s^\mathrm{max}_{h,p,y} B_{h,p,t}\\\\
+    S_{h,p,y} + (1-B_{h,p,t}) s^\mathrm{max}_{h,p,y} \leq S^\mathrm{approx}_{h,p,t,y} \leq S_{h,p,y}
 
-where a sufficiently large :math:`M` is selected. Here :math:`M` could be represented by the maximum technology capacity :math:`s^\mathrm{max}_{h,p,y}`.
+If no physically motivated capacity limit :math:`s^\mathrm{max}_{h,p,y}` exists, :math:`s^\mathrm{max}_{h,p,y}` must be large enough to ensure that the technology is not constrained by the capacity limit (Big-M parameter).
 
 .. _min_capacity_installation:
+
 Minimum capacity installation
 -----------------------------
 
@@ -705,8 +727,9 @@ Eq. :eq:`min_capacity_constraint_bigM` ensure that :math:`\Delta S^\mathrm{appro
 
 
 .. _PWA_constraints:
+
 Piecewise affine approximation of capital expenditures
------------------------------------------------------
+------------------------------------------------------
 
 
 .. note:: Please note that the following introduces the mathematical formulation of piecewise affine linearizations, which deviates slightly from the general formulation in ZEN-garden.

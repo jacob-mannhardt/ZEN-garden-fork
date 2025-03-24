@@ -94,10 +94,12 @@ class System(Subscriptable):
     set_storage_technologies: list[str] = []
     set_retrofitting_technologies: list[str] = []
     storage_periodicity: bool = True
+    multiyear_periodicity: bool = False
     set_transport_technologies: list[str] = []
     set_transport_technologies_loss_exponential: list[str] = []
     double_capex_transport: bool = False
     set_nodes: list[str] = []
+    coords: dict[str, dict[str, float]] = {}
     exclude_parameters_from_TSA: bool = True
     conduct_scenario_analysis: bool = False
     run_default_scenario: bool = True
@@ -128,7 +130,10 @@ class Solver(Subscriptable):
     solver_dir: str = ".//outputs//solver_files"
     keep_files: bool = False
     io_api: str = "lp"
-    add_duals: bool = False
+    save_duals: bool = False
+    save_parameters: bool = True
+    selected_saved_parameters: list = [] # if empty, all parameters are saved
+    selected_saved_variables: list = [] # if empty, all variables are saved
     linear_regression_check: dict[str, float] = {
         "eps_intercept": 0.1,
         "epsRvalue": 1 - (1e-5),
@@ -138,6 +143,7 @@ class Solver(Subscriptable):
     rounding_decimal_points_capacity: int = 4
     rounding_decimal_points_tsa: int = 4
     analyze_numerics: bool = True
+    run_diagnostics: bool = False
     use_scaling: bool = True
     scaling_include_rhs: bool = True
     scaling_algorithm: Union[list[str],str] = ["geom","geom","geom"]
@@ -171,7 +177,6 @@ class Analysis(Subscriptable):
     overwrite_output: bool = True
     output_format: str = "h5"
     earliest_year_of_data: int = 1900
-    save_benchmarking_results: bool = False
     zen_garden_version: str = None
 
 class Config(Subscriptable):

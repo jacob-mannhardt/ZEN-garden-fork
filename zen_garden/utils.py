@@ -583,7 +583,7 @@ class ScenarioDict(dict):
                 if element in ScenarioDict._setting_elements:
                     if not isinstance(param_dict, dict):
                         continue
-                    elif isinstance(param_dict, dict) and not isinstance(param_dict['value'], list):
+                    elif isinstance(param_dict, dict) and "value" in param_dict and not isinstance(param_dict['value'], list):
                         scenario[element][param] = param_dict['value']
                 for key in sorted(ScenarioDict._param_dict_keys):
                     if key in param_dict and isinstance(param_dict[key], list):

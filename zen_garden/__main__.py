@@ -53,7 +53,8 @@ def run_module(args=None, config = "./config.py", dataset = None,
 
     # change working directory to the directory of the config file
     config_path, config_file = os.path.split(args.config)
-    os.chdir(config_path)
+    if config_path != "":
+        os.chdir(config_path)
     ### import the config
     if config_file.endswith(".py"):
         spec = importlib.util.spec_from_file_location("module", config_file)

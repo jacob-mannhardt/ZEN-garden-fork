@@ -456,7 +456,8 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: ts for idx, ts in enumerate(unique_sequence_time_steps)}
-
+        else:
+            raise NotImplementedError(f"Storage representation method {self.analysis.time_series_aggregation.storageRepresentationMethod} not yet implemented")
         # overwrite in time steps object
         self.time_steps.time_steps_storage = time_steps_storage
         self.time_steps.time_steps_storage_duration = time_steps_storage_duration

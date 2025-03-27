@@ -1,6 +1,7 @@
 """
 This module contains the implementation of a SolutionLoader that reads the solution.
 """
+import copy
 import re
 import json
 import os
@@ -126,35 +127,57 @@ class Scenario():
     folder.
     """
 
-    def __init__(self, path: str, name: str, base_scenario: str) -> None:
+    def __init__(self, path: str, name: str, base_scenario: str,default_ureg: pint.UnitRegistry) -> None:
+        self.name = name
+        self.base_name = base_scenario
+        self._exists = True
         self._path = path
         self._analysis: Analysis = self._read_analysis()
         self._system: System = self._read_system()
         self._solver: Solver = self._read_solver()
-        self._ureg = self._read_ureg()
-        self.name = name
-        self.base_name = base_scenario
+        self._benchmarking = self._read_benchmarking()
+        self._ureg = self._read_ureg(default_ureg)
 
     def _read_analysis(self) -> Analysis:
         analysis_path = os.path.join(self.path, "analysis.json")
+        if not os.path.exists(analysis_path):
+            print(f"analysis.json does not exist for scenario {self.name}")
+            self._exists = False
+            return Analysis()
 
         with open(analysis_path, "r") as f:
             return Analysis(**json.load(f))
 
     def _read_system(self) -> System:
         system_path = os.path.join(self.path, "system.json")
+        if not os.path.exists(system_path):
+            print(f"system.json does not exist for scenario {self.name}")
+            return System()
 
         with open(system_path, "r") as f:
             return System(**json.load(f))
 
     def _read_solver(self) -> Solver:
         solver_path = os.path.join(self.path, "solver.json")
+        if not os.path.exists(solver_path):
+            print(f"solver.json does not exist for scenario {self.name}")
+            return Solver()
 
         with open(solver_path, "r") as f:
             return Solver(**json.load(f))
 
-    def _read_ureg(self) -> pint.UnitRegistry:
-        ureg = pint.UnitRegistry()
+    def _read_benchmarking(self):
+        benchmarking_path = os.path.join(self.path, "benchmarking.json")
+
+        if not os.path.exists(benchmarking_path):
+            print(f"benchmarking.json does not exist for scenario {self.name}")
+            return {}
+
+        with open(benchmarking_path, "r") as f:
+            return json.load(f)
+
+    def _read_ureg(self,default_ureg: pint.UnitRegistry) -> pint.UnitRegistry:
+        ureg = copy.deepcopy(default_ureg)
         unit_path = os.path.join(self.path, "unit_definitions.txt")
         if os.path.exists(unit_path):
             ureg.load_definitions(unit_path)
@@ -169,20 +192,27 @@ class Scenario():
         return self._solver
 
     @property
+    def system(self) -> System:
+        return self._system
+
+    @property
+    def benchmarking(self) -> dict:
+        return self._benchmarking
+
+    @property
     def path(self) -> str:
         return self._path
 
     @property
     def has_rh(self) -> bool:
         return self.system.use_rolling_horizon
-
-    @property
-    def system(self) -> System:
-        return self._system
-
     @property
     def ureg(self) -> pint.UnitRegistry:
         return self._ureg
+
+    @property
+    def exists(self) -> bool:
+        return self._exists
 
 class SolutionLoader():
     """
@@ -347,14 +377,14 @@ class SolutionLoader():
         """
         scenarios_json_path = os.path.join(self.path, "scenarios.json")
         ans: dict[str, Scenario] = {}
-
+        default_ureg = pint.UnitRegistry()
         with open(scenarios_json_path, "r") as f:
             scenario_configs = json.load(f)
 
         if len(scenario_configs) == 1:
             scenario_name = "none"
             scenario_path = self.path
-            ans[scenario_name] = Scenario(scenario_path, scenario_name, "")
+            ans[scenario_name] = Scenario(scenario_path, scenario_name, "",default_ureg)
         else:
             for scenario_id, scenario_config in scenario_configs.items():
                 scenario_name = f"scenario_{scenario_id}"
@@ -373,9 +403,11 @@ class SolutionLoader():
                         scenario_path, f"scenario_{scenario_subfolder}"
                     )
 
-                ans[scenario_name] = Scenario(
-                    scenario_path, scenario_name, base_scenario
+                scenario = Scenario(
+                    scenario_path, scenario_name, base_scenario,default_ureg
                 )
+                if scenario.exists:
+                    ans[scenario_name] = scenario
 
         return ans
 

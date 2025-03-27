@@ -415,6 +415,7 @@ class TimeSeriesAggregation(object):
         """ this method calculates the number of time steps on the storage level, and the sequence in which the storage levels are connected
         """
         sequence_time_steps = self.time_steps.sequence_time_steps_operation
+        logging.info(f"The storage representation method is {self.analysis.time_series_aggregation.storageRepresentationMethod}")
         # if time series aggregation was conducted
         if self.analysis.time_series_aggregation.storageRepresentationMethod in ["ZEN-garden", "wogrin"]:
             if self.conducted_tsa and self.analysis.time_series_aggregation.hoursPerPeriod == 1:

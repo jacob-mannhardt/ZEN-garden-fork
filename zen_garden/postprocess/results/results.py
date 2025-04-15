@@ -48,7 +48,7 @@ class Results:
         scenario_name: Optional[str] = None,
         data_type: Literal["dataframe", "units"] = "dataframe",
         index: Optional[Union[NestedTuple, NestedDict, list[str], str, float, int]] = None,
-    ) -> Optional[dict[str, "pd.DataFrame | pd.Series[Any]"]]:
+    ) -> Optional[Union[dict[str, "pd.DataFrame | pd.Series[Any]"],pd.Series]]:
         """
         Transforms a parameter or variable dataframe (compressed) string into an actual pandas dataframe
 
@@ -60,14 +60,17 @@ class Results:
         """
 
         scenario_names = (
-            self.solution_loader.scenarios.keys()
+            list(self.solution_loader.scenarios.keys())
             if scenario_name is None
             else [scenario_name]
         )
 
         if component_name not in self.solution_loader.components:
             logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
-            return {s:pd.Series() for s in scenario_names}
+            if len(scenario_names) == 1:
+                return pd.Series()
+            else:
+                return {s:pd.Series() for s in scenario_names}
 
         component = self.solution_loader.components[component_name]
 
@@ -76,13 +79,19 @@ class Results:
         if data_type == "units" and not component.has_units:
             return None
 
-        ans = {}
-
-        for scenario_name in scenario_names:
+        if len(scenario_names) == 1:
+            scenario_name = scenario_names[0]
             scenario = self.solution_loader.scenarios[scenario_name]
-            ans[scenario_name] = self.solution_loader.get_component_data(
+            ans = self.solution_loader.get_component_data(
                 scenario, component, data_type=data_type, index=index
             )
+        else:
+            ans = {}
+            for scenario_name in scenario_names:
+                scenario = self.solution_loader.scenarios[scenario_name]
+                ans[scenario_name] = self.solution_loader.get_component_data(
+                    scenario, component, data_type=data_type, index=index
+                )
 
         return ans
 
@@ -125,11 +134,9 @@ class Results:
                 time_steps = self.solution_loader.get_timesteps_of_years(scenario, component.timestep_type,tuple(years)).values
                 index = index + (f"{component.timestep_type.value} in [{', '.join(time_steps.astype(str))}]",)
                 select_year_time_steps = True
-
         series = self.solution_loader.get_component_data(
             scenario, component, keep_raw=keep_raw, index=index
         )
-
         if isinstance(series.index, pd.MultiIndex):
             series = series.unstack(component.timestep_name)
 
@@ -175,8 +182,9 @@ class Results:
                 # for storage components, the last timestep is the final state, linear interpolation is used
                 last_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[-1])
                 first_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[0])
-                output_df = pd.DataFrame(columns=sequence_timesteps.index,index=series.index,dtype=float)
-                output_df[last_occurrences.values] = series[last_occurrences.index]
+                output_df = series[last_occurrences.index].rename(last_occurrences,axis=1)
+                # fill missing ts with nan
+                output_df = output_df.reindex(columns=sequence_timesteps.index)
                 time_steps_start_end = self.solution_loader.get_time_steps_storage_level_startend_year(scenario)
                 for tstart,tend in time_steps_start_end.items():
                     tstart_reconstructed = first_occurrences[tstart]
@@ -433,6 +441,7 @@ class Results:
         year: Optional[int] = None,
         discount_to_first_step: bool = True,
         keep_raw: Optional[bool] = False,
+        index: Optional[Union[NestedTuple, NestedDict, list[str], str, float, int]] = None,
     ) -> Optional["pd.DataFrame | pd.Series[Any]"]:
         """extracts the dual variables of a component
 
@@ -441,6 +450,7 @@ class Results:
         :param year: Year
         :param discount_to_first_step: apply annuity to first year of interval or entire interval
         :param keep_raw: Keep the raw values of the rolling horizon optimization
+        :param index: slicing index of the resulting dataframe
         :return: Duals of the component
         """
         if not self.get_solver(scenario_name=scenario_name).save_duals:
@@ -458,6 +468,7 @@ class Results:
             year=year,
             discount_to_first_step=discount_to_first_step,
             keep_raw=keep_raw,
+            index=index,
         )
         return duals
 
@@ -478,12 +489,11 @@ class Results:
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
-        res = self.get_df(
+        units = self.get_df(
             component_name, scenario_name=scenario_name, data_type="units"
         )
-        if res is None:
+        if units is None:
             return None
-        units = res[scenario_name]
         if droplevel:
             # TODO make more flexible
             loc_idx = ["node", "location", "edge", "set_location", "set_nodes"]
@@ -646,7 +656,7 @@ class Results:
         if "carrier" not in dataframe.index.names:
             reference_carriers = self.get_df(
                 "set_reference_carriers", scenario_name=scenario_name
-            )[scenario_name]
+            )
             data_extracted = pd.DataFrame()
             for tech in dataframe.index.get_level_values("technology"):
                 if reference_carriers[tech] == carrier:
@@ -674,9 +684,7 @@ class Results:
         :param scenario: scenario of interest
         :return: pd.DataFrame containing carrier_flow data desired
         """
-        set_nodes_on_edges = self.get_df("set_nodes_on_edges", scenario_name=scenario)[
-            scenario
-        ]
+        set_nodes_on_edges = self.get_df("set_nodes_on_edges", scenario_name=scenario)
         set_nodes_on_edges = {
             edge: set_nodes_on_edges[edge].split(",")
             for edge in set_nodes_on_edges.index

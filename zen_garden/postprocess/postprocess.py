@@ -8,7 +8,6 @@ import logging
 import os
 from pathlib import Path
 
-import h5py
 import numpy as np
 import pint
 from tables import NaturalNameWarning
@@ -373,6 +372,10 @@ class Postprocess:
             fname = self.name_dir.parent.joinpath('analysis')
         else:
             fname = self.name_dir.joinpath('analysis')
+        # remove cwd path part to avoid saving the absolute path
+        if os.path.isabs(self.analysis.dataset):
+            self.analysis.dataset = str(Path(self.analysis.dataset).relative_to(os.getcwd()))
+            self.analysis.folder_output = str(Path(self.analysis.folder_output).relative_to(os.getcwd()))
         self.write_file(fname, self.analysis, format="json")
 
     def save_solver(self):
@@ -394,24 +397,10 @@ class Postprocess:
         """
         Saves the scenario dict as json
         """
-
-        # This we only need to save once
-        # check if MF within scenario analysis
-        if isinstance(self.subfolder, tuple):
-            # check if there are sub_scenarios (parent must then be the name of the parent scenario)
-            if not self.subfolder[0].parent == Path("."):
-                fname = self.name_dir.parent.parent.parent.joinpath('scenarios')
-            else:
-                # MF with in scenario analysis without sub-scenarios
-                fname = self.name_dir.parent.parent.joinpath('scenarios')
-        # only MF or only scenario analysis
-        elif self.subfolder != Path(""):
-            fname = self.name_dir.parent.joinpath('scenarios')
-        # neither MF nor scenario analysis
-        else:
-            fname = self.name_dir.joinpath('scenarios')
+        # only save the scenarios at the highest level
+        root_path = Path(self.analysis.folder_output).joinpath(self.model_name)
+        fname = root_path.joinpath('scenarios')
         self.write_file(fname, self.scenarios, format="json")
-
 
     def save_unit_definitions(self):
         """

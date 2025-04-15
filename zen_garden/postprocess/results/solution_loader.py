@@ -127,7 +127,7 @@ class Scenario():
     folder.
     """
 
-    def __init__(self, path: str, name: str, base_scenario: str,default_ureg: pint.UnitRegistry) -> None:
+    def __init__(self, path: str, name: str, base_scenario: str, default_ureg: pint.UnitRegistry) -> None:
         self.name = name
         self.base_name = base_scenario
         self._exists = True
@@ -135,7 +135,7 @@ class Scenario():
         self._analysis: Analysis = self._read_analysis()
         self._system: System = self._read_system()
         self._solver: Solver = self._read_solver()
-        self._benchmarking = self._read_benchmarking()
+        self._benchmarking: dict[str,Any] = self._read_benchmarking()
         self._ureg = self._read_ureg(default_ureg)
 
     def _read_analysis(self) -> Analysis:
@@ -166,17 +166,15 @@ class Scenario():
         with open(solver_path, "r") as f:
             return Solver(**json.load(f))
 
-    def _read_benchmarking(self):
+    def _read_benchmarking(self) -> dict[str,Any]:
         benchmarking_path = os.path.join(self.path, "benchmarking.json")
-
-        if not os.path.exists(benchmarking_path):
-            print(f"benchmarking.json does not exist for scenario {self.name}")
+        if os.path.exists(benchmarking_path):
+            with open(benchmarking_path, "r") as f:
+                return json.load(f)
+        else:
             return {}
 
-        with open(benchmarking_path, "r") as f:
-            return json.load(f)
-
-    def _read_ureg(self,default_ureg: pint.UnitRegistry) -> pint.UnitRegistry:
+    def _read_ureg(self,default_ureg) -> pint.UnitRegistry:
         ureg = copy.deepcopy(default_ureg)
         unit_path = os.path.join(self.path, "unit_definitions.txt")
         if os.path.exists(unit_path):
@@ -196,7 +194,7 @@ class Scenario():
         return self._system
 
     @property
-    def benchmarking(self) -> dict:
+    def benchmarking(self) -> dict[str,Any]:
         return self._benchmarking
 
     @property
@@ -206,6 +204,7 @@ class Scenario():
     @property
     def has_rh(self) -> bool:
         return self.system.use_rolling_horizon
+
     @property
     def ureg(self) -> pint.UnitRegistry:
         return self._ureg
@@ -404,8 +403,9 @@ class SolutionLoader():
                     )
 
                 scenario = Scenario(
-                    scenario_path, scenario_name, base_scenario,default_ureg
+                    scenario_path, scenario_name, base_scenario, default_ureg
                 )
+
                 if scenario.exists:
                     ans[scenario_name] = scenario
 

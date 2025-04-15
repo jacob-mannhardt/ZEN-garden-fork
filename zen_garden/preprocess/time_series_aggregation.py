@@ -22,7 +22,7 @@ class TimeSeriesAggregation(object):
 
         :param energy_system: The energy system to use"""
         logging.info("\n--- Time series aggregation ---")
-        #initiate dictionary for saving year specific TSA results
+        # initiate dictionary for saving year specific TSA results
         self.year_specific_tsa = {}
         self.energy_system = energy_system
         self.time_steps = self.energy_system.time_steps
@@ -448,7 +448,7 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
-        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             time_steps_storage = np.arange(len(sequence_time_steps))
             unique_array, idx = np.unique(sequence_time_steps, return_index=True)
             unique_sequence_time_steps = sequence_time_steps[np.sort(idx)]
@@ -457,6 +457,12 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: ts for idx, ts in enumerate(unique_sequence_time_steps)}
+            if self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+                if self.system.optimized_years != 1:
+                    raise NotImplementedError ("The minmax storage representation method is not yet implemented for multiple years")
+                self.time_steps.time_steps_storage_periods = self.aggregation.clusterPeriodIdx
+                self.time_steps.time_steps_storage_periods_order = self.aggregation.clusterOrder
+                self.time_steps.sequence_time_steps_periods = np.repeat(self.aggregation.clusterOrder,self.analysis.time_series_aggregation.hoursPerPeriod)
         else:
             raise NotImplementedError(f"Storage representation method {self.analysis.time_series_aggregation.storageRepresentationMethod} not yet implemented")
         # overwrite in time steps object
@@ -465,6 +471,8 @@ class TimeSeriesAggregation(object):
         self.time_steps.sequence_time_steps_storage = sequence_time_steps_storage
         # set the storage2year
         self.time_steps.set_time_steps_storage2year_both_dir()
+        if self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+            self.time_steps.set_time_steps_year2period()
         # set the dict time_steps_energy2power
         self.time_steps.time_steps_energy2power = time_steps_energy2power
         # set the first and last time step of each year

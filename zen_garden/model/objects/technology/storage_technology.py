@@ -8,6 +8,7 @@ import logging
 
 import numpy as np
 import xarray as xr
+import pandas as pd
 
 from zen_garden.utils import linexpr_from_tuple_np, setup_logger
 from .technology import Technology
@@ -152,12 +153,25 @@ class StorageTechnology(Technology):
         # flow of carrier on node out of storage
         variables.add_variable(model, name="flow_storage_discharge", index_sets=(index_values, index_names),
             bounds=bounds, doc='carrier flow out of storage technology on node i and time t', unit_category={"energy_quantity": 1, "time": -1})
-        if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             # intra storage level
             variables.add_variable(model, name="storage_level_intra", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage_intra"], optimization_setup), bounds=(-np.inf, np.inf),
                 doc="storage level of Kotzur's intra states of storage technology on node in each storage time step", unit_category={"energy_quantity": 1})
             variables.add_variable(model, name="storage_level_inter", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage_inter"], optimization_setup), bounds=(0, np.inf),
                 doc="storage level of Kotzur's inter states of storage technology on node in each storage time steps", unit_category={"energy_quantity": 1})
+            if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+                # intra storage level
+                variables.add_variable(model, name="storage_level_intra_max", index_sets=cls.create_custom_set(
+                    ["set_storage_technologies", "set_nodes", "set_time_steps_storage_periods"], optimization_setup),
+                                       bounds=(-np.inf, np.inf),
+                                       doc="maximum storage level of Kotzur's intra states of storage technology on node in each storage period",
+                                       unit_category={"energy_quantity": 1})
+                variables.add_variable(model, name="storage_level_intra_min", index_sets=cls.create_custom_set(
+                    ["set_storage_technologies", "set_nodes", "set_time_steps_storage_periods"], optimization_setup),
+                                       bounds=(0, np.inf),
+                                       doc="minimum storage level of Kotzur's intra states of storage technology on node in each storage period",
+                                       unit_category={"energy_quantity": 1})
+
         #elif not optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
         else:
             # storage level
@@ -290,7 +304,7 @@ class StorageTechnologyRules(GenericRule):
         capacity = self.map_and_expand(self.variables["capacity"],times)
         capacity = capacity.rename({"set_technologies": "set_storage_technologies","set_location":"set_nodes"})
         capacity = capacity.sel({"set_nodes":nodes,"set_storage_technologies":techs})
-        if self.analysis.time_series_aggregation.storageRepresentationMethod != "wogrin":
+        if self.analysis.time_series_aggregation.storageRepresentationMethod != "minmax" and self.analysis.time_series_aggregation.storageRepresentationMethod != "wogrin":
             if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
                 hpp = self.analysis.time_series_aggregation.hoursPerPeriod
                 self_discharge = self.parameters.self_discharge
@@ -313,6 +327,53 @@ class StorageTechnologyRules(GenericRule):
                 rhs = 0
                 constraints = lhs <= rhs
                 self.constraints.add_constraint("constraint_storage_level_min", constraints)
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+            hpp = self.analysis.time_series_aggregation.hoursPerPeriod
+            self_discharge = self.parameters.self_discharge
+            set_time_steps_storage_intra = self.sets.sets["set_time_steps_storage_intra"].items
+            times_intra2storage = self.get_intra2energy_time_step_array()
+            self.time_steps.sequence_time_steps_intra = times_intra2storage.values
+            times_inter2storage = self.get_inter2storage_time_step_array()
+            self.time_steps.sequence_time_steps_inter = times_inter2storage.values
+            periods2intra = pd.Series({intra: intra // hpp for intra in set_time_steps_storage_intra})
+            periods2intra.name = "set_time_steps_storage_periods"
+            periods2intra.index.name = "set_time_steps_storage_intra"
+            # four additional constraints
+            # 1. intra storage level max
+            lhs = self.map_and_expand(self.variables["storage_level_intra_max"],periods2intra) - self.variables["storage_level_intra"]
+            rhs = 0
+            constraints = lhs >= rhs
+            self.constraints.add_constraint("constraint_storage_level_intra_max", constraints)
+            # 2. intra storage level min
+            lhs = self.map_and_expand(self.variables["storage_level_intra_min"],periods2intra) - self.variables["storage_level_intra"]
+            rhs = 0
+            constraints = lhs <= rhs
+            self.constraints.add_constraint("constraint_storage_level_intra_min", constraints)
+            # 3. storage level limit max
+            period_order = self.time_steps.time_steps_storage_periods_order
+            period_order = pd.Series(index=range(len(period_order)),data=period_order)
+            period_order.name = "set_time_steps_storage_periods"
+            period_order.index.name = "set_time_steps_storage_inter"
+            storage_level_intra_max = self.map_and_expand(self.variables["storage_level_intra_max"],period_order)
+            periods = self.get_period2year_time_step_array()
+            capacity = self.map_and_expand(self.map_and_expand(self.variables["capacity"], periods),period_order)
+            capacity = capacity.rename({"set_technologies": "set_storage_technologies", "set_location": "set_nodes"})
+            capacity = capacity.sel({"set_nodes": nodes, "set_storage_technologies": techs})
+            mask_capacity_type = self.variables["capacity"].coords["set_capacity_types"] == "energy"
+            lhs = (self.variables["storage_level_inter"] + storage_level_intra_max - capacity).where(mask_capacity_type,0.0)
+            rhs = 0
+            constraints = lhs <= rhs
+            self.constraints.add_constraint("constraint_storage_level_max", constraints)
+            # 4. storage level limit min
+            period_order = self.time_steps.time_steps_storage_periods_order
+            period_order = pd.Series(index=range(len(period_order)), data=period_order)
+            period_order.name = "set_time_steps_storage_periods"
+            period_order.index.name = "set_time_steps_storage_inter"
+            storage_level_intra_min = self.map_and_expand(self.variables["storage_level_intra_min"], period_order)
+            lhs = self.variables["storage_level_inter"]*(1 - self_discharge)**hpp + storage_level_intra_min
+            rhs = 0
+            constraints = lhs >= rhs
+            self.constraints.add_constraint("constraint_storage_level_min", constraints)
         # wogrin
         else:
             times_power2energy = self.get_power2energy_time_step_array()
@@ -415,7 +476,7 @@ class StorageTechnologyRules(GenericRule):
             rhs = 0
             constraints = lhs == rhs
             self.constraints.add_constraint("constraint_couple_storage_level",constraints)
-        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             times_coupling, mask_coupling = self.get_next_time_step_array(type="storage_intra")
             term_delta_storage_level = (-(1-self_discharge) * self.variables["storage_level_intra"] + self.variables["storage_level_intra"].sel({"set_time_steps_storage_intra": times_coupling}))
             # charge and discharge flow

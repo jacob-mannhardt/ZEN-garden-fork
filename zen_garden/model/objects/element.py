@@ -418,6 +418,13 @@ class GenericRule(object):
         times.index.name = "set_time_steps_storage"
         return times
 
+    def get_period2year_time_step_array(self):
+        """ returns array with period2year time steps """
+        times = {st: y for y in self.sets["set_time_steps_yearly"] for st in self.energy_system.time_steps.get_time_steps_year2period(y)}
+        times = pd.Series(times,name="set_time_steps_yearly")
+        times.index.name = "set_time_steps_storage_periods"
+        return times
+
     def get_intra2energy_time_step_array(self):
         """
 

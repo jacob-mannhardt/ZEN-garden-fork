@@ -168,7 +168,7 @@ class StorageTechnology(Technology):
                                        unit_category={"energy_quantity": 1})
                 variables.add_variable(model, name="storage_level_intra_min", index_sets=cls.create_custom_set(
                     ["set_storage_technologies", "set_nodes", "set_time_steps_storage_periods"], optimization_setup),
-                                       bounds=(0, np.inf),
+                                       bounds=(-np.inf, np.inf),
                                        doc="minimum storage level of Kotzur's intra states of storage technology on node in each storage period",
                                        unit_category={"energy_quantity": 1})
 
@@ -360,7 +360,7 @@ class StorageTechnologyRules(GenericRule):
             capacity = capacity.rename({"set_technologies": "set_storage_technologies", "set_location": "set_nodes"})
             capacity = capacity.sel({"set_nodes": nodes, "set_storage_technologies": techs})
             mask_capacity_type = self.variables["capacity"].coords["set_capacity_types"] == "energy"
-            lhs = (self.variables["storage_level_inter"] + storage_level_intra_max - capacity).where(mask_capacity_type,0.0)
+            lhs = (self.variables["storage_level_inter"] + storage_level_intra_max - capacity).where(mask_capacity_type,0.0) # this is the formulation in kotzur appendix
             rhs = 0
             constraints = lhs <= rhs
             self.constraints.add_constraint("constraint_storage_level_max", constraints)

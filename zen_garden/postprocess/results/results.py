@@ -176,11 +176,11 @@ class Results:
                 )
                 series[time_steps_year] = series[time_steps_year] / annuity[year_temp]
         try:
-            if component.timestep_type is TimestepType.operational:
+            if component.timestep_type is TimestepType.operational or component.timestep_type is TimestepType.storage_inter or component.timestep_type is TimestepType.storage_intra:
                 if select_year_time_steps:
                     sequence_timesteps = sequence_timesteps[sequence_timesteps.isin(time_steps)]
                 output_df = series[sequence_timesteps]
-            elif component.timestep_type is TimestepType.storage:
+            elif component.timestep_type is TimestepType.storage or component.timestep_type:
                 # for storage components, the last timestep is the final state, linear interpolation is used
                 last_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[-1])
                 first_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[0])

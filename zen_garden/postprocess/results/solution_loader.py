@@ -420,42 +420,42 @@ class SolutionLoader():
         if any of the defined time steps name is in the index of the dataframe.
         """
         ans: dict[str, Component] = {}
-        first_scenario = get_first_scenario(self.scenarios)
+        for s in self.scenarios.values():
+            if s.has_rh:
+                mf_name = [i for i in os.listdir(s.path) if "MF_" in i][0]
+                component_folder = os.path.join(s.path, mf_name)
+            else:
+                component_folder = s.path
 
-        if first_scenario.has_rh:
-            mf_name = [i for i in os.listdir(first_scenario.path) if "MF_" in i][0]
-            component_folder = os.path.join(first_scenario.path, mf_name)
-        else:
-            component_folder = first_scenario.path
+            for file_name, component_type in ComponentType.get_file_names_maps().items():
+                file_path = os.path.join(component_folder, file_name)
 
-        for file_name, component_type in ComponentType.get_file_names_maps().items():
-            file_path = os.path.join(component_folder, file_name)
+                if not os.path.exists(file_path):
+                    continue
 
-            if not os.path.exists(file_path):
-                continue
+                h5_file = h5py.File(file_path)
+                version = get_solution_version(s)
+                for component_name in h5_file.keys():
+                    if component_name not in ans:
+                        index_names = get_index_names(h5_file,component_name,version)
+                        time_index = set(index_names).intersection(set(TimestepType.get_time_steps_names()))
+                        timestep_name = time_index.pop() if len(time_index) > 0 else None
+                        timestep_type = TimestepType.get_time_step_type(timestep_name)
 
-            h5_file = h5py.File(file_path)
-            version = get_solution_version(first_scenario)
-            for component_name in h5_file.keys():
-                index_names = get_index_names(h5_file,component_name,version)
-                time_index = set(index_names).intersection(set(TimestepType.get_time_steps_names()))
-                timestep_name = time_index.pop() if len(time_index) > 0 else None
-                timestep_type = TimestepType.get_time_step_type(timestep_name)
+                        doc = get_doc(h5_file,component_name,version)
 
-                doc = get_doc(h5_file,component_name,version)
+                        has_units = get_has_units(h5_file,component_name,version)
 
-                has_units = get_has_units(h5_file,component_name,version)
-
-                ans[component_name] = Component(
-                    component_name,
-                    component_type,
-                    index_names,
-                    timestep_type,
-                    timestep_name,
-                    file_name,
-                    doc,
-                    has_units
-                )
+                        ans[component_name] = Component(
+                            component_name,
+                            component_type,
+                            index_names,
+                            timestep_type,
+                            timestep_name,
+                            file_name,
+                            doc,
+                            has_units
+                        )
 
         return ans
 
@@ -546,6 +546,8 @@ class SolutionLoader():
             time_step_name = "time_steps_year2storage"
         elif ts_type is TimestepType.operational:
             time_step_name = "time_steps_year2operation"
+        elif ts_type is TimestepType.storage_inter:
+            time_step_name = "time_steps_storage_inter"
         else:
             raise KeyError(f"Time step type {ts_type} not found.")
 
@@ -577,6 +579,10 @@ class SolutionLoader():
             sequence_timesteps_name = "operation"
         elif timestep_type is TimestepType.storage:
             sequence_timesteps_name = "storage"
+        elif timestep_type is TimestepType.storage_inter:
+            sequence_timesteps_name = "inter"
+        elif timestep_type is TimestepType.storage_intra:
+            sequence_timesteps_name = "intra"
         else:
             sequence_timesteps_name = "yearly"
         version = get_solution_version(scenario)

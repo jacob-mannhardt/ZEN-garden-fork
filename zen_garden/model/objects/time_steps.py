@@ -95,6 +95,8 @@ class TimeStepsDicts(object):
         if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             dict_all_sequence_time_steps["intra"] = self.sequence_time_steps_intra
             dict_all_sequence_time_steps["inter"] = self.sequence_time_steps_inter
+            if analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+                dict_all_sequence_time_steps["periods"] = self.sequence_time_steps_periods
         return dict_all_sequence_time_steps
 
     def encode_time_step(self, base_time_steps: int, time_step_type: str = None):

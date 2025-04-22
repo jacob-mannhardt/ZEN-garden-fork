@@ -350,7 +350,7 @@ class StorageTechnologyRules(GenericRule):
             constraints = lhs <= rhs
             self.constraints.add_constraint("constraint_storage_level_intra_min", constraints)
             # 3. storage level limit max
-            period_order = self.time_steps.time_steps_storage_periods_order
+            period_order = self.get_intra2inter_time_step_array()
             period_order = pd.Series(index=range(len(period_order)),data=period_order)
             period_order.name = "set_time_steps_storage_periods"
             period_order.index.name = "set_time_steps_storage_inter"
@@ -365,7 +365,7 @@ class StorageTechnologyRules(GenericRule):
             constraints = lhs <= rhs
             self.constraints.add_constraint("constraint_storage_level_max", constraints)
             # 4. storage level limit min
-            period_order = self.time_steps.time_steps_storage_periods_order
+            period_order = self.get_intra2inter_time_step_array()
             period_order = pd.Series(index=range(len(period_order)), data=period_order)
             period_order.name = "set_time_steps_storage_periods"
             period_order.index.name = "set_time_steps_storage_inter"

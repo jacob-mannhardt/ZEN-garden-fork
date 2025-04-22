@@ -114,7 +114,7 @@ class Results:
         :param index: slicing index of the resulting dataframe
         :return: Full timeseries
         """
-        assert component.timestep_type is not None, "Component has no timestep type."
+        assert component.timestep_type is not None, f"Component {component.name} has no timestep type."
         
         if index is None:
             index = tuple()
@@ -174,7 +174,7 @@ class Results:
                 )
                 series[time_steps_year] = series[time_steps_year] / annuity[year_temp]
         try:
-            if component.timestep_type is TimestepType.operational or component.timestep_type is TimestepType.storage_inter or component.timestep_type is TimestepType.storage_intra:
+            if component.timestep_type is TimestepType.operational or component.timestep_type is TimestepType.storage_inter or component.timestep_type is TimestepType.storage_intra or component.timestep_type is TimestepType.storage_periods:
                 if select_year_time_steps:
                     sequence_timesteps = sequence_timesteps[sequence_timesteps.isin(time_steps)]
                 output_df = series[sequence_timesteps]

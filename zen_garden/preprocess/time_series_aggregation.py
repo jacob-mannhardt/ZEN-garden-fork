@@ -457,6 +457,15 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: ts for idx, ts in enumerate(unique_sequence_time_steps)}
+            if self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+                if self.system.optimized_years != 1:
+                    raise NotImplementedError ("The minmax storage representation method is not yet implemented for multiple years")
+                if self.conducted_tsa:
+                    self.time_steps.time_steps_storage_periods = self.aggregation.clusterPeriodIdx
+                    self.time_steps.sequence_time_steps_periods = np.repeat(self.aggregation.clusterOrder,self.analysis.time_series_aggregation.hoursPerPeriod)
+                else:
+                    self.time_steps.time_steps_storage_periods = np.arange(int(len(sequence_time_steps)/self.analysis.time_series_aggregation.hoursPerPeriod))
+                    self.time_steps.sequence_time_steps_periods = np.repeat(self.time_steps.time_steps_storage_periods,self.analysis.time_series_aggregation.hoursPerPeriod)
         else:
             raise NotImplementedError(f"Storage representation method {self.analysis.time_series_aggregation.storageRepresentationMethod} not yet implemented")
         # overwrite in time steps object

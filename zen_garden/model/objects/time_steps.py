@@ -25,7 +25,6 @@ class TimeStepsDicts(object):
             self.time_steps_storage_intra = None
             self.time_steps_storage_inter = None
             self.time_steps_storage_periods = None
-            self.time_steps_storage_periods_order = None
             self.sequence_time_steps_operation = None
             self.sequence_time_steps_storage = None
             self.sequence_time_steps_yearly = None

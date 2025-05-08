@@ -50,8 +50,8 @@ class Carrier(Element):
         self.carbon_intensity_carrier_import = self.data_input.extract_input_data("carbon_intensity_carrier_import", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"emissions": 1, "energy_quantity": -1})
         self.carbon_intensity_carrier_export = self.data_input.extract_input_data("carbon_intensity_carrier_export", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly",  unit_category={"emissions": 1, "energy_quantity": -1})
         self.price_shed_demand = self.data_input.extract_input_data("price_shed_demand", index_sets=[], unit_category={"money": 1, "energy_quantity": -1})
-        self.transport_limit_in = self.data_input.extract_input_data("transport_limit_in", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_base_time_steps_yearly", unit_category={"energy_quantity": 1})
-        self.transport_limit_out = self.data_input.extract_input_data("transport_limit_out", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_base_time_steps_yearly", unit_category={"energy_quantity": 1})
+        self.transport_limit_in = self.data_input.extract_input_data("transport_limit_in", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
+        self.transport_limit_out = self.data_input.extract_input_data("transport_limit_out", index_sets=["set_nodes", "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1})
 
     def overwrite_time_steps(self, base_time_steps):
         """ overwrites set_time_steps_operation
@@ -448,7 +448,25 @@ class CarrierRules(GenericRule):
             # if there is no carrier flow we just create empty arrays
             term_flow_transport_in = self.variables["flow_import"].where(False).to_linexpr()
             term_flow_transport_out = self.variables["flow_import"].where(False).to_linexpr()
-        a=1
+        # sum up over all operation time steps per year
+        time_step_duration = self.get_year_time_step_duration_array()
+        term_flow_transport_in = (term_flow_transport_in.assign_coords(time_step_duration.coords) * time_step_duration).sum("set_time_steps_operation")
+        term_flow_transport_out = (term_flow_transport_out.assign_coords(time_step_duration.coords) * time_step_duration).sum("set_time_steps_operation")
+        # transport limits
+        transport_limit_in = self.parameters.transport_limit_in
+        transport_limit_out = self.parameters.transport_limit_out
+        mask_limit_in = transport_limit_in != np.inf
+        mask_limit_out = transport_limit_out != np.inf
+        # create the constraints
+        lhs_in = term_flow_transport_in.where(mask_limit_in)
+        lhs_out = term_flow_transport_out.where(mask_limit_out)
+        rhs_in = transport_limit_in.where(mask_limit_in,0.0)
+        rhs_out = transport_limit_out.where(mask_limit_out,0.0)
+        constraints_in = lhs_in <= rhs_in
+        constraints_out = lhs_out <= rhs_out
+        # add the constraints to the model
+        self.constraints.add_constraint("constraint_transport_limit_in",constraints_in)
+        self.constraints.add_constraint("constraint_transport_limit_out",constraints_out)
 
     def constraint_nodal_energy_balance(self):
         """

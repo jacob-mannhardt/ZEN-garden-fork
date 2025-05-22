@@ -171,6 +171,16 @@ class Postprocess:
         benchmarking_data = dict()
         # get the benchmarking data
         benchmarking_data["objective_value"] = self.model.objective.value
+        benchmarking_data["construction_time"] = self.optimization_setup.construction_time
+        benchmarking_data["number_of_variables"] = sum(
+            self.model.variables[var_name].size for var_name in self.model.variables)
+        benchmarking_data["number_of_storage_variables"] = sum(
+            self.model.variables[var_name].size for var_name in self.model.variables if "storage_level" in var_name)
+        benchmarking_data["number_of_constraints"] = sum(
+            self.model.constraints[const_name].size for const_name in self.model.constraints)
+        benchmarking_data["number_of_storage_constraints"] = sum(
+            self.model.constraints[const_name].size for const_name in self.model.constraints if
+            "storage_level" in const_name)
         if self.solver.name == "gurobi":
             benchmarking_data["solving_time"] = self.model.solver_model.Runtime
             if self.solver.solver_options["Method"] == 2:

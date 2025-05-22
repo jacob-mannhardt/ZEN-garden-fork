@@ -30,6 +30,7 @@ class TimeStepsDicts(object):
             self.sequence_time_steps_yearly = None
             self.sequence_time_steps_inter = None
             self.sequence_time_steps_intra = None
+            self.sequence_time_steps_periods = None
             self.time_steps_operation_duration = None
             self.time_steps_storage_duration = None
 
@@ -37,6 +38,7 @@ class TimeStepsDicts(object):
             self.time_steps_year2operation = None
             self.time_steps_storage2year = None
             self.time_steps_year2storage = None
+            self.time_steps_year2period = None
 
             self.time_steps_energy2power = None
 
@@ -89,7 +91,7 @@ class TimeStepsDicts(object):
         dict_all_sequence_time_steps = {"operation": self.sequence_time_steps_operation,
                                         "storage": self.sequence_time_steps_storage,
                                         "yearly": self.sequence_time_steps_yearly}
-        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             dict_all_sequence_time_steps["intra"] = self.sequence_time_steps_intra
             dict_all_sequence_time_steps["inter"] = self.sequence_time_steps_inter
             if analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
@@ -176,6 +178,18 @@ class TimeStepsDicts(object):
             time_steps_year2storage[year] = time_steps_combi_storage[0,time_steps_combi_storage[1] == year]
         self.time_steps_year2storage = time_steps_year2storage
 
+    def set_time_steps_year2period(self):
+        """ calculates the conversion of invest/yearly time steps to periods
+
+        """
+        sequence_period = self.sequence_time_steps_periods
+        sequence_yearly = self.sequence_time_steps_yearly
+        time_steps_combi_storage = np.vstack(pd.unique(pd.Series(zip(sequence_period, sequence_yearly)))).T
+        time_steps_year2period = {}
+        for year in pd.unique(time_steps_combi_storage[1]):
+            time_steps_year2period[year] = time_steps_combi_storage[0, time_steps_combi_storage[1] == year]
+        self.time_steps_year2period = time_steps_year2period
+
     def set_time_steps_storage_startend(self, system, analysis):
         """ sets the dict of matching the last time step of the year in the storage level domain to the first
 
@@ -196,7 +210,7 @@ class TimeStepsDicts(object):
         else:
             self.time_steps_storage_level_startend_year = {self.sequence_time_steps_storage[0]: self.sequence_time_steps_storage[-1]}
 
-        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        if analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             sequence_time_steps_inter = self.time_steps_storage_inter
             counter_inter = 0
             time_steps_start_inter = []
@@ -235,6 +249,17 @@ class TimeStepsDicts(object):
             return self.time_steps_year2storage
         else:
             return self.time_steps_year2storage[year]
+
+    def get_time_steps_year2period(self, year=None):
+        """ gets the dict of converting the invest time steps to the period time steps of technologies
+
+        :param year: year of interest
+        :return: time_steps_year2period of the specified element (at specified year)
+        """
+        if year is None:
+            return self.time_steps_year2period
+        else:
+            return self.time_steps_year2period[year]
 
     def get_time_steps_storage_startend(self, time_step, direction, ts_type=None):
         """ gets the dict of converting the operational time steps to the invest time steps of technologies

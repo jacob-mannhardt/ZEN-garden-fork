@@ -114,7 +114,7 @@ class Element:
         t_end = time.perf_counter()
         if optimization_setup.solver.run_diagnostics:
             logging.info(f"Total time to construct model components: {t_end - t_start:0.1f} seconds")
-            optimization_setup.construction_time = t_end - t_start
+        optimization_setup.construction_time = t_end - t_start
 
     @classmethod
     def construct_sets(cls, optimization_setup):
@@ -416,6 +416,13 @@ class GenericRule(object):
         times = {st: y for y in self.sets["set_time_steps_yearly"] for st in self.energy_system.time_steps.get_time_steps_year2storage(y)}
         times = pd.Series(times,name="set_time_steps_yearly")
         times.index.name = "set_time_steps_storage"
+        return times
+
+    def get_period2year_time_step_array(self):
+        """ returns array with period2year time steps """
+        times = {st: y for y in self.sets["set_time_steps_yearly"] for st in self.energy_system.time_steps.get_time_steps_year2period(y)}
+        times = pd.Series(times,name="set_time_steps_yearly")
+        times.index.name = "set_time_steps_storage_periods"
         return times
 
     def get_intra2energy_time_step_array(self):

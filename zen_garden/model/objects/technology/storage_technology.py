@@ -8,6 +8,7 @@ import logging
 
 import numpy as np
 import xarray as xr
+import pandas as pd
 
 from zen_garden.utils import linexpr_from_tuple_np, setup_logger
 from .technology import Technology
@@ -152,7 +153,7 @@ class StorageTechnology(Technology):
         # flow of carrier on node out of storage
         variables.add_variable(model, name="flow_storage_discharge", index_sets=(index_values, index_names),
             bounds=bounds, doc='carrier flow out of storage technology on node i and time t', unit_category={"energy_quantity": 1, "time": -1})
-        if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        if optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             # intra storage level
             variables.add_variable(model, name="storage_level_intra", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage_intra"], optimization_setup), bounds=(-np.inf, np.inf),
                 doc="storage level of Kotzur's intra states of storage technology on node in each storage time step", unit_category={"energy_quantity": 1})
@@ -303,7 +304,7 @@ class StorageTechnologyRules(GenericRule):
         capacity = self.map_and_expand(self.variables["capacity"],times)
         capacity = capacity.rename({"set_technologies": "set_storage_technologies","set_location":"set_nodes"})
         capacity = capacity.sel({"set_nodes":nodes,"set_storage_technologies":techs})
-        if self.analysis.time_series_aggregation.storageRepresentationMethod != "wogrin":
+        if self.analysis.time_series_aggregation.storageRepresentationMethod != "minmax" and self.analysis.time_series_aggregation.storageRepresentationMethod != "wogrin":
             if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
                 hpp = self.analysis.time_series_aggregation.hoursPerPeriod
                 self_discharge = self.parameters.self_discharge
@@ -475,7 +476,7 @@ class StorageTechnologyRules(GenericRule):
             rhs = 0
             constraints = lhs == rhs
             self.constraints.add_constraint("constraint_couple_storage_level",constraints)
-        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             times_coupling, mask_coupling = self.get_next_time_step_array(type="storage_intra")
             term_delta_storage_level = (-(1-self_discharge) * self.variables["storage_level_intra"] + self.variables["storage_level_intra"].sel({"set_time_steps_storage_intra": times_coupling}))
             # charge and discharge flow

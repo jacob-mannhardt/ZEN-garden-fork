@@ -224,9 +224,11 @@ class EnergySystem:
         self.optimization_setup.sets.add_set(name="set_time_steps_operation",data=self.time_steps.time_steps_operation,doc="Set of operational time steps")
         # storage time steps
         self.optimization_setup.sets.add_set(name="set_time_steps_storage",data=self.time_steps.time_steps_storage,doc="Set of storage level time steps")
-        if self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        if self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             self.optimization_setup.sets.add_set(name="set_time_steps_storage_intra", data=self.time_steps.time_steps_storage_intra, doc="Set of intra storage level time steps")
             self.optimization_setup.sets.add_set(name="set_time_steps_storage_inter", data=self.time_steps.time_steps_storage_inter, doc="Set of inter storage level time steps")
+            if self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+                self.optimization_setup.sets.add_set(name="set_time_steps_storage_periods", data=self.time_steps.time_steps_storage_periods, doc="Set of inter storage level time steps")
 
     def construct_params(self):
         """ constructs the pe.Params of the class <EnergySystem> """

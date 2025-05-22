@@ -448,7 +448,7 @@ class TimeSeriesAggregation(object):
             time_steps_storage_duration = {key: 1 for key in time_steps_storage}
             sequence_time_steps_storage = np.arange(len(sequence_time_steps))
             time_steps_energy2power = {idx: value for idx, value in enumerate(sequence_time_steps)}
-        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+        elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             time_steps_storage = np.arange(len(sequence_time_steps))
             unique_array, idx = np.unique(sequence_time_steps, return_index=True)
             unique_sequence_time_steps = sequence_time_steps[np.sort(idx)]
@@ -474,6 +474,8 @@ class TimeSeriesAggregation(object):
         self.time_steps.sequence_time_steps_storage = sequence_time_steps_storage
         # set the storage2year
         self.time_steps.set_time_steps_storage2year_both_dir()
+        if self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
+            self.time_steps.set_time_steps_year2period()
         # set the dict time_steps_energy2power
         self.time_steps.time_steps_energy2power = time_steps_energy2power
         # set the first and last time step of each year

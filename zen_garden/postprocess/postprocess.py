@@ -179,6 +179,14 @@ class Postprocess:
             else:
                 benchmarking_data["number_iterations"] = self.model.solver_model.IterCount
             benchmarking_data["solver_status"] = self.model.solver_model.Status
+            if benchmarking_data["solver_status"] == 13:
+                benchmarking_data["suboptimality"] = {
+                    "ConstrVio": self.model.solver_model.ConstrVio,
+                    "ConstrResidual": self.model.solver_model.ConstrResidual,
+                    "DualVio": self.model.solver_model.DualVio,
+                    "DualResidual": self.model.solver_model.DualResidual,
+                    "ComplVio": self.model.solver_model.ComplVio,
+                }
             benchmarking_data["number_constraints"] = self.model.solver_model.NumConstrs
             benchmarking_data["number_variables"] = self.model.solver_model.NumVars
         elif self.solver.name == "highs":

@@ -95,9 +95,8 @@ class Postprocess:
         # extract and save sequence time steps, we transform the arrays to lists
         self.dict_sequence_time_steps = self.flatten_dict(self.energy_system.time_steps.get_sequence_time_steps_dict(self.analysis))
         self.dict_sequence_time_steps["optimized_time_steps"] = optimization_setup.optimized_time_steps
-        if include_year2operation:
-            self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
-            self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
+        self.dict_sequence_time_steps["time_steps_year2operation"] = self.get_time_steps_year2operation()
+        self.dict_sequence_time_steps["time_steps_year2storage"] = self.get_time_steps_year2storage()
 
         self.save_sequence_time_steps(scenario=scenario_name)
 

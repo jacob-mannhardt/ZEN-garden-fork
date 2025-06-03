@@ -625,7 +625,11 @@ class OptimizationSetup(object):
             else:
                 index_list = []
             if set_time_steps:
-                component_data = component[self.sets[set_time_steps]]
+                if len(index_list)<=1:
+                    component_data = component[self.sets[set_time_steps]]
+                else:
+                    custom_set, index_list = Element.create_custom_set(index_names, self)
+                    component_data = component[custom_set]
             elif type(component) == float:
                 component_data = component
             else:

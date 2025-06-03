@@ -97,8 +97,10 @@ class EnergySystem:
         self.discount_rate = self.data_input.extract_input_data("discount_rate", index_sets=[], unit_category={})
         # carbon emissions limit
         self.carbon_emissions_annual_limit = self.data_input.extract_input_data("carbon_emissions_annual_limit", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"emissions": 1})
+        self.carbon_emissions_annual_limit_nodal = self.data_input.extract_input_data("carbon_emissions_annual_limit_nodal", index_sets=["set_nodes","set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"emissions": 1})
         _fraction_year = self.system.unaggregated_time_steps_per_year / self.system.total_hours_per_year
         self.carbon_emissions_annual_limit = self.carbon_emissions_annual_limit * _fraction_year  # reduce to fraction of year
+        self.carbon_emissions_annual_limit_nodal = self.carbon_emissions_annual_limit_nodal * _fraction_year  # reduce to fraction of year
         self.carbon_emissions_budget = self.data_input.extract_input_data("carbon_emissions_budget", index_sets=[], unit_category={"emissions": 1})
         self.carbon_emissions_cumulative_existing = self.data_input.extract_input_data("carbon_emissions_cumulative_existing", index_sets=[], unit_category={"emissions": 1})
         # price carbon emissions
@@ -238,6 +240,8 @@ class EnergySystem:
         parameters.add_parameter(name="discount_rate", doc='Parameter which specifies the discount rate of the energy system', calling_class=cls)
         # carbon emissions limit
         parameters.add_parameter(name="carbon_emissions_annual_limit", set_time_steps="set_time_steps_yearly", doc='Parameter which specifies the total limit on carbon emissions', calling_class=cls)
+        # carbon emissions limit
+        parameters.add_parameter(name="carbon_emissions_annual_limit_nodal", set_time_steps="set_time_steps_yearly",index_names=["set_nodes","set_time_steps_yearly"], doc='Parameter which specifies the total limit on carbon emissions', calling_class=cls)
         # carbon emissions budget
         parameters.add_parameter(name="carbon_emissions_budget", doc='Parameter which specifies the total budget of carbon emissions until the end of the entire time horizon', calling_class=cls)
         # carbon emissions budget
@@ -262,6 +266,8 @@ class EnergySystem:
         model = self.optimization_setup.model
         # carbon emissions
         variables.add_variable(model, name="carbon_emissions_annual", index_sets=sets["set_time_steps_yearly"], doc="annual carbon emissions of energy system", unit_category={"emissions": 1})
+        # carbon emissions for each node
+        variables.add_variable(model, name="carbon_emissions_annual_nodal", index_sets=Element.create_custom_set(["set_nodes", "set_time_steps_yearly"], self.optimization_setup), doc="annual carbon emissions of energy system for each node", unit_category={"emissions": 1})
         # cumulative carbon emissions
         variables.add_variable(model, name="carbon_emissions_cumulative", index_sets=sets["set_time_steps_yearly"],
                                doc="cumulative carbon emissions of energy system over time for each year", unit_category={"emissions": 1})
@@ -293,6 +299,9 @@ class EnergySystem:
         # annual limit carbon emissions
         self.rules.constraint_carbon_emissions_annual_limit()
 
+        # annual limit carbon emissions for each node
+        self.rules.constraint_carbon_emissions_annual_limit_nodal()
+
         # carbon emission budget limit
         self.rules.constraint_carbon_emissions_budget()
 
@@ -301,6 +310,9 @@ class EnergySystem:
 
         # total carbon emissions
         self.rules.constraint_carbon_emissions_annual()
+
+        # total carbon emissions for each node
+        self.rules.constraint_carbon_emissions_annual_nodal()
 
         # cost of carbon emissions
         self.rules.constraint_cost_carbon_emissions_total()
@@ -390,6 +402,20 @@ class EnergySystemRules(GenericRule):
         constraints = lhs <= rhs
 
         self.constraints.add_constraint("constraint_carbon_emissions_annual_limit",constraints)
+
+    def constraint_carbon_emissions_annual_limit_nodal(self):
+        """ time dependent carbon emissions limit from technologies and carriers for each node
+
+        .. math::
+            E_{y,n}\\leq e_{y,n}
+
+        """
+        mask = self.parameters.carbon_emissions_annual_limit_nodal != np.inf
+        lhs = self.variables["carbon_emissions_annual_nodal"].where(mask)
+        rhs = self.parameters.carbon_emissions_annual_limit_nodal.where(mask,0.0)
+        constraints = lhs <= rhs
+
+        self.constraints.add_constraint("constraint_carbon_emissions_annual_limit_nodal",constraints)
 
     def constraint_carbon_emissions_budget(self):
         """ carbon emissions budget of entire time horizon from technologies and carriers.
@@ -491,7 +517,6 @@ class EnergySystemRules(GenericRule):
 
         self.constraints.add_constraint("constraint_carbon_emissions_annual_overshoot",constraints)
 
-
     def constraint_carbon_emissions_annual(self):
         """ add up all carbon emissions from technologies and carriers
 
@@ -510,6 +535,30 @@ class EnergySystemRules(GenericRule):
         constraints = lhs == rhs
 
         self.constraints.add_constraint("constraint_carbon_emissions_annual",constraints)
+
+    def constraint_carbon_emissions_annual_nodal(self):
+        """ add up all carbon emissions from technologies and carriers for each node
+
+        .. math::
+            E_{y,n} = E_{y,n,\\mathcal{H}} + E_{y,n,\\mathcal{C}}
+
+        :math:`E_{y,n,\\mathcal{H}}`: carbon emissions from technologies in year :math:`y` at node :math:`n` \n
+        :math:`E_{y,n,\\mathcal{C}}`: carbon emissions from carriers in year :math:`y` at node :math:`n`
+        """
+        term_carbon_emissions_carrier = (
+                self.variables["carbon_emissions_carrier"] * self.get_year_time_step_duration_array()).sum(
+            ["set_carriers", "set_time_steps_operation"])
+        term_carbon_emissions_technology = (
+                self.variables["carbon_emissions_technology"] * self.get_year_time_step_duration_array()).sum(
+            ["set_technologies", "set_time_steps_operation"])
+        term_carbon_emissions_technology = term_carbon_emissions_technology.sel({"set_location":self.sets["set_nodes"]})
+        term_carbon_emissions_technology = term_carbon_emissions_technology.rename({"set_location": "set_nodes"})
+        lhs = (self.variables["carbon_emissions_annual_nodal"]
+               - term_carbon_emissions_technology
+               - term_carbon_emissions_carrier)
+        rhs = 0
+        constraints = lhs == rhs
+        self.constraints.add_constraint("constraint_carbon_emissions_annual_nodal",constraints)
 
     def constraint_cost_carbon_emissions_total(self):
         """ carbon cost associated with the carbon emissions of the system in each year

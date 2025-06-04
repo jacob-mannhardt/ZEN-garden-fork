@@ -9,7 +9,7 @@ import logging
 import numpy as np
 import pandas as pd
 import xarray as xr
-from linopy import LinearExpression
+import linopy as lp
 
 from zen_garden.model.objects.element import GenericRule,Element
 from zen_garden.preprocess.extract_input_data import DataInput
@@ -553,9 +553,43 @@ class EnergySystemRules(GenericRule):
             ["set_technologies", "set_time_steps_operation"])
         term_carbon_emissions_technology = term_carbon_emissions_technology.sel({"set_location":self.sets["set_nodes"]})
         term_carbon_emissions_technology = term_carbon_emissions_technology.rename({"set_location": "set_nodes"})
+        # add flow terms
+        ### index sets
+        if "carbon" in self.sets["set_carriers"] and self.variables["flow_transport"].size > 0:
+            index_values, index_names = Element.create_custom_set(["set_carriers", "set_nodes", "set_time_steps_operation"],self.optimization_setup)
+            index_values = [iv for iv in index_values if iv[0] == "carbon"]
+            index = ZenIndex(index_values, index_names)
+            # carrier flow transport technologies
+            # recalculate all the edges
+            edges_in = {(node,edge):1 for node in self.sets["set_nodes"] for edge in self.energy_system.calculate_connected_edges(node, "in")}
+            edges_out = {(node,edge):1 for node in self.sets["set_nodes"] for edge in self.energy_system.calculate_connected_edges(node, "out")}
+            edges_in = pd.Series(edges_in)
+            edges_in.index.names = ["set_nodes", "set_edges"]
+            edges_out = pd.Series(edges_out)
+            edges_out.index.names = ["set_nodes", "set_edges"]
+            edges_in = edges_in.to_xarray().fillna(0)
+            edges_out = edges_out.to_xarray().fillna(0)
+            term_flow_transport_in = (self.variables["flow_transport"] * edges_in).sum(["set_edges"])
+            term_flow_transport_out = (self.variables["flow_transport"] * edges_out).sum(["set_edges"])
+            term_flow_transport_loss = (self.variables["flow_transport_loss"] * edges_in).sum(["set_edges"])
+            term_net_flow = term_flow_transport_in - term_flow_transport_out - term_flow_transport_loss
+            carbon_techs = [tech for tech in self.sets["set_transport_technologies"] if "carbon" in self.sets["set_reference_carriers"][tech]]
+            term_net_flow_carbon = term_net_flow.sel({"set_transport_technologies": carbon_techs}).sum(["set_transport_technologies"])
+            assert "carbon_storage" in self.sets["set_conversion_technologies"], "The set of conversion technologies must contain 'carbon_storage' to calculate carbon storage."
+            carbon_intensity_carbon_storage = self.parameters.carbon_intensity_technology.sel({"set_technologies":"carbon_storage"}).to_series().dropna().iloc[0]
+            term_net_flow_carbon = term_net_flow_carbon * carbon_intensity_carbon_storage
+            time_step_duration = self.get_year_time_step_duration_array()
+            term_net_flow_carbon = (term_net_flow_carbon.assign_coords(time_step_duration.coords) * time_step_duration).sum("set_time_steps_operation")
+            term_net_flow_carbon = term_net_flow_carbon.reindex_like(term_carbon_emissions_technology.const)
+        else:
+            # if there is no carrier flow we just create empty arrays
+            term_net_flow_carbon = term_carbon_emissions_technology.where(False).to_linexpr()
+        # sum up all terms
+        # build LHS
         lhs = (self.variables["carbon_emissions_annual_nodal"]
                - term_carbon_emissions_technology
-               - term_carbon_emissions_carrier)
+               - term_carbon_emissions_carrier
+               - term_net_flow_carbon)
         rhs = 0
         constraints = lhs == rhs
         self.constraints.add_constraint("constraint_carbon_emissions_annual_nodal",constraints)

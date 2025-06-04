@@ -577,7 +577,7 @@ class EnergySystemRules(GenericRule):
             term_net_flow_carbon = term_net_flow.sel({"set_transport_technologies": carbon_techs}).sum(["set_transport_technologies"])
             assert "carbon_storage" in self.sets["set_conversion_technologies"], "The set of conversion technologies must contain 'carbon_storage' to calculate carbon storage."
             carbon_intensity_carbon_storage = self.parameters.carbon_intensity_technology.sel({"set_technologies":"carbon_storage"}).to_series().dropna().iloc[0]
-            term_net_flow_carbon = term_net_flow_carbon * carbon_intensity_carbon_storage
+            term_net_flow_carbon = term_net_flow_carbon * xr.DataArray(carbon_intensity_carbon_storage)
             time_step_duration = self.get_year_time_step_duration_array()
             term_net_flow_carbon = (term_net_flow_carbon.assign_coords(time_step_duration.coords) * time_step_duration).sum("set_time_steps_operation")
             term_net_flow_carbon = term_net_flow_carbon.reindex_like(term_carbon_emissions_technology.const)

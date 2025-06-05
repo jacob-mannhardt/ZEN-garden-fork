@@ -572,7 +572,7 @@ class EnergySystemRules(GenericRule):
             term_flow_transport_in = (self.variables["flow_transport"] * edges_in).sum(["set_edges"])
             term_flow_transport_out = (self.variables["flow_transport"] * edges_out).sum(["set_edges"])
             term_flow_transport_loss = (self.variables["flow_transport_loss"] * edges_in).sum(["set_edges"])
-            term_net_flow = term_flow_transport_in - term_flow_transport_out - term_flow_transport_loss
+            term_net_flow = - term_flow_transport_in + term_flow_transport_out + term_flow_transport_loss
             carbon_techs = [tech for tech in self.sets["set_transport_technologies"] if "carbon" in self.sets["set_reference_carriers"][tech]]
             term_net_flow_carbon = term_net_flow.sel({"set_transport_technologies": carbon_techs}).sum(["set_transport_technologies"])
             assert "carbon_storage" in self.sets["set_conversion_technologies"], "The set of conversion technologies must contain 'carbon_storage' to calculate carbon storage."

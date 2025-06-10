@@ -303,7 +303,7 @@ class StorageTechnologyRules(GenericRule):
         times = self.get_storage2year_time_step_array()
         capacity = self.map_and_expand(self.variables["capacity"],times)
         capacity = capacity.rename({"set_technologies": "set_storage_technologies","set_location":"set_nodes"})
-        capacity = capacity.sel({"set_nodes":nodes,"set_storage_technologies":techs})
+        capacity = capacity.sel({"set_nodes":nodes,"set_storage_technologies":techs,"set_capacity_types":"energy"})
         if self.analysis.time_series_aggregation.storageRepresentationMethod != "minmax" and self.analysis.time_series_aggregation.storageRepresentationMethod != "wogrin":
             if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
                 hpp = self.analysis.time_series_aggregation.hoursPerPeriod
@@ -316,17 +316,16 @@ class StorageTechnologyRules(GenericRule):
                 storage_level = (1 - self_discharge) ** self_discharge_exponent * self.map_and_expand(self.variables["storage_level_inter"], times_inter2storage)+ self.map_and_expand(self.variables["storage_level_intra"], times_intra2storage)
             else:
                 storage_level = self.variables["storage_level"]
-            mask_capacity_type = self.variables["capacity"].coords["set_capacity_types"] == "energy"
-            lhs = (storage_level-capacity).where(mask_capacity_type,0.0)
+            lhs = storage_level-capacity
             rhs = 0
             constraints = lhs <= rhs
             self.constraints.add_constraint("constraint_storage_level_max", constraints)
-            if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
-                # since the superposed storage level is not bounded by the lower bound of variable storage_level, this constraint ensures that the superposed storage level is always greater equal zero
-                lhs = -storage_level.where(mask_capacity_type,0.0)
-                rhs = 0
-                constraints = lhs <= rhs
-                self.constraints.add_constraint("constraint_storage_level_min", constraints)
+            # if self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur":
+            # since the superposed storage level is not bounded by the lower bound of variable storage_level, this constraint ensures that the superposed storage level is always greater equal zero
+            lhs = -storage_level
+            rhs = 0
+            constraints = lhs <= rhs
+            self.constraints.add_constraint("constraint_storage_level_min", constraints)
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             hpp = self.analysis.time_series_aggregation.hoursPerPeriod
             self_discharge = self.parameters.self_discharge
@@ -358,9 +357,8 @@ class StorageTechnologyRules(GenericRule):
             periods = self.get_period2year_time_step_array()
             capacity = self.map_and_expand(self.map_and_expand(self.variables["capacity"], periods),period_order)
             capacity = capacity.rename({"set_technologies": "set_storage_technologies", "set_location": "set_nodes"})
-            capacity = capacity.sel({"set_nodes": nodes, "set_storage_technologies": techs})
-            mask_capacity_type = self.variables["capacity"].coords["set_capacity_types"] == "energy"
-            lhs = (self.variables["storage_level_inter"] + storage_level_intra_max - capacity).where(mask_capacity_type,0.0) # this is the formulation in kotzur appendix
+            capacity = capacity.sel({"set_nodes": nodes, "set_storage_technologies": techs, "set_capacity_types": "energy"})
+            lhs = self.variables["storage_level_inter"] + storage_level_intra_max - capacity # this is the formulation in kotzur appendix
             rhs = 0
             constraints = lhs <= rhs
             self.constraints.add_constraint("constraint_storage_level_max", constraints)
@@ -374,7 +372,7 @@ class StorageTechnologyRules(GenericRule):
             rhs = 0
             constraints = lhs >= rhs
             self.constraints.add_constraint("constraint_storage_level_min", constraints)
-        # wogrin
+                    # wogrin
         else:
             times_power2energy = self.get_power2energy_time_step_array()
             flow_storage_charge = self.map_and_expand(self.variables["flow_storage_charge"], times_power2energy)
@@ -399,9 +397,6 @@ class StorageTechnologyRules(GenericRule):
         :math:`\\rho_k^{max}`: maximum power-to-energy ratio of storage :math:`k`
 
         """
-
-
-
         techs = self.sets["set_storage_technologies"]
         if len(techs) == 0:
             return None
@@ -518,7 +513,7 @@ class StorageTechnologyRules(GenericRule):
             self.constraints.add_constraint("constraint_storage_level_inter_coupling", constraint_inter)
 
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
-            a=1
+            raise ValueError("Storage representation method 'wogrin' is not implemented in StorageTechnologyRules.constraint_couple_storage_level(). Please use another representation method or implement the constraint.")
 
 
     def constraint_flow_storage_spillage(self):

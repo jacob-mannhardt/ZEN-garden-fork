@@ -15,4 +15,4 @@ module load gurobi/12.0.1
 
 # activate the env from anywhere
 # $BASH_SOURCE contains the path that was sourced
-source $(realpath $BASH_SOURCE | xargs dirname)/zen_garden_env/bin/activate
+source $(realpath $BASH_SOURCE | xargs dirname)/zen_garden_env_tsa/bin/activate

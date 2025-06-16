@@ -372,7 +372,7 @@ class StorageTechnologyRules(GenericRule):
             rhs = 0
             constraints = lhs >= rhs
             self.constraints.add_constraint("constraint_storage_level_min", constraints)
-                    # wogrin
+        # wogrin
         else:
             times_power2energy = self.get_power2energy_time_step_array()
             flow_storage_charge = self.map_and_expand(self.variables["flow_storage_charge"], times_power2energy)
@@ -473,6 +473,7 @@ class StorageTechnologyRules(GenericRule):
             self.constraints.add_constraint("constraint_couple_storage_level",constraints)
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "kotzur" or self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
             times_coupling, mask_coupling = self.get_next_time_step_array(type="storage_intra")
+            sel_coupling = {"set_time_steps_storage_intra": [t for t,b in mask_coupling.to_series().items() if b == True]}
             term_delta_storage_level = (-(1-self_discharge) * self.variables["storage_level_intra"] + self.variables["storage_level_intra"].sel({"set_time_steps_storage_intra": times_coupling}))
             # charge and discharge flow
             term_flow_charge_discharge = (self.variables["flow_storage_charge"] * efficiency_charge
@@ -481,16 +482,16 @@ class StorageTechnologyRules(GenericRule):
                                           - flow_storage_spillage)
             times_power2energy = self.get_power2energy_time_step_array(ts_type="intra")
             term_flow_charge_discharge = self.map_and_expand(term_flow_charge_discharge, times_power2energy)
-            lhs = (term_delta_storage_level - term_flow_charge_discharge).where(mask_coupling,0.0)
+            lhs = (term_delta_storage_level - term_flow_charge_discharge).sel(sel_coupling)
             rhs = 0
             constraints_intra = lhs == rhs
             self.constraints.add_constraint("constraint_couple_storage_level_intra", constraints_intra)
 
             # first intra storage level must be 0 per definition
             hpp = self.analysis.time_series_aggregation.hoursPerPeriod
-            mask = [False if (i % hpp != 0 and i != 0) else True for i in self.time_steps.time_steps_operation]
-            mask = xr.DataArray(mask, dims="set_time_steps_storage_intra", coords={"set_time_steps_storage_intra": self.sets["set_time_steps_storage_intra"]})
-            lhs = (self.variables["storage_level_intra"]-0).where(mask,0.0)
+            mask = {"set_time_steps_storage_intra":[i for i in self.time_steps.time_steps_operation if (i % hpp == 0)]}
+            # mask = xr.DataArray(mask, dims="set_time_steps_storage_intra", coords={"set_time_steps_storage_intra": self.sets["set_time_steps_storage_intra"]})
+            lhs = (self.variables["storage_level_intra"]-0).sel(mask)
             rhs = 0
             constraints_intra_zero = lhs == rhs
             self.constraints.add_constraint("constraint_set_first_storage_level_intra_to_zero", constraints_intra_zero)

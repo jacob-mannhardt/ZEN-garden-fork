@@ -338,8 +338,14 @@ class CarrierRules(GenericRule):
         rhs_shed_demand = self.parameters.demand.where(mask, 0.0)
         constraints_shed_demand = lhs_shed_demand <= rhs_shed_demand
 
+        # lower bound on shed demand
+        lhs_shed_demand_lower = self.variables["shed_demand"]
+        rhs_shed_demand_lower = 0.0
+        constraints_shed_demand_lower = lhs_shed_demand_lower >= rhs_shed_demand_lower
+
         self.constraints.add_constraint("constraint_cost_shed_demand",constraints_cost)
         self.constraints.add_constraint("constraint_limit_shed_demand",constraints_shed_demand)
+        self.constraints.add_constraint("constraint_lower_bound_shed_demand",constraints_shed_demand_lower)
 
     def constraint_carbon_emissions_carrier(self):
         """ carbon emissions of importing and exporting carrier

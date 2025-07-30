@@ -150,8 +150,6 @@ class EnergySystem:
         )
         return extended_tax_rate.to_xarray()
 
-
-
     def calculate_edges_from_nodes(self):
         """ calculates set_nodes_on_edges from set_nodes
 

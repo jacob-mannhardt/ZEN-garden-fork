@@ -492,6 +492,9 @@ class Technology(Element):
         # limit diffusion rate
         rules.constraint_technology_diffusion_limit()
 
+        # split overnight capex into capex with and without derisking
+        rules.constraint_split_overnight_capex()
+
         # annual capex of having capacity
         rules.constraint_cost_capex_yearly()
 
@@ -1016,11 +1019,12 @@ class TechnologyRules(GenericRule):
         self.constraints.add_constraint("constraint_cost_capex_yearly",constraints)
 
         # add constraint for derisking budget
-        lending_share = self.parameters.lending_share
-        lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"])
-        rhs = self.parameters.budget_derisking
-        constraints_derisking = lhs <= rhs
-        self.constraints.add_constraint("constraint_limit_derisking_budget",constraints_derisking)
+        if self.optimization_setup.system.variable_CoC:
+            lending_share = self.parameters.lending_share
+            lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"])
+            rhs = self.parameters.budget_derisking
+            constraints_derisking = lhs <= rhs
+            self.constraints.add_constraint("constraint_limit_derisking_budget",constraints_derisking)
 
     def constraint_cost_opex_yearly(self):
         """ yearly opex for a technology at a location in each year

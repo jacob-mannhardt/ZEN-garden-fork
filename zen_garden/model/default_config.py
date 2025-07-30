@@ -97,7 +97,7 @@ class System(Subscriptable):
     use_capacities_existing: bool = True
     allow_investment: bool = True
     storage_charge_discharge_binary: bool = False
-
+    variable_CoC: bool = False
 
 class Solver(Subscriptable):
     """
@@ -157,9 +157,6 @@ class Analysis(Subscriptable):
     output_format: str = "h5"
     earliest_year_of_data: int = 1900
     zen_garden_version: str = None
-    variable_CoC: bool = False
-    calculate_WACC: bool = False
-
 
 class Config(Subscriptable):
     """

@@ -1,8 +1,7 @@
 {
   "analysis": {
     "dataset": "PI_yearly",
-    "variable_CoC": true,
-    "calculate_WACC": false
+    "variable_CoC": true
   },
   "solver": {
     "name": "gurobi",

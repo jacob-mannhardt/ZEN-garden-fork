@@ -63,13 +63,9 @@ class Technology(Element):
         self.capacity_existing = self.data_input.extract_input_data("capacity_existing", index_sets=[set_location, "set_technologies_existing"], unit_category={"energy_quantity": 1, "time": -1})
         self.capacity_investment_existing = self.data_input.extract_input_data("capacity_investment_existing", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"energy_quantity": 1, "time": -1})
         self.lifetime_existing = self.data_input.extract_lifetime_existing("capacity_existing", index_sets=[set_location, "set_technologies_existing"])
-        if self.optimization_setup.analysis.variable_CoC:
-            if self.optimization_setup.analysis.calculate_WACC:
-                #extract data for cost of capital
-                self.debt_ratio = self.data_input.extract_input_data("debt_ratio", index_sets=["set_time_steps_yearly"], unit_category={})
-                self.technology_premium = self.data_input.extract_input_data("technology_premium", index_sets = [set_location,"set_time_steps_yearly"], unit_category={})
-            else:
-                self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"],time_steps="set_time_steps_yearly", unit_category={})
+        if self.optimization_setup.system.variable_CoC:
+            self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"],time_steps="set_time_steps_yearly", unit_category={})
+            self.WACC_derisked = self.data_input.extract_input_data("WACC_derisked", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -349,15 +345,10 @@ class Technology(Element):
                                                     doc="Parameter which specifies the total available capacity of existing technologies at the beginning of the optimization", calling_class=cls)
         optimization_setup.parameters.add_parameter(name="existing_capex", data=cls.get_existing_quantity(optimization_setup,type_existing_quantity="cost_capex_overnight"),
                                                     doc="Parameter which specifies the total capex of existing technologies at the beginning of the optimization", calling_class=cls)
-        if optimization_setup.analysis.variable_CoC:
-            if optimization_setup.analysis.calculate_WACC:
-                #debt ratio
-                optimization_setup.parameters.add_parameter(name="debt_ratio", index_names=["set_technologies","set_time_steps_yearly"],doc='Parameter which specifies the debt ratio of technology',calling_class=cls)
-                #technology premium
-                optimization_setup.parameters.add_parameter(name="technology_premium", index_names=["set_technologies", "set_location","set_time_steps_yearly"],doc='Parameter which specifies the technology premium for calculating the cost of capital',calling_class=cls)
-            else:
-                # weighted average cost of capital
-                optimization_setup.parameters.add_parameter(name="WACC", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the weighted average cost of capital', calling_class=cls)
+        if optimization_setup.system.variable_CoC:
+            optimization_setup.parameters.add_parameter(name="WACC", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the weighted average cost of capital', calling_class=cls)
+            # derisking WACC
+            optimization_setup.parameters.add_parameter(name="WACC_derisked", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the derisking WACC', calling_class=cls)
 
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -421,6 +412,12 @@ class Technology(Element):
         # capex of building capacity overnight
         variables.add_variable(model, name="cost_capex_overnight", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='capex for building technology at location l and time t', unit_category={"money": 1})
+        # capex of building capacity overnight without derisking
+        variables.add_variable(model, name="cost_capex_overnight_no_derisking", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0,np.inf), doc='capex for building technology at location l and time t without derisking', unit_category={"money": 1})
+        # capex of building capacity overnight with derisking
+        variables.add_variable(model, name="cost_capex_overnight_derisking", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0,np.inf), doc='capex for building technology at location l and time t with derisking', unit_category={"money": 1})
         # annual capex of having capacity
         variables.add_variable(model, name="cost_capex_yearly", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='annual capex for having technology at location l', unit_category={"money": 1})
@@ -461,7 +458,7 @@ class Technology(Element):
         variables.add_variable(model, name="tech_on_var", index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_operation"],optimization_setup),mask=mask_on_off,doc="Binary variable which equals 1 when technology is switched on at location l and time t", binary=True, unit_category=None)
         variables.add_variable(model, name="capacity_on_off_helper_var",index_sets=cls.create_custom_set(["set_technologies", "set_location", "set_time_steps_operation"],optimization_setup), bounds=(0, np.inf),mask=mask_on_off,doc="Helper variable that substitutes the product of capacity and tech_on_var",unit_category={"energy_quantity": 1, "time": -1})
 
-        #add NPC variable
+        # add NPC variable
         variables.add_variable(model, name="net_present_cost_yearly_technology", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),doc='net present cost for having technology at location l', unit_category={"money": 1})
 
         # add pe.Vars of the child classes
@@ -945,6 +942,23 @@ class TechnologyRules(GenericRule):
             constraints_an = lhs_an <= rhs_an
             self.constraints.add_constraint("constraint_technology_diffusion_limit",constraints_an)
 
+    def constraint_split_overnight_capex(self):
+        """ splits the overnight capex into the not derisked and the derisked part
+
+        .. math::
+            I_{h,p,y} = I_{h,p,y}^\\mathrm{no_derisking} + I_{h,p,y}^\\mathrm{derisking}
+
+        :math:`I_{h,p,y}`: overnight capex of technology :math:`h` at location :math:`p` in year :math:`y` \n
+        :math:`I_{h,p,y}^\\mathrm{no_derisking}`: not derisked overnight capex of technology :math:`h` at location :math:`p` in year :math:`y` \n
+        :math:`I_{h,p,y}^\\mathrm{derisking}`: derisked overnight capex of technology :math:`h` at location :math:`p` in year :math:`y`
+        """
+        lhs = self.variables["cost_capex_overnight"] - (self.variables["cost_capex_overnight_no_derisking"] + self.variables["cost_capex_overnight_derisking"])
+        rhs = 0
+        constraints = lhs == rhs
+
+        ### return
+        self.constraints.add_constraint("constraint_split_overnight_capex",constraints)
+
     def constraint_cost_capex_yearly(self):
         """ aggregates the capex of built capacity and of existing capacity
 
@@ -967,16 +981,18 @@ class TechnologyRules(GenericRule):
         index_values, index_names = Element.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], self.optimization_setup)
         index = ZenIndex(index_values, index_names)
 
-        ### masks
-        # not necessary
-
-        dr = self.get_discount_factor(calling_class="Technology", get_WACC=True)
+        dr_no_derisking = self.get_discount_factor(calling_class="Technology", get_WACC=True)
+        dr_derisking = self.get_discount_factor(calling_class="Technology", get_WACC=True, get_derisked_WACC=True)
         lt = self.parameters.lifetime
-        #ToDo: check for each entry if != then dr otherwise lt
-        if dr.all() != 0: #ToDo: could both 0 and non-zero discount rates be possible?; Check if it is implemented correctly, but annuity factor does not need to be indexed with set_time_steps_yearly_prev
-            a = ((1 + dr) ** lt * dr) / ((1 + dr) ** lt - 1)
+        # ToDo: check for each entry if != then dr otherwise lt
+        if dr_no_derisking.all() != 0: #ToDo: could both 0 and non-zero discount rates be possible?; Check if it is implemented correctly, but annuity factor does not need to be indexed with set_time_steps_yearly_prev
+            a_no_derisking = ((1 + dr_no_derisking) ** lt * dr_no_derisking) / ((1 + dr_no_derisking) ** lt - 1)
         else:
-            a = 1 / lt
+            a_no_derisking = 1 / lt
+        if dr_derisking.all() != 0:
+            a_derisking = ((1 + dr_derisking) ** lt * dr_derisking) / ((1 + dr_derisking) ** lt - 1)
+        else:
+            a_derisking = 1 / lt
         lt_range = pd.MultiIndex.from_tuples([(t, y, py) for t, y in
                                               index.get_unique(["set_technologies", "set_time_steps_yearly"]) for py in
                                               list(Technology.get_lifetime_range(self.optimization_setup, t, y))])
@@ -984,16 +1000,27 @@ class TechnologyRules(GenericRule):
         lt_range.index.names = ["set_technologies", "set_time_steps_yearly", "set_time_steps_yearly_prev"]
         lt_range = lt_range.to_xarray().broadcast_like(self.variables["capacity"].lower).fillna(0)
 
-        cost_capex_overnight = self.variables["cost_capex_overnight"].rename(
+        cost_capex_overnight_no_derisking = self.variables["cost_capex_overnight_no_derisking"].rename(
             {"set_time_steps_yearly": "set_time_steps_yearly_prev"})
-        cost_capex_overnight = cost_capex_overnight.broadcast_like(lt_range)
-        expr = (lt_range * a * cost_capex_overnight).sum("set_time_steps_yearly_prev")
+        cost_capex_overnight_no_derisking = cost_capex_overnight_no_derisking.broadcast_like(lt_range)
+        cost_capex_overnight_derisking = self.variables["cost_capex_overnight_derisking"].rename(
+            {"set_time_steps_yearly": "set_time_steps_yearly_prev"})
+        cost_capex_overnight_derisking = cost_capex_overnight_derisking.broadcast_like(lt_range)
+
+        expr = (lt_range * (a_no_derisking * cost_capex_overnight_no_derisking + a_derisking * cost_capex_overnight_derisking)).sum("set_time_steps_yearly_prev")
         lhs = lp.merge([1 * self.variables["cost_capex_yearly"], expr], compat="broadcast_equals")
-        rhs = (a * self.parameters.existing_capex).broadcast_like(lhs.const)
+        rhs = (a_no_derisking * self.parameters.existing_capex).broadcast_like(lhs.const)
         constraints = lhs == rhs
 
         ### return
         self.constraints.add_constraint("constraint_cost_capex_yearly",constraints)
+
+        # add constraint for derisking budget
+        lending_share = self.parameters.lending_share
+        lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"])
+        rhs = self.parameters.budget_derisking
+        constraints_derisking = lhs <= rhs
+        self.constraints.add_constraint("constraint_limit_derisking_budget",constraints_derisking)
 
     def constraint_cost_opex_yearly(self):
         """ yearly opex for a technology at a location in each year

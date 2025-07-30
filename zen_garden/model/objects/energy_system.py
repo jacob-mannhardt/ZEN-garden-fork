@@ -110,19 +110,12 @@ class EnergySystem:
         # knowledge_spillover_rate
         self.knowledge_depreciation_rate = self.data_input.extract_input_data("knowledge_depreciation_rate", index_sets=[], unit_category={})
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
-
-        #new input data for variable CoC -> only relevant if variable CoC is calculated based on decomposition in equity and debt margin
-        if self.optimization_setup.analysis.variable_CoC:
-            if self.optimization_setup.analysis.calculate_WACC:
-                # debt_margin
-                self.interest_rate = self.data_input.extract_input_data("interest_rate",index_sets=["set_time_steps_yearly", "set_nodes"], time_steps="set_time_steps_yearly", unit_category={})
-                self.interest_rate = self.add_location_index_to_input_data(self.interest_rate)
-                # company tax-rate
-                self.tax_rate = self.data_input.extract_input_data("tax_rate", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-                self.tax_rate = self.add_location_index_to_input_data(self.tax_rate)
-                #equity_margin
-                self.equity_margin = self.data_input.extract_input_data("equity_margin", index_sets=["set_time_steps_yearly", "set_nodes"],time_steps="set_time_steps_yearly", unit_category={})
-                self.equity_margin = self.add_location_index_to_input_data(self.equity_margin)
+        # set the lending_share and the budget_derisking
+        if self.optimization_setup.system.variable_CoC:
+            # what share of the derisked investment cost is financed by lending
+            self.lending_share = self.data_input.extract_input_data("lending_share", index_sets=[], unit_category={})
+            # budget for derisking of central institution
+            self.budget_derisking = self.data_input.extract_input_data("budget_derisking", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"money": 1})
 
     def add_location_index_to_input_data(self, object):
         """
@@ -302,16 +295,12 @@ class EnergySystem:
         parameters.add_parameter(name="knowledge_depreciation_rate", doc='Parameter which specifies the knowledge depreciation rate', calling_class=cls)
         # knowledge spillover rate
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
-
-        if self.optimization_setup.analysis.variable_CoC:
-            if self.optimization_setup.analysis.calculate_WACC:
-                # interest rate
-                parameters.add_parameter(name="interest_rate", index_names=["set_location", "set_time_steps_yearly"], doc='Parameter which specifies the interest rate', calling_class=cls)
-                # tax rate
-                parameters.add_parameter(name="tax_rate", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the tax rate', calling_class=cls)
-                # equity margin
-                parameters.add_parameter(name="equity_margin", index_names=["set_location","set_time_steps_yearly"], doc='Parameter which specifies the equity margin', calling_class=cls)
-
+        # lending share and budget derisking
+        if self.optimization_setup.system.variable_CoC:
+            # lending share
+            parameters.add_parameter(name="lending_share", doc='Parameter which specifies the lending share of the derisked investment cost', calling_class=cls)
+            # budget derisking
+            parameters.add_parameter(name="budget_derisking", set_time_steps="set_time_steps_yearly", doc='Parameter which specifies the budget for derisking of central institution', calling_class=cls)
 
     def construct_vars(self):
         """ constructs the pe.Vars of the class <EnergySystem> """

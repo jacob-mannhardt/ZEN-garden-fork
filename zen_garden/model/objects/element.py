@@ -319,22 +319,23 @@ class GenericRule(object):
         self.time_steps = self.energy_system.time_steps
 
     # helper methods for constraint rules
-    def get_discount_factor(self,calling_class,get_WACC=False):
+    def get_discount_factor(self,calling_class,get_WACC=False,get_derisked_WACC=False):
         """ returns discount factor. Depending on the calling class and function either the series of yearly discount factors for the entire planning horizon
         is returned (for NPC calculations) or the discount rate is returned by itself (for calculations of the annuity factor).
 
         :param calling_class: class that calls the function
         :param get_WACC: boolean indicating if WACC should be returned
+        :param get_derisking_WACC: boolean indicating if derisking WACC should be returned
 
         :return discount_factor: discount factor (if get_WACC == true) or series of yearly discount factors
         """
-        #check if discount factor needs to be returned for annuity factor calculation
-        if self.analysis.variable_CoC:
-            #return discount rate only for technologies as only here annuity factor is calculated
+        # check if discount factor needs to be returned for annuity factor calculation
+        if self.system.variable_CoC:
+            # return discount rate only for technologies as only here annuity factor is calculated
             if calling_class == "Technology":
-                #check if WACC should be calculated based on decomposition into equity and debt
-                if self.optimization_setup.analysis["calculate_WACC"]:
-                    discount_factor = self.parameters.debt_ratio * (1-self.parameters.tax_rate) * (self.parameters.interest_rate + self.parameters.technology_premium) + (1-self.parameters.debt_ratio) * (self.parameters.interest_rate+self.parameters.equity_margin+self.parameters.technology_premium)
+                if get_derisked_WACC:
+                    # return derisking WACC
+                    discount_factor = self.parameters.WACC_derisked
                 else:
                     discount_factor = self.parameters.WACC
                 if get_WACC:

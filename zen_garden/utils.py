@@ -7,21 +7,16 @@ import os
 import sys
 import warnings
 import importlib.util
-from collections import UserDict,defaultdict
-from contextlib import contextmanager
-from datetime import datetime
+from collections import defaultdict
 import re
 from ordered_set import OrderedSet
-import h5py
 import linopy as lp
 import numpy as np
-import pandas as pd
 import xarray as xr
-import yaml
 import shutil
-from numpy import string_
 from copy import deepcopy
 from pathlib import Path
+from zen_garden.model.default_config import Subscriptable
 
 def setup_logger(level=logging.INFO):
     """ set up logger
@@ -30,6 +25,7 @@ def setup_logger(level=logging.INFO):
     """
     logging.basicConfig(stream=sys.stdout, level=level,format="%(message)s",datefmt='%Y-%m-%d %H:%M:%S')
     logging.captureWarnings(True)
+
 
 def get_inheritors(klass):
     """
@@ -48,6 +44,7 @@ def get_inheritors(klass):
                 subclasses.add(child)
                 work.append(child)
     return subclasses
+
 
 def copy_dataset_example(example):
     """ copies a dataset example to the current working directory
@@ -72,7 +69,8 @@ def copy_dataset_example(example):
     example_path = f"{base_path}docs/dataset_examples/{example}/"
     config_path = f"{base_path}docs/dataset_examples/config.json"
     notebook_path = f"{base_path}docs/dataset_examples/example_notebook.ipynb"
-    local_dataset_path = os.path.join(os.getcwd(), "dataset_examples")
+    #local_dataset_path = os.path.join(os.getcwd(), "dataset_examples")
+    local_dataset_path = os.getcwd()
     if not os.path.exists(local_dataset_path):
         os.mkdir(local_dataset_path)
     local_example_path = os.path.join(local_dataset_path, example)
@@ -113,10 +111,169 @@ def copy_dataset_example(example):
     if not notebook_found:
         logging.warning("Example jupyter notebook could not be downloaded from the dataset examples!")
     logging.info(f"Example dataset {example} downloaded to {local_example_path}")
-    return local_example_path,os.path.join(local_dataset_path, "config.json")
+    return local_example_path, os.path.join(local_dataset_path, "config.json")
+
+
+# linopy helpers
+# --------------
+
+def lp_sum(exprs, dim='_term'):
+    """Sum of linear expressions with lp.expressions.merge, returns 0 if list is emtpy
+
+    :param exprs: The expressions to sum
+    :param dim: Along which dimension to merge
+    :return: The sum of the expressions
+    """
+
+    # emtpy sum
+    if len(exprs) == 0:
+        return 0
+    # no sum
+    if len(exprs) == 1:
+        return exprs[0]
+    # normal sum
+    return lp.expressions.merge(exprs, dim=dim)
+
+
+def align_like(da, other, fillna=0.0, astype=None):
+    """Aligns a data array like another data array
+
+    :param da: The data array to align
+    :param other: The data array to align to
+    :param fillna: The value to fill na values with
+    :param astype: The type to cast the data array to
+    :return: The aligned data array
+    """
+    if isinstance(other, lp.Variable):
+        other = other.lower
+    elif isinstance(other, lp.LinearExpression):
+        other = other.const
+    elif isinstance(other, xr.DataArray):
+        other = other
+    else:
+        raise TypeError(f"other must be a Variable, LinearExpression or DataArray, not {type(other)}")
+    da = xr.align(da, other, join="right")[0]
+    da = da.broadcast_like(other)
+    if fillna is not None:
+        da = da.fillna(fillna)
+    if astype is not None:
+        da = da.astype(astype)
+    return da
+
+
+def linexpr_from_tuple_np(tuples, coords, model):
+    """Transforms tuples of (coeff, var) into a linopy linear expression, but uses numpy broadcasting
+
+    :param tuples: Tuple of (coeff, var)
+    :param coords: The coordinates of the final linear expression
+    :param model: The model to which the linear expression belongs
+    :return: A linear expression
+    """
+
+    # get actual coords
+    if not isinstance(coords, xr.core.dataarray.DataArrayCoordinates):
+        coords = xr.DataArray(coords=coords).coords
+
+    # numpy stack everything
+    coefficients = []
+    variables = []
+    for coeff, var in tuples:
+        var = var.labels.data
+        if isinstance(coeff, (float, int)):
+            coeff = np.full(var.shape, 1.0 * coeff)
+        coefficients.append(coeff)
+        variables.append(var)
+
+    # to linear expression
+    variables = xr.DataArray(np.stack(variables, axis=0), coords=coords, dims=["_term", *coords])
+    coefficients = xr.DataArray(np.stack(coefficients, axis=0), coords=coords, dims=["_term", *coords])
+    xr_ds = xr.Dataset({"coeffs": coefficients, "vars": variables}).transpose(..., "_term")
+
+    return lp.LinearExpression(xr_ds, model)
+
+
+def xr_like(fill_value, dtype, other, dims):
+    """Creates an xarray with fill value and dtype like the other object but only containing the given dimensions
+
+    :param fill_value: The value to fill the data with
+    :param dtype: dtype of the data
+    :param other: The other object to use as base
+    :param dims: The dimensions to use
+    :return: An object like the other object but only containing the given dimensions
+    """
+
+    # get the coords
+    coords = {}
+    for dim in dims:
+        coords[dim] = other.coords[dim]
+
+    # create the data array
+    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords,
+                      dims=dims)
+
+    # return
+    return da
+
+def reformat_slicing_index(index, component) -> tuple[str]:
+        """ reformats the slicing index to a tuple of strings that is readable by pytables
+        :param index: slicing index of the resulting dataframe
+        :param component: component for which the index is reformatted
+        :return: reformatted index
+        """
+        if index is None:
+            return tuple()
+        index_names = component.index_names
+        if isinstance(index, str) or isinstance(index, float) or isinstance(index, int):
+            index_name = index_names[0]
+            ref_index = (f"{index_name} == {index}",)
+        elif isinstance(index, list):
+            index_name = index_names[0]
+            ref_index = (f"{index_name} in {index}",)
+        elif isinstance(index, dict):
+            ref_index = []
+            for key, value in index.items():
+                if key not in index_names:
+                    logging.warning(f"Invalid index name '{key}' in index. Skipping.")
+                    continue
+                if isinstance(value, list):
+                    ref_index.append(f"{key} in {value}")
+                else:
+                    ref_index.append(f"{key} == {value}")
+            ref_index = tuple(ref_index)
+        elif isinstance(index, tuple):
+            ref_index = []
+            if len(index) > len(index_names):
+                logging.warning(f"Index length {len(index)} is longer than the number of index dimensions {len(index_names)}. Check selected index.")
+            for i, index_name in enumerate(index_names):
+                if i >= len(index):
+                    break
+                if index[i] is None:
+                    continue
+                elif isinstance(index[i], list):
+                    ref_index.append(f"{index_name} in {index[i]}")
+                else:
+                    ref_index.append(f"{index_name} == {index[i]}")
+            ref_index = tuple(ref_index)
+        else:
+            logging.warning(f"Invalid index type {type(index)}. Skipping.")
+            ref_index = tuple()
+
+        return ref_index
+
+def get_label_position(obj,label:int):
+    """ Get dict of index and coordinate for variable or constraint labels."""
+    name_element = obj.get_name_by_label(int(label))
+    element = obj[name_element]
+    if element.ndim > 0:
+        selection = element[np.where(element.labels == label)]
+        mapping = (name_element,{k: v.values[0] for k, v in selection.indexes.variables.items()})
+    else:
+        mapping = (name_element,{})
+    return mapping
 
 # This functionality is for the IIS constraints
 # ---------------------------------------------
+
 
 class IISConstraintParser(object):
     """
@@ -144,7 +301,7 @@ class IISConstraintParser(object):
         # write gurobi IIS to file
         self.write_gurobi_iis()
         # get the labels
-        self.constraint_labels,self.var_labels, self.var_lines = self.read_labels()
+        self.constraint_labels, self.var_labels, self.var_lines = self.read_labels()
         # enable logger again
         logging.disable(logging.NOTSET)
 
@@ -263,7 +420,7 @@ class IISConstraintParser(object):
 
         name = constraints.get_name_by_label(value)
         con = constraints[name]
-        indices = [i[0] for i in np.where(con.values == value)]
+        indices = [i[0] for i in np.where(con.labels.values == value)]
 
         # Extract the coordinates from the indices
         coord = {
@@ -313,8 +470,9 @@ class ScenarioDict(dict):
     This is a dictionary for the scenario analysis that has some convenience functions
     """
 
-    _param_dict_keys = {"file", "file_op", "default", "default_op"}
-    _special_elements = ["system", "analysis","solver", "base_scenario", "sub_folder", "param_map"]
+    _param_dict_keys = {"file", "part_file", "file_op", "default", "default_op", "value"}
+    _special_elements = ["base_scenario", "sub_folder", "param_map"]
+    _setting_elements = ["system", "analysis", "solver"]
 
     def __init__(self, init_dict, optimization_setup, paths):
         """Initializes the dictionary from a normal dictionary
@@ -352,7 +510,7 @@ class ScenarioDict(dict):
         for key, value in config_parts.items():
             if key in self.dict:
                 for sub_key, sub_value in self.dict[key].items():
-                    assert sub_key in value, f"Trying to update {key} with key {sub_key} and value {sub_value}, but the {key} does not have this key!"
+                    assert sub_key in value.keys(), f"Trying to update {key} with key {sub_key} and value {sub_value}, but the {key} does not have this key!"
                     if type(value[sub_key]) == type(sub_value):
                         value[sub_key] = sub_value
                     elif isinstance(sub_value, dict): #ToDO check this and make more general -> here only for SolverOptions
@@ -416,8 +574,18 @@ class ScenarioDict(dict):
             # we do not expand these
             if element in ScenarioDict._special_elements:
                 continue
+            # check for dict items in settings elements
+            # if element in ScenarioDict._setting_elements and dict not in [type(v) for v in element_dict.values()]:
+            #     continue
 
+            # check for 'system' analysis' and 'solver' keys and see whether they are dicts and have a list in them,
+            # on ly then do the list expansion, otherwise proceed as always.
             for param, param_dict in sorted(element_dict.items(), key=lambda x: x[0]):
+                if element in ScenarioDict._setting_elements:
+                    if not isinstance(param_dict, dict):
+                        continue
+                    elif isinstance(param_dict, dict) and not isinstance(param_dict['value'], list):
+                        scenario[element][param] = param_dict['value']
                 for key in sorted(ScenarioDict._param_dict_keys):
                     if key in param_dict and isinstance(param_dict[key], list):
                         # get the old param dict entry
@@ -432,7 +600,10 @@ class ScenarioDict(dict):
                             new_scenario = deepcopy(scenario)
 
                             # set the new value
-                            new_scenario[element][param][key] = value
+                            if element in ScenarioDict._setting_elements:
+                                new_scenario[element][param] = value
+                            else:
+                                new_scenario[element][param][key] = value
 
                             # create the name
                             if key + "_fmt" in param_dict:
@@ -441,7 +612,8 @@ class ScenarioDict(dict):
                                                       "placeholder '{}' for its value! No placeholder found in "
                                                       f"for {key} in {param} in {element} in {scenario['base_scenario']}")
                                 name = param_dict[key + "_fmt"].format(value)
-                                del new_scenario[element][param][key + "_fmt"]
+                                if element not in ScenarioDict._setting_elements:
+                                    del new_scenario[element][param][key + "_fmt"]
                                 # we don't need to increment the param for the next expansion
                                 param_up = 0
                             else:
@@ -461,7 +633,10 @@ class ScenarioDict(dict):
                                 param_map[new_scenario["sub_folder"]][element] = dict()
                             if param not in param_map[new_scenario["sub_folder"]][element]:
                                 param_map[new_scenario["sub_folder"]][element][param] = dict()
-                            param_map[new_scenario["sub_folder"]][element][param][key] = value
+                            if element in ScenarioDict._setting_elements:
+                                param_map[new_scenario["sub_folder"]][element][param] = value
+                            else:
+                                param_map[new_scenario["sub_folder"]][element][param][key] = value
 
                             # set the param_map of the scenario
                             new_scenario["param_map"] = param_map
@@ -512,6 +687,7 @@ class ScenarioDict(dict):
                                 new_dict[element][param] = base_dict.copy()
                 # delete the old set
                 del new_dict[current_set]
+
         return new_dict
 
     def validate_dict(self, vali_dict):
@@ -521,7 +697,7 @@ class ScenarioDict(dict):
         """
 
         for element, element_dict in vali_dict.items():
-            if element in self._special_elements:
+            if element in self._special_elements or element in self._setting_elements:
                 continue
 
             if not isinstance(element_dict, dict):
@@ -531,6 +707,22 @@ class ScenarioDict(dict):
                 if len(diff := (set(param_dict.keys()) - self._param_dict_keys)) > 0:
                     raise ValueError(
                         f"The entry for element {element} and param {param} contains invalid entries: {diff}!")
+
+    @staticmethod
+    def check_if_all_elements_in_model(scenario_dict,element_dict):
+        """
+        Checks if all elements in the scenario_dict are present in the element_dict
+        This is used to ensure that all elements in the scenario are defined in the model.
+
+        :param scenario_dict: Dictionary containing the scenario elements
+        :param element_dict: Dictionary containing the element definitions
+        """
+        ignored_elements = ScenarioDict._setting_elements + ScenarioDict._special_elements + list(ScenarioDict._param_dict_keys) + ["EnergySystem"]
+        relevant_elements = set(scenario_dict.keys()) - set(ignored_elements)
+        existing_elements = [e.name for e in element_dict["Element"]]
+        for element in relevant_elements:
+            if element not in existing_elements:
+                raise KeyError(f"The element '{element}', defined in the scenario file, is not defined in the model.")
 
     @staticmethod
     def validate_file_name(fname):
@@ -563,6 +755,7 @@ class ScenarioDict(dict):
             default_f_name = param_dict.get("default", default_f_name)
             default_f_name = self.validate_file_name(default_f_name)
             default_factor = param_dict.get("default_op", default_factor)
+            self._check_if_numeric_default_factor(default_factor, element=element, param=param, default_f_name=default_f_name, op_type="default_op")
 
         return default_f_name, default_factor
 
@@ -584,178 +777,32 @@ class ScenarioDict(dict):
             default_f_name = param_dict.get("file", default_f_name)
             default_f_name = self.validate_file_name(default_f_name)
             default_factor = param_dict.get("file_op", default_factor)
+            self._check_if_numeric_default_factor(default_factor, element=element, param=param, default_f_name=default_f_name, op_type="file_op")
 
         return default_f_name, default_factor
 
-
-# linopy helpers
-# --------------
-
-def lp_sum(exprs, dim='_term'):
-    """Sum of linear expressions with lp.expressions.merge, returns 0 if list is emtpy
-
-    :param exprs: The expressions to sum
-    :param dim: Along which dimension to merge
-    :return: The sum of the expressions
-    """
-
-    # emtpy sum
-    if len(exprs) == 0:
-        return 0
-    # no sum
-    if len(exprs) == 1:
-        return exprs[0]
-    # normal sum
-    return lp.expressions.merge(exprs, dim=dim)
-
-def align_like(da, other,fillna=0.0,astype=None):
-    """Aligns a data array like another data array
-
-    :param da: The data array to align
-    :param other: The data array to align to
-    :return: The aligned data array
-    """
-    if isinstance(other,lp.Variable):
-        other = other.lower
-    elif isinstance(other,lp.LinearExpression):
-        other = other.const
-    elif isinstance(other,xr.DataArray):
-        other = other
-    else:
-        raise TypeError(f"other must be a Variable, LinearExpression or DataArray, not {type(other)}")
-    da = xr.align(da, other,join="right")[0]
-    da = da.broadcast_like(other)
-    if fillna is not None:
-        da = da.fillna(fillna)
-    if astype is not None:
-        da = da.astype(astype)
-    return da
-
-def linexpr_from_tuple_np(tuples, coords, model):
-    """Transforms tuples of (coeff, var) into a linopy linear expression, but uses numpy broadcasting
-
-    :param tuples: Tuple of (coeff, var)
-    :param coords: The coordinates of the final linear expression
-    :param model: The model to which the linear expression belongs
-    :return: A linear expression
-    """
-
-    # get actual coords
-    if not isinstance(coords, xr.core.dataarray.DataArrayCoordinates):
-        coords = xr.DataArray(coords=coords).coords
-
-    # numpy stack everything
-    coefficients = []
-    variables = []
-    for coeff, var in tuples:
-        var = var.labels.data
-        if isinstance(coeff, (float, int)):
-            coeff = np.full(var.shape, 1.0 * coeff)
-        coefficients.append(coeff)
-        variables.append(var)
-
-    # to linear expression
-    variables = xr.DataArray(np.stack(variables, axis=0), coords=coords, dims=["_term", *coords])
-    coefficients = xr.DataArray(np.stack(coefficients, axis=0), coords=coords, dims=["_term", *coords])
-    xr_ds = xr.Dataset({"coeffs": coefficients, "vars": variables}).transpose(..., "_term")
-
-    return lp.LinearExpression(xr_ds, model)
-
-
-def xr_like(fill_value, dtype, other, dims):
-    """Creates an xarray with fill value and dtype like the other object but only containing the given dimensions
-
-    :param fill_value: The value to fill the data with
-    :param dtype: dtype of the data
-    :param other: The other object to use as base
-    :param dims: The dimensions to use
-    :return: An object like the other object but only containing the given dimensions
-    """
-
-    # get the coords
-    coords = {}
-    for dim in dims:
-        coords[dim] = other.coords[dim]
-
-    # create the data array
-    da = xr.DataArray(np.full([len(other.coords[dim]) for dim in dims], fill_value, dtype=dtype), coords=coords,
-                      dims=dims)
-
-    # return
-    return da
-
-
-# This is to lazy load h5 file most of it is taken from the hdfdict package
-###########################################################################
-
-class HDFPandasSerializer():
-    """
-    This class saves dictionaries with a pandas store as a hdf file.
-    """
-
-    def __init__(self):
+    def get_param_part_file(self, element, param):
         """
-        Initializes the class to read a hdf file, potentially lazily. For writing files, use the classmethod
-        "serialize_dict".
-
+        Return the partial file name where the parameter values should be read out
+        :param element: the element name
+        :param param: the parameter of the element for which the partial file name is returned
+        :return:  If the entry is overwritten by the scenario analysis the entry, otherwise None
         """
+        if element in self.dict and param in (element_dict := self.dict[element]):
+            param_dict = element_dict[param]
+            if "part_file" in param_dict:
+                part_file = param_dict["part_file"]
+                part_file = self.validate_file_name(part_file)
+                return part_file
+        return None
 
-        raise NotImplementedError("The HDFPandasSerializer class constructor is not used and so also not implemented. If you arrive here, something went wrong. Please contact the developers.")
+    def _check_if_numeric_default_factor(self, default_factor, element, param, default_f_name, op_type):
+        """Check if the default factor is numeric
 
-    @classmethod
-    def _recurse(cls, store, dictionary, previous_key=""):
+        :param default_factor: The default factor to check
         """
-        Recursively saves the dictionary into the store.
-
-        :param store: The store to save the dictionary into.
-        :param dictionary: The dictionary to save.
-        :param previous_key: The key of the dictionary.
-        """
-
-        for key, value in dictionary.items():
-            if not isinstance(key, str):
-                raise TypeError("All dictionary keys must be strings!")
-
-            key = f"{previous_key}/{key}"
-            if isinstance(value, dict):
-                cls._recurse(store, value, key)
-            elif isinstance(value, (pd.DataFrame, pd.Series)):
-                # make a proper multi index to save memory
-                store.put(key, value)
-                store.get_storer(key).attrs.type = "pandas"
-            elif isinstance(value, (float,str,int)):
-                store.put(key, pd.Series([], dtype=int))
-                store.get_storer(key).attrs.value = value
-                store.get_storer(key).attrs.type = "scalar"
-            # elif isinstance(value,str):
-            #     # encode string to bytes
-            #     store.put(key, pd.Series([np.char.encode(value)], dtype=type(value)))
-            #     store.get_storer(key).attrs.type = "scalar"
-            elif isinstance(value, (list, tuple)) or isinstance(value, np.ndarray) and value.ndim == 1:
-                store.put(key, pd.Series(value))
-                store.get_storer(key).attrs.type = "vector"
-            elif isinstance(value, np.ndarray) and value.ndim == 2:
-                store.put(key, pd.DataFrame(value))
-                store.get_storer(key).attrs.type = "matrix"
-            else:
-                raise TypeError(f"Type {type(value)} is not supported.")
-
-    @classmethod #USED
-    def serialize_dict(cls, file_name, dictionary, overwrite=True):
-        """
-        Serialized a dictionary of dataframes and other objects into a hdf file.
-
-        :param file_name: The file name of the hdf file.
-        :param dictionary: The dictionary to serialize
-        :param overwrite: If True, the file will be overwritten.
-        """
-
-        if not overwrite and os.path.exists(file_name):
-            raise FileExistsError("File already exists. Please set overwrite=True to overwrite the file.")
-
-        with pd.HDFStore(file_name, mode='w', complevel=4) as store:
-            cls._recurse(store, dictionary)
-
+        if not isinstance(default_factor, (int, float)):
+            raise ValueError(f"Default factor {default_factor} of type {type(default_factor)} in {op_type} ({element} -> {param} -> {default_f_name}) is not numeric!")
 
 class InputDataChecks:
     """
@@ -782,9 +829,9 @@ class InputDataChecks:
         assert len(self.system.set_conversion_technologies + self.system.set_transport_technologies + self.system.set_storage_technologies) > 0, f"No technology selected in system.py"
         # Checks if identical technologies are selected multiple times in system.py file and removes possible duplicates
         for tech_list in ["set_conversion_technologies", "set_transport_technologies", "set_storage_technologies"]:
-            techs_selected = self.system[tech_list]
+            techs_selected = getattr(self.system,tech_list)
             unique_elements = list(np.unique(techs_selected))
-            self.system[tech_list] = unique_elements
+            self.system = self.system.model_copy(update={tech_list: unique_elements})
 
     def check_year_definitions(self):
         """
@@ -804,7 +851,7 @@ class InputDataChecks:
         Checks if the primary folder structure (set_conversion_technology, set_transport_technology, ..., energy_system) is provided correctly
         """
 
-        for set_name, subsets in self.analysis.subsets.items():
+        for set_name, subsets in self.analysis.subsets.model_dump().items():
             if not os.path.exists(os.path.join(self.analysis.dataset, set_name)):
                 raise AssertionError(f"Folder {set_name} does not exist!")
             if isinstance(subsets, dict):
@@ -864,8 +911,8 @@ class InputDataChecks:
         """
         dataset = os.path.basename(self.analysis.dataset)
         dirname = os.path.dirname(self.analysis.dataset)
-        assert os.path.exists(dirname),f"Requested folder {dirname} is not a valid path"
-        assert os.path.exists(self.analysis.dataset),f"The chosen dataset {dataset} does not exist at {self.analysis.dataset} as it is specified in the config"
+        assert os.path.exists(dirname), f"Requested folder {dirname} is not a valid path"
+        assert os.path.exists(self.analysis.dataset), f"The chosen dataset {dataset} does not exist at {self.analysis.dataset} as it is specified in the config"
         # check if any character in the dataset name is prohibited
         for char in self.PROHIBITED_DATASET_CHARACTERS:
             if char in dataset:
@@ -884,6 +931,37 @@ class InputDataChecks:
             reversed_edge = edge[2] + "-" + edge[1]
             if reversed_edge not in [edge_string[0] for edge_string in set_edges_input.values] and edge[1] in self.system.set_nodes and edge[2] in self.system.set_nodes:
                 warnings.warn(f"The edge {edge[0]} is single-directed, i.e., the edge {reversed_edge} doesn't exist!")
+
+    def read_system_file(self,config):
+        """
+        Reads the system file and returns the system dictionary
+
+        :param config: config object
+        """
+        # check if system.json file exists
+        if os.path.exists(os.path.join(config.analysis.dataset, "system.json")):
+            with open(os.path.join(config.analysis.dataset, "system.json"), "r") as file:
+                system = json.load(file)
+        # otherwise read system.py file
+        else:
+            system_path = os.path.join(config.analysis.dataset, "system.py")
+            spec = importlib.util.spec_from_file_location("module", system_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            system = module.system
+        new_system = config.system.model_copy(update=system)
+        config.system = new_system
+        self.system = new_system
+        self.check_no_extra_config_fields(config)
+
+    def check_no_extra_config_fields(self,config,config_name="config"):
+        """ Checks if the config object has no extra fields that are not defined in the default_config """
+        assert len(config.model_extra) == 0, f"The config object '{config_name}' has extra fields that are not defined in the default_config: {config.model_extra}."
+        for name in config.__class__.model_fields:
+            subconfig = getattr(config, name)
+            # Detect if the subconfig is a subclass of Subscriptable
+            if isinstance(subconfig.__class__, type) and issubclass(subconfig.__class__, Subscriptable):
+                self.check_no_extra_config_fields(subconfig,config_name = config_name+"/"+name)
 
     @staticmethod
     def check_carrier_configuration(input_carrier, output_carrier, reference_carrier, name):
@@ -932,25 +1010,6 @@ class InputDataChecks:
 
         return df_input
 
-    @staticmethod
-    def read_system_file(config):
-        """
-        Reads the system file and returns the system dictionary
-
-        :param config: config object
-        """
-        # check if system.json file exists
-        if os.path.exists(os.path.join(config.analysis.dataset, "system.json")):
-            with open(os.path.join(config.analysis.dataset, "system.json"), "r") as file:
-                system = json.load(file)
-        # otherwise read system.py file
-        else:
-            system_path = os.path.join(config.analysis.dataset, "system.py")
-            spec = importlib.util.spec_from_file_location("module", system_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            system = module.system
-        config.system.update(system)
 
 class StringUtils:
     """
@@ -961,7 +1020,7 @@ class StringUtils:
         pass
 
     @classmethod
-    def print_optimization_progress(cls,scenario, steps_horizon,step,system):
+    def print_optimization_progress(cls, scenario, steps_horizon, step, system):
         """ prints the current optimization progress
 
         :param scenario: string of scenario name
@@ -978,7 +1037,7 @@ class StringUtils:
                 f"\n--- Conduct optimization for rolling horizon step for {corresponding_year} ({steps_horizon.index(step) + 1} of {len(steps_horizon)}) {scenario_string}--- \n")
 
     @classmethod
-    def generate_folder_path(cls,config,scenario,scenario_dict,steps_horizon, step):
+    def generate_folder_path(cls, config, scenario, scenario_dict, steps_horizon, step):
         """ generates the folder path for the results
 
         :param config: config of optimization
@@ -1016,10 +1075,10 @@ class StringUtils:
             else:
                 subfolder = Path(mf_f_string)
 
-        return scenario_name,subfolder,param_map
+        return scenario_name, subfolder, param_map
 
     @classmethod
-    def setup_model_folder(cls,analysis,system):
+    def setup_model_folder(cls, analysis, system):
         """return model name while conducting some tests
 
         :param analysis: analysis of optimization
@@ -1028,11 +1087,11 @@ class StringUtils:
         :return: output folder
         """
         model_name = os.path.basename(analysis.dataset)
-        out_folder = cls.setup_output_folder(analysis,system)
-        return model_name,out_folder
+        out_folder = cls.setup_output_folder(analysis, system)
+        return model_name, out_folder
 
     @classmethod
-    def setup_output_folder(cls,analysis,system):
+    def setup_output_folder(cls, analysis, system):
         """return model name while conducting some tests
 
         :param analysis: analysis of optimization
@@ -1040,10 +1099,16 @@ class StringUtils:
         :return: output folder
         """
         if not os.path.exists(analysis.folder_output):
-            os.mkdir(analysis.folder_output)
+            try:
+                os.mkdir(analysis.folder_output)
+            except FileExistsError:
+                pass
         out_folder = cls.get_output_folder(analysis)
         if not os.path.exists(out_folder):
-            os.mkdir(out_folder)
+            try:
+                os.mkdir(out_folder)
+            except FileExistsError:
+                pass
         else:
             logging.warning(f"The output folder '{out_folder}' already exists")
             if analysis.overwrite_output:
@@ -1068,6 +1133,7 @@ class StringUtils:
         model_name = os.path.basename(analysis.dataset)
         out_folder = os.path.join(analysis.folder_output, model_name)
         return out_folder
+
 
 class ScenarioUtils:
     """
@@ -1121,7 +1187,7 @@ class ScenarioUtils:
                             os.remove(sub_folder_path)
 
     @staticmethod
-    def get_scenarios(config,job_index):
+    def get_scenarios(config, job_index):
         """ retrieves and overwrites the scenario dicts
 
         :param config: config of optimization
@@ -1170,6 +1236,7 @@ class ScenarioUtils:
             elements = [{}]
         return scenarios, elements
 
+
 class OptimizationError(RuntimeError):
     """
     Exception raised when the optimization problem is infeasible
@@ -1179,7 +1246,7 @@ class OptimizationError(RuntimeError):
         """
         Initializes the class
 
-        :param message: The message to display
+        :param status: The message to display
         """
         self.message = f"The termination condition was {status}"
         super().__init__(self.message)

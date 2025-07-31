@@ -1021,7 +1021,7 @@ class TechnologyRules(GenericRule):
         # add constraint for derisking budget
         if self.optimization_setup.system.variable_CoC:
             lending_share = self.parameters.lending_share
-            lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"])
+            lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share.item()).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"])
             rhs = self.parameters.budget_derisking
             constraints_derisking = lhs <= rhs
             self.constraints.add_constraint("constraint_limit_derisking_budget",constraints_derisking)

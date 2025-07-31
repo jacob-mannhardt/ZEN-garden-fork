@@ -514,13 +514,13 @@ class EnergySystemRules(GenericRule):
         mask_last_year = [year == self.energy_system.set_time_steps_yearly[-1] for year in self.energy_system.set_time_steps_yearly]
         # add cost for overshooting carbon emissions budget
         if self.parameters.price_carbon_emissions_budget_overshoot != np.inf:
-            cost_emission = -self.variables["carbon_emissions_budget_overshoot"].where(mask_last_year) * self.parameters.price_carbon_emissions_budget_overshoot
+            cost_emission = -self.variables["carbon_emissions_budget_overshoot"].where(mask_last_year) * self.parameters.price_carbon_emissions_budget_overshoot.item()
         # add cost for overshooting annual carbon emissions limit
         if self.parameters.price_carbon_emissions_annual_overshoot != np.inf:
             try:
-                cost_emission -= self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot
+                cost_emission -= self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot.item()
             except:
-                cost_emission = -self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot
+                cost_emission = -self.variables["carbon_emissions_annual_overshoot"] * self.parameters.price_carbon_emissions_annual_overshoot.item()
 
         try:
             term_discounted_cost_emission = (cost_emission) * factor

@@ -328,6 +328,10 @@ class EnergySystem:
         # net_present_cost_system
         variables.add_variable(model, name="net_present_cost_system", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),
                                doc="net_present_cost of energy system that includes carbon budget and overshoot costs", unit_category={"money": 1})
+        # total use of the derisking budget
+        if self.optimization_setup.system.variable_CoC:
+            variables.add_variable(model,name="budget_derisking_used", index_sets=sets["set_time_steps_yearly"], bounds=(0, np.inf),
+                                   doc="total use of the derisking budget of the central institution", unit_category={"money": 1})
 
     def construct_constraints(self):
         """ constructs the constraints of the class <EnergySystem> """

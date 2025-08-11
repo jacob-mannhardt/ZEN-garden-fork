@@ -369,7 +369,7 @@ class EnergySystem:
         # net_present_cost_system
         self.rules.constraint_net_present_cost_system()
 
-        #net present cost of the system with variable CoC
+        # net present cost of the system with variable CoC
         self.rules.constraint_add_net_present_cost()
 
 

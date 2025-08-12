@@ -345,17 +345,26 @@ class TransportTechnologyRules(GenericRule):
         global_mask.loc[index_arrs] = True
 
         ### auxiliary calculations TODO improve
-        term_distance_inf = mask * self.variables["capacity_addition"].loc[coords[0], "power", coords[1], coords[2]]
-        term_distance_not_inf = (1 - mask) * (self.variables["cost_capex_overnight"].loc[coords[0], "power", coords[1], coords[2]]
-                                              - self.variables["capacity_addition"].loc[coords[0], "power", coords[1], coords[2]] * self.parameters.capex_specific_transport.loc[coords[0], coords[1]])
+        term_distance_inf_no_derisking = mask * self.variables["capacity_addition_no_derisking"].loc[coords[0], "power", coords[1], coords[2]]
+        term_distance_not_inf_no_derisking = (1 - mask) * (self.variables["cost_capex_overnight_no_derisking"].loc[coords[0], "power", coords[1], coords[2]]
+                                              - self.variables["capacity_addition_no_derisking"].loc[coords[0], "power", coords[1], coords[2]] * self.parameters.capex_specific_transport.loc[coords[0], coords[1]])
         # we have an additional check here to avoid binary variables when their coefficient is 0
         if np.any(self.parameters.distance.loc[coords[0], coords[1]] * self.parameters.capex_per_distance_transport.loc[coords[0], coords[1]] != 0):
-            term_distance_not_inf -= (1 - mask) * self.variables["technology_installation"].loc[coords[0], "power", coords[1], coords[2]] * (self.parameters.distance.loc[coords[0], coords[1]] * self.parameters.capex_per_distance_transport.loc[coords[0], coords[1]])
+            raise NotImplementedError("Distance transport capex with derisking not implemented yet. Please contact the developers.")
+            term_distance_not_inf_no_derisking -= (1 - mask) * self.variables["technology_installation"].loc[coords[0], "power", coords[1], coords[2]] * (self.parameters.distance.loc[coords[0], coords[1]] * self.parameters.capex_per_distance_transport.loc[coords[0], coords[1]])
+
+        term_distance_inf_derisking = mask * self.variables["capacity_addition_derisking"].loc[coords[0], "power", coords[1], coords[2]]
+        term_distance_not_inf_derisking = (1 - mask) * (self.variables["cost_capex_overnight_derisking"].loc[coords[0], "power", coords[1], coords[2]]
+                                              - self.variables["capacity_addition_derisking"].loc[coords[0], "power", coords[1], coords[2]] * self.parameters.capex_specific_transport.loc[coords[0], coords[1]])
 
         ### formulate constraint
-        lhs = term_distance_inf + term_distance_not_inf
-        lhs  = lhs.where(global_mask)
+        lhs_no_derisking = term_distance_inf_no_derisking + term_distance_not_inf_no_derisking
+        lhs_no_derisking = lhs_no_derisking.where(global_mask)
+        lhs_derisking = term_distance_inf_derisking + term_distance_not_inf_derisking
+        lhs_derisking = lhs_derisking.where(global_mask)
         rhs = xr.zeros_like(global_mask)
-        constraints = lhs == rhs
-        self.constraints.add_constraint("constraint_transport_technology_capex",constraints)
+        constraints_no_derisking = lhs_no_derisking == rhs
+        constraints_derisking = lhs_derisking == rhs
+        self.constraints.add_constraint("constraint_transport_technology_capex_no_derisking",constraints_no_derisking)
+        self.constraints.add_constraint("constraint_transport_technology_capex_derisking",constraints_derisking)
 

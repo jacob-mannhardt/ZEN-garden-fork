@@ -478,12 +478,17 @@ class StorageTechnologyRules(GenericRule):
         coords = [self.variables.coords["set_storage_technologies"], self.variables.coords["set_capacity_types"], self.variables.coords["set_nodes"], self.variables.coords["set_time_steps_yearly"]]
 
         ### formulate constraint
-        lhs = linexpr_from_tuple_np([(1.0, self.variables["cost_capex_overnight"].loc[techs, capacity_types, nodes, times]),
-                                     (-self.parameters.capex_specific_storage.loc[techs, capacity_types, nodes, times], self.variables["capacity_addition"].loc[techs, capacity_types, nodes, times])],
+        lhs_no_derisking = linexpr_from_tuple_np([(1.0, self.variables["cost_capex_overnight_no_derisking"].loc[techs, capacity_types, nodes, times]),
+                                     (-self.parameters.capex_specific_storage.loc[techs, capacity_types, nodes, times], self.variables["capacity_addition_no_derisking"].loc[techs, capacity_types, nodes, times])],
                                      coords, self.model)
+        lhs_derisking = linexpr_from_tuple_np([(1.0, self.variables["cost_capex_overnight_derisking"].loc[techs, capacity_types, nodes, times]),
+                                        (-self.parameters.capex_specific_storage.loc[techs, capacity_types, nodes, times], self.variables["capacity_addition_derisking"].loc[techs, capacity_types, nodes, times])],
+                                        coords, self.model)
         rhs = 0
-        constraints = lhs == rhs
+        constraints_no_derisking = lhs_no_derisking == rhs
+        constraints_derisking = lhs_derisking == rhs
 
-        self.constraints.add_constraint("constraint_storage_technology_capex", constraints)
+        self.constraints.add_constraint("constraint_storage_technology_capex_no_derisking", constraints_no_derisking)
+        self.constraints.add_constraint("constraint_storage_technology_capex_derisking", constraints_derisking)
 
 

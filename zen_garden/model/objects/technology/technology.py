@@ -406,6 +406,12 @@ class Technology(Element):
         # built_capacity technology
         variables.add_variable(model, name="capacity_addition", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of built technology (invested capacity after construction) at location l and time t', unit_category={"energy_quantity": 1, "time": -1})
+        # built_capacity technology no derisking
+        variables.add_variable(model, name="capacity_addition_no_derisking", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0,np.inf), doc='size of built technology (invested capacity after construction) at location l and time t without derisking', unit_category={"energy_quantity": 1, "time": -1})
+        # built_capacity technology with derisking
+        variables.add_variable(model, name="capacity_addition_derisking", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
+            bounds=(0,np.inf), doc='size of built technology (invested capacity after construction) at location l and time t with derisking', unit_category={"energy_quantity": 1, "time": -1})
         # invested_capacity technology
         variables.add_variable(model, name="capacity_investment", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup),
             bounds=(0,np.inf), doc='size of invested technology at location l and time t', unit_category={"energy_quantity": 1, "time": -1})
@@ -494,6 +500,9 @@ class Technology(Element):
 
         # split overnight capex into capex with and without derisking
         rules.constraint_split_overnight_capex()
+
+        # split capacity addition into capacity addition with and without derisking
+        rules.constraint_split_capacity_addition()
 
         # annual capex of having capacity
         rules.constraint_cost_capex_yearly()
@@ -910,6 +919,10 @@ class TechnologyRules(GenericRule):
         market_share_unbounded = market_share_unbounded.to_xarray().broadcast_like(capacity_previous.lower).fillna(0)
         mask_market_share_unbounded = market_share_unbounded != 0
         term_unbounded_addition = (market_share_unbounded * capacity_previous.rename({"set_technologies":"set_other_technologies"})).where(mask_market_share_unbounded).sum("set_other_technologies")
+        term_derisking_boost = capacity_addition.where(False) # dummy term
+        if self.system.variable_CoC:
+            derisking_boost = self.parameters.boost_capacity_addition_share_derisking
+            term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost
         # existing capacities
         delta_years = interval_between_years * (capacity_addition.coords["set_time_steps_yearly"] - 1 - self.energy_system.set_time_steps_yearly[0])
         lifetime_existing = self.parameters.lifetime_existing
@@ -921,7 +934,7 @@ class TechnologyRules(GenericRule):
         capacity_addition_unbounded = capacity_addition_unbounded.broadcast_like(tdr)
         capacity_addition_unbounded = capacity_addition_unbounded.where(mask_technology_location, 0)
         # build constraints for all nodes summed ("sn")
-        lhs_sn = lp.merge([1*capacity_addition,-1*term_knowledge_no_spillover,-1*term_unbounded_addition], compat="broadcast_equals").sum("set_location")
+        lhs_sn = lp.merge([1*capacity_addition,-1*term_knowledge_no_spillover,-1*term_unbounded_addition,-1*term_derisking_boost], compat="broadcast_equals").sum("set_location")
         rhs_sn = (tdr * (capacity_existing_total_nosr * kdr_existing).sum("set_technologies_existing") + capacity_addition_unbounded).sum("set_location")
         rhs_sn = rhs_sn.broadcast_like(lhs_sn.const)
         # mask for tdr == inf
@@ -935,7 +948,7 @@ class TechnologyRules(GenericRule):
             # existing capacities with spillover
             capacity_existing_total = capacity_existing + spillover_rate * (
                         capacity_existing.sum("set_location") - capacity_existing).where(mask_technology_type, 0)
-            lhs_an = lp.merge([1*capacity_addition,-1*term_knowledge,-1*term_unbounded_addition], compat="broadcast_equals")
+            lhs_an = lp.merge([1*capacity_addition,-1*term_knowledge,-1*term_unbounded_addition,-1*term_derisking_boost], compat="broadcast_equals")
             rhs_an = tdr * (capacity_existing_total * kdr_existing).sum("set_technologies_existing") + capacity_addition_unbounded
             rhs_an = rhs_an.broadcast_like(lhs_an.const)
             # mask for tdr == inf
@@ -961,6 +974,23 @@ class TechnologyRules(GenericRule):
 
         ### return
         self.constraints.add_constraint("constraint_split_overnight_capex",constraints)
+
+    def constraint_split_capacity_addition(self):
+        """ splits the capacity addition into the not derisked and the derisked part
+
+        .. math::
+            \Delta S_{h,p,y} = \Delta S_{h,p,y}^\\mathrm{no_derisking} + \Delta S_{h,p,y}^\\mathrm{derisking}
+
+        :math:`\Delta S_{h,p,y}`: capacity addition of technology :math:`h` at location :math:`p` in year :math:`y` \n
+        :math:`\Delta S_{h,p,y}^\\mathrm{no_derisking}`: not derisked capacity addition of technology :math:`h` at location :math:`p` in year :math:`y` \n
+        :math:`\Delta S_{h,p,y}^\\mathrm{derisking}`: derisked capacity addition of technology :math:`h` at location :math:`p` in year :math:`y`
+        """
+        lhs = self.variables["capacity_addition"] - (self.variables["capacity_addition_no_derisking"] + self.variables["capacity_addition_derisking"])
+        rhs = 0
+        constraints = lhs == rhs
+
+        ### return
+        self.constraints.add_constraint("constraint_split_capacity_addition",constraints)
 
     def constraint_cost_capex_yearly(self):
         """ aggregates the capex of built capacity and of existing capacity

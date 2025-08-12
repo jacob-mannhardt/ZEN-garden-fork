@@ -252,11 +252,17 @@ class ConversionTechnology(Technology):
             bounds=flow_conversion_bounds(index_values, index_names), doc='Carrier output of conversion technologies', unit_category={"energy_quantity": 1, "time": -1})
         ## pwa Variables - Capex
         # pwa capacity
-        variables.add_variable(model, name="capacity_approximation", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
-            doc='pwa variable for size of installed technology on edge i and time t', unit_category={"energy_quantity": 1, "time": -1})
+        variables.add_variable(model, name="capacity_approximation_no_derisking", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
+            doc='pwa variable for size of installed technology on edge i and time t without derisking', unit_category={"energy_quantity": 1, "time": -1})
         # pwa capex technology
-        variables.add_variable(model, name="capex_approximation", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
-            doc='pwa variable for capex for installing technology on edge i and time t', unit_category={"money": 1})
+        variables.add_variable(model, name="capex_approximation_no_derisking", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
+            doc='pwa variable for capex for installing technology on edge i and time t without derisking', unit_category={"money": 1})
+        # pwa capacity with derisking
+        variables.add_variable(model, name="capacity_approximation_derisking", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
+            doc='pwa variable for size of installed technology on edge i and time t with derisking', unit_category={"energy_quantity": 1, "time": -1})
+        # pwa capex technology with derisking
+        variables.add_variable(model, name="capex_approximation_derisking", index_sets=cls.create_custom_set(["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"], optimization_setup), bounds=(0, np.inf),
+            doc='pwa variable for capex for installing technology on edge i and time t with derisking', unit_category={"money": 1})
 
     @classmethod
     def construct_constraints(cls, optimization_setup):
@@ -279,6 +285,7 @@ class ConversionTechnology(Technology):
         set_linear_capex = cls.create_custom_set(["set_conversion_technologies", "set_capex_linear", "set_nodes", "set_time_steps_yearly"], optimization_setup)
         if len(set_pwa_capex[0]) > 0:
             # if set_pwa_capex contains technologies:
+            raise NotImplementedError("Piecewise affine capex constraints are not implemented for the derisking model.")
             pwa_breakpoints, pwa_values = cls.calculate_capex_pwa_breakpoints_values(optimization_setup, set_pwa_capex[0])
             constraints.add_pw_constraint(model, index_values=set_pwa_capex[0], yvar="capex_approximation", xvar="capacity_approximation",
                                           break_points=pwa_breakpoints, f_vals=pwa_values, cons_type="EQ", name="constraint_capex_pwa",)
@@ -406,17 +413,26 @@ class ConversionTechnologyRules(GenericRule):
         capex_specific_conversion = self.parameters.capex_specific_conversion
         capex_specific_conversion = capex_specific_conversion.rename({old: new for old, new in zip(list(capex_specific_conversion.dims),
                                           ["set_conversion_technologies", "set_nodes", "set_time_steps_yearly"])})
-        capex_specific_conversion = capex_specific_conversion.broadcast_like(self.variables["capacity_approximation"].lower)
+        capex_specific_conversion = capex_specific_conversion.broadcast_like(self.variables["capacity_approximation_no_derisking"].lower)
         mask = ~np.isnan(capex_specific_conversion)
-        lhs = lp.merge(
-            [1 * self.variables["capex_approximation"],
-             - capex_specific_conversion * self.variables["capacity_approximation"]],
+        lhs_no_derisking = lp.merge(
+            [1 * self.variables["capex_approximation_no_derisking"],
+             - capex_specific_conversion * self.variables["capacity_approximation_no_derisking"]],
             compat="broadcast_equals")
-        lhs = self.align_and_mask(lhs, mask)
-        rhs = 0
-        constraints = lhs == rhs
+        lhs_no_derisking = self.align_and_mask(lhs_no_derisking, mask)
+        rhs_no_derisking = 0
+        constraints_no_derisking = lhs_no_derisking == rhs_no_derisking
 
-        self.constraints.add_constraint("constraint_linear_capex", constraints)
+        self.constraints.add_constraint("constraint_linear_capex_no_derisking", constraints_no_derisking)
+        lhs_derisking = lp.merge(
+            [1 * self.variables["capex_approximation_derisking"],
+             - capex_specific_conversion * self.variables["capacity_approximation_derisking"]],
+            compat="broadcast_equals")
+        lhs_derisking = self.align_and_mask(lhs_derisking, mask)
+        rhs_derisking = 0
+        constraints_derisking = lhs_derisking == rhs_derisking
+
+        self.constraints.add_constraint("constraint_linear_capex_derisking", constraints_derisking)
 
     def constraint_capacity_capex_coupling(self):
         """ couples capacity variables based on modeling technique
@@ -432,20 +448,31 @@ class ConversionTechnologyRules(GenericRule):
 
         techs = self.sets["set_conversion_technologies"]
         nodes = self.sets["set_nodes"]
-        capacity_addition = self.variables["capacity_addition"].loc[techs, "power", nodes].rename(
+        capacity_addition_no_derisking = self.variables["capacity_addition_no_derisking"].loc[techs, "power", nodes].rename(
             {"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
-        cost_capex_overnight = self.variables["cost_capex_overnight"].loc[techs, "power", nodes].rename(
+        cost_capex_overnight_no_derisking = self.variables["cost_capex_overnight_no_derisking"].loc[techs, "power", nodes].rename(
             {"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
 
         ### formulate constraint
-        lhs_capacity = capacity_addition - self.variables["capacity_approximation"]
-        lhs_capex = cost_capex_overnight - self.variables["capex_approximation"]
+        lhs_capacity_no_derisking = capacity_addition_no_derisking - self.variables["capacity_approximation_no_derisking"]
+        lhs_capex_no_derisking = cost_capex_overnight_no_derisking - self.variables["capex_approximation_no_derisking"]
         rhs = 0
-        constraints_capacity = lhs_capacity == rhs
-        constraints_capex = lhs_capex == rhs
+        constraints_capacity_no_derisking = lhs_capacity_no_derisking == rhs
+        constraints_capex_no_derisking = lhs_capex_no_derisking == rhs
         ### return
-        self.constraints.add_constraint("constraint_capacity_coupling", constraints_capacity)
-        self.constraints.add_constraint("constraint_capex_coupling", constraints_capex)
+        self.constraints.add_constraint("constraint_capacity_coupling_no_derisking", constraints_capacity_no_derisking)
+        self.constraints.add_constraint("constraint_capex_coupling_no_derisking", constraints_capex_no_derisking)
+
+        capacity_addition_derisking = self.variables["capacity_addition_derisking"].loc[techs, "power", nodes].rename(
+            {"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
+        cost_capex_overnight_derisking = self.variables["cost_capex_overnight_derisking"].loc[techs, "power", nodes].rename(
+            {"set_technologies": "set_conversion_technologies", "set_location": "set_nodes"})
+        lhs_capacity_derisking = capacity_addition_derisking - self.variables["capacity_approximation_derisking"]
+        lhs_capex_derisking = cost_capex_overnight_derisking - self.variables["capex_approximation_derisking"]
+        constraints_capacity_derisking = lhs_capacity_derisking == rhs
+        constraints_capex_derisking = lhs_capex_derisking == rhs
+        self.constraints.add_constraint("constraint_capacity_coupling_derisking", constraints_capacity_derisking)
+        self.constraints.add_constraint("constraint_capex_coupling_derisking", constraints_capex_derisking)
 
     def constraint_carrier_conversion(self):
         """ conversion factor between reference carrier and dependent carrier

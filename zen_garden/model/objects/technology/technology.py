@@ -922,7 +922,7 @@ class TechnologyRules(GenericRule):
         term_derisking_boost = capacity_addition.where(False) # dummy term
         if self.system.variable_CoC:
             derisking_boost = self.parameters.boost_capacity_addition_share_derisking
-            term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost
+            term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost.item()
         # existing capacities
         delta_years = interval_between_years * (capacity_addition.coords["set_time_steps_yearly"] - 1 - self.energy_system.set_time_steps_yearly[0])
         lifetime_existing = self.parameters.lifetime_existing

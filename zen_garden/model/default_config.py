@@ -98,6 +98,7 @@ class System(Subscriptable):
     allow_investment: bool = True
     storage_charge_discharge_binary: bool = False
     variable_CoC: bool = False
+    derisking_technologies: list[str] = []
 
 class Solver(Subscriptable):
     """

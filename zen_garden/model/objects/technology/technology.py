@@ -504,6 +504,9 @@ class Technology(Element):
         # split capacity addition into capacity addition with and without derisking
         rules.constraint_split_capacity_addition()
 
+        # limit capacity_addition_derisking if not a derisking technology
+        rules.constraint_limit_capacity_addition_derisking()
+
         # annual capex of having capacity
         rules.constraint_cost_capex_yearly()
 
@@ -991,6 +994,26 @@ class TechnologyRules(GenericRule):
 
         ### return
         self.constraints.add_constraint("constraint_split_capacity_addition",constraints)
+
+    def constraint_limit_capacity_addition_derisking(self):
+        """ set the capacity addition of derisking to zero if not a derisking technology
+
+        .. math::
+            \Delta S_{h,p,y}^\\mathrm{derisking} = 0, \\mathrm{if} h \\notin \\mathcal{H}^\\mathrm{derisking}
+
+        :math:`\Delta S_{h,p,y}^\\mathrm{derisking}`: derisked capacity addition of technology :math:`h` at location :math:`p` in year :math:`y` \n
+
+        """
+        lhs = self.variables["capacity_addition_derisking"]
+        derisking_technologies = self.system.derisking_technologies
+        mask = ~lhs.coords["set_technologies"].isin(derisking_technologies)
+        mask = mask.broadcast_like(lhs.lower)
+        lhs = lhs.where(mask)
+        rhs = 0
+        constraints = lhs == rhs
+
+        ### return
+        self.constraints.add_constraint("constraint_limit_capacity_addition_derisking",constraints)
 
     def constraint_cost_capex_yearly(self):
         """ aggregates the capex of built capacity and of existing capacity

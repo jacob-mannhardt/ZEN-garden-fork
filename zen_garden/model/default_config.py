@@ -99,6 +99,7 @@ class System(Subscriptable):
     storage_charge_discharge_binary: bool = False
     variable_CoC: bool = False
     derisking_technologies: list[str] = []
+    derisking_countries: list[str] = []
 
 class Solver(Subscriptable):
     """

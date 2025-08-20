@@ -116,8 +116,6 @@ class EnergySystem:
             self.lending_share = self.data_input.extract_input_data("lending_share", index_sets=[], unit_category={})
             # budget for derisking of central institution
             self.budget_derisking = self.data_input.extract_input_data("budget_derisking", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"money": 1})
-            # unbounded market share boost
-            self.boost_capacity_addition_share_derisking = self.data_input.extract_input_data("boost_capacity_addition_share_derisking", index_sets=[],unit_category={})
 
     def add_location_index_to_input_data(self, object):
         """
@@ -301,8 +299,6 @@ class EnergySystem:
             parameters.add_parameter(name="lending_share", doc='Parameter which specifies the lending share of the derisked investment cost', calling_class=cls)
             # budget derisking
             parameters.add_parameter(name="budget_derisking", set_time_steps="set_time_steps_yearly", doc='Parameter which specifies the budget for derisking of central institution', calling_class=cls)
-            # unbounded market share boost
-            parameters.add_parameter(name="boost_capacity_addition_share_derisking", doc='Parameter which specifies the boost of capacity addition through derisking (0.1 means that the capacity addition can be additionally increased by 10% of the derisked capacity addition)', calling_class=cls)
 
     def construct_vars(self):
         """ constructs the pe.Vars of the class <EnergySystem> """

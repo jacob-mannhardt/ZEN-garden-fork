@@ -66,6 +66,8 @@ class Technology(Element):
         if self.optimization_setup.system.variable_CoC:
             self.WACC = self.data_input.extract_input_data("WACC", index_sets=[set_location, "set_time_steps_yearly"],time_steps="set_time_steps_yearly", unit_category={})
             self.WACC_derisked = self.data_input.extract_input_data("WACC_derisked", index_sets=[set_location, "set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={})
+            # unbounded market share boost
+            self.boost_capacity_addition_share_derisking = self.data_input.extract_input_data("boost_capacity_addition_share_derisking", index_sets=[], unit_category={})
 
     def calculate_capex_of_capacities_existing(self, storage_energy=False):
         """ this method calculates the annualized capex of the existing capacities
@@ -349,6 +351,8 @@ class Technology(Element):
             optimization_setup.parameters.add_parameter(name="WACC", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the weighted average cost of capital', calling_class=cls)
             # derisking WACC
             optimization_setup.parameters.add_parameter(name="WACC_derisked", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the derisking WACC', calling_class=cls)
+            # boost
+            optimization_setup.parameters.add_parameter(name="boost_capacity_addition_share_derisking", index_names=["set_technologies"], doc='Parameter which specifies the boost of capacity addition through derisking (0.1 means that the capacity addition can be additionally increased by 10% of the derisked capacity addition)', calling_class=cls)
 
         # add pe.Param of the child classes
         for subclass in cls.__subclasses__():
@@ -925,7 +929,7 @@ class TechnologyRules(GenericRule):
         term_derisking_boost = capacity_addition.where(False) # dummy term
         if self.system.variable_CoC:
             derisking_boost = self.parameters.boost_capacity_addition_share_derisking
-            term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost.item()
+            term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost
         # existing capacities
         delta_years = interval_between_years * (capacity_addition.coords["set_time_steps_yearly"] - 1 - self.energy_system.set_time_steps_yearly[0])
         lifetime_existing = self.parameters.lifetime_existing
@@ -1006,7 +1010,8 @@ class TechnologyRules(GenericRule):
         """
         lhs = self.variables["capacity_addition_derisking"]
         derisking_technologies = self.system.derisking_technologies
-        mask = ~lhs.coords["set_technologies"].isin(derisking_technologies)
+        derisking_countries = self.system.derisking_countries
+        mask = ~lhs.coords["set_technologies"].isin(derisking_technologies) & ~lhs.coords["set_location"].isin(derisking_countries)
         mask = mask.broadcast_like(lhs.lower)
         lhs = lhs.where(mask)
         rhs = 0

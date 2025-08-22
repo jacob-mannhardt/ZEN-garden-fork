@@ -55,9 +55,9 @@ themselves with the JSON files structure before continuing with this tutorial.
 .. tip::
 
     A common mistake when writing JSON files is to put a comma at the end of a 
-    list in json. For example, `"list": [1, 2, 3,]`` is wrong, it should be 
+    list in json. For example, ``"list": [1, 2, 3,]`` is wrong, it should be
     ``"list": [1, 2, 3]``. The cryptic error message which results is:
-    ``json.decoder.JSONDecodeError: Expecting value: [...]``. If you recieve
+    ``json.decoder.JSONDecodeError: Expecting value: [...]``. If you receive
     this message, check the ''`system.json``, ``config.json``, and 
     ``attributes.json`` for commas at the end of lists. When you scroll up in 
     the error message, it will tell you which file caused the error.

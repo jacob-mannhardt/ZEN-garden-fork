@@ -192,21 +192,6 @@ elements are collectively referred to as ``components``.
 Step 1: Identify the name of the component
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All components are stored in a dictionary ``r.solution_loader.components``. A 
-complete list of all parameter, variable, and dual variable names can therefore
-be obtained using the command:
-
-.. code:: python
-
-    r.solution_loader.components.keys()
-
-.. tip::
-    Any component whose name starts with ``constraint_`` refers to a dual
-    variable. Dual variables are not saved to the results by default. To view
-    dual variables, users therefore need to adjust the ZEN-garden 
-    configurations, as described in :ref:`configurations tutorial 
-    <t_configuration.t_configuration>` 
-
 To filter the names by component type (``<component_type>`` in {``'parameter'``, 
 ``'variable'``, ``'dual'``, ``'sets'``})  the following member function can be 
 used:
@@ -214,6 +199,14 @@ used:
 .. code:: python
 
     r.get_component_names(<component_type>)
+
+.. note::
+    The result class can only identify the components present in the result
+    files. Please refer to :ref:`configuration.solver` on how to only save
+    selected parameters and variables. If the user wants to access a component
+    that was not saved, the user must add the component to the
+    ``selected_saved_parameters`` or ``selected_saved_variables`` in the
+    solver settings.
 
 For example, the following code produces a list of all variable names used 
 in the model: 
@@ -226,6 +219,13 @@ From the list of components names, select the component which your are intereste
 in investigating. Descriptions of all components can be found in the in the 
 documentation on :ref:`sets, parameters, variables, and constraints 
 <notation.notation>`.
+
+.. tip::
+    Any component whose name starts with ``constraint_`` refers to a dual
+    variable. Dual variables are not saved to the results by default. To view
+    dual variables, users therefore need to adjust the ZEN-garden
+    configurations, as described in :ref:`configurations tutorial
+    <t_configuration.t_configuration>`
 
 Step II: Read component values
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -274,7 +274,7 @@ results to values from a single scenario, year, or region. The optional input
 arguments for these functions are:
 
 1. ``year``: A single optimization period for which the results should be 
-   returned (0, 1, 2, ...). Noe that this is not available for ``r.get_unit()``.
+   returned (0, 1, 2, ...). Note that this is not available for ``r.get_unit()``.
 2. ``scenario_name``: A single scenario name for which the results should be 
    returned. This is only relevant when using the scenario tool, as described
    in the :ref:`scenarios tutorial <t_scenario.t_scenario>`.
@@ -301,15 +301,6 @@ There are four ways to pass an index:
    nodes DE and CH. The value of a key can either be a single index or a list 
    of indices. The dictionary must contain the keys of the component. Since the 
    key is passed, the order of the keys does not matter.
-
-.. note::
-    The result class can only identify the components present in the result 
-    files. Please refer to :ref:`configuration.solver` on how to only save 
-    selected parameters and variables. If the user wants to access a component 
-    that was not saved, the user must add the component to the 
-    ``selected_saved_parameters`` or ``selected_saved_variables`` in the 
-    solver settings.
-
 
 Example Exercises
 ^^^^^^^^^^^^^^^^^

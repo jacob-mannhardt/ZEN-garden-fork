@@ -4,7 +4,6 @@
 Tutorial 3: Create Scenarios
 ############################
 
-
 The scenario tool allows the user to overwrite parameter values and run a given 
 model multiple times with slight variations to the input data, the system or 
 analysis settings. In the following we discuss the features of the scenario 
@@ -40,7 +39,7 @@ scenario tool, two steps need to be taken:
     `--config.json
 
 2. Set the setting ``conduct_scenario_analysis`` to ``true`` in the  
-``systems.json`` file. This can be done by adding the following line to the end 
+``system.json`` file. This can be done by adding the following line to the end
 of the file (before the closing bracket):
 
 .. code-block::

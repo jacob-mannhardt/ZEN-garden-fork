@@ -208,7 +208,7 @@ used:
     ``selected_saved_parameters`` or ``selected_saved_variables`` in the
     solver settings.
 
-For example, the following code produces a list of all variable names used 
+For example, the following code produces a list of all variable names used
 in the model: 
 
 .. code:: python
@@ -301,6 +301,10 @@ There are four ways to pass an index:
    nodes DE and CH. The value of a key can either be a single index or a list 
    of indices. The dictionary must contain the keys of the component. Since the 
    key is passed, the order of the keys does not matter.
+
+``r.get_unit()`` has the additional argument ``convert_to_yearly_unit`` (default: ``False``).
+If set to ``True``, the function converts the unit of the component to a yearly unit,
+i.e., multiplying the unit string of components with an operational time step type with ``hour``.
 
 Example Exercises
 ^^^^^^^^^^^^^^^^^

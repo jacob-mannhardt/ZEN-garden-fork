@@ -54,6 +54,7 @@ class Results:
         index: Optional[Union[NestedTuple, NestedDict, list[str], str, float, int]] = None,
     ) -> Optional[Union[dict[str, "pd.DataFrame | pd.Series[Any]"],pd.Series]]:
         """
+        Returns the raw results without any further processing.
         Transforms a parameter or variable dataframe (compressed) string into an actual pandas dataframe
 
         :component_name string: The string to decode
@@ -130,6 +131,7 @@ class Results:
         if year is None:
             years = [i for i in range(0, scenario.system.optimized_years)]
         else:
+            year = scenario.convert_year2ts(year)
             years = [year]
 
         # slice index with time steps of year
@@ -156,7 +158,7 @@ class Results:
                 ans = ans[years]
             except KeyError:
                 pass
-
+            ans = scenario.convert_ts2year(ans)
             return ans
 
         if (
@@ -282,14 +284,19 @@ class Results:
         if year is None:
             years = [i for i in range(0, scenario.system.optimized_years)]
         else:
+            year = scenario.convert_year2ts(year)
             years = [year]
 
         if component.timestep_type is None or type(series.index) is not pd.MultiIndex:
+            if component.timestep_type is TimestepType.yearly:
+                series = scenario.convert_ts2year(series)
             return series
 
         if component.timestep_type is TimestepType.yearly:
             ans = series.unstack(component.timestep_name)
-            return ans[years]
+            ans = ans[years]
+            ans = scenario.convert_ts2year(ans)
+            return ans
 
         timestep_duration = self.solution_loader.get_timestep_duration(
             scenario, component
@@ -312,7 +319,7 @@ class Results:
             ans = ans.reorder_levels(
                 [i for i in ans.index.names if i != "mf"] + ["mf"]
             ).sort_index(axis=0)
-
+        ans = scenario.convert_ts2year(ans)
         return ans
 
     def get_total(
@@ -472,7 +479,7 @@ class Results:
         component_name: str,
         scenario_name: Optional[str] = None,
         droplevel: bool = True,
-        is_total: bool = True,
+        convert_to_yearly_unit: bool = False,
     ) -> None | Series | str:
         """
         Extracts the unit of a given Component. If no scenario is given, a random one is taken.
@@ -480,6 +487,7 @@ class Results:
         :param component_name: Name of the component
         :param scenario_name: Name of the scenario
         :param droplevel: Drop the location and time levels of the multiindex
+        :param convert_to_yearly_unit: If True, the unit is converted to a yearly unit, i.e., for components with an operational time step type, the unit is multiplied by hours.
         :return: The corresponding unit
         """
         if scenario_name is None:
@@ -507,15 +515,15 @@ class Results:
         # convert to pint units
         if isinstance(units, pd.Series):
             for i in units.index:
-                units[i] = self._convert_to_pint_units(units[i], is_total, component_name)
+                units[i] = self._convert_to_pint_units(units[i], convert_to_yearly_unit, component_name)
         elif isinstance(units, str):
-            units = self._convert_to_pint_units(units, is_total, component_name)
+            units = self._convert_to_pint_units(units, convert_to_yearly_unit, component_name)
         else:
             raise TypeError(f"Invalid units type: {type(units)}")
 
         return units
 
-    def _convert_to_pint_units(self,u: str,is_total: bool, component_name: str) -> str:
+    def _convert_to_pint_units(self,u: str,convert_to_yearly_unit: bool, component_name: str) -> str:
         """
         Converts a string to a pint unit.
         """
@@ -530,12 +538,12 @@ class Results:
 
         try:
             u = self.ureg.parse_expression(u)
-            if is_total and timestep_type is TimestepType.operational:
+            if convert_to_yearly_unit and timestep_type is TimestepType.operational:
                 u = u * self.ureg.h
             u_return = f"{u.u:~D}"
-        # if the unit is not in the pint registry, change the string manually (normally, when the unit_definition.txt is not saved)
+        # if the unit is not in the pint registry, change the string manually (normally when the unit_definition.txt is not saved)
         except Exception:
-            if is_total and timestep_type is TimestepType.operational:
+            if convert_to_yearly_unit and timestep_type is TimestepType.operational:
                 if u.endswith(" / hour"):
                     u_return = u.replace(" / hour", "")
                 else:

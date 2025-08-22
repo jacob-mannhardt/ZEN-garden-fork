@@ -236,6 +236,15 @@ def test_1i(config, folder_path):
     res = Results(os.path.join("outputs", data_set_name))
     compare_variables_results(data_set_name, res, folder_path)
 
+def test_1j(config, folder_path):
+    # run the test
+    data_set_name = "test_1j"
+    config.solver.save_duals = True
+    main(config=config, dataset_path=os.path.join(folder_path, data_set_name))
+
+    # read the results and check again
+    res = Results(os.path.join("outputs", data_set_name))
+    compare_variables_results(data_set_name, res, folder_path)
 
 def test_2a(config, folder_path):
     # run the test
@@ -310,7 +319,7 @@ def test_3c(config, folder_path):
     res = Results(os.path.join("outputs", data_set_name))
     compare_variables_results(data_set_name, res, folder_path)
     # test functions get_total() and get_full_ts()
-    check_get_total_get_full_ts(res, year=0)
+    check_get_total_get_full_ts(res, year=2022)
 
 
 def test_3d(config, folder_path):
@@ -398,6 +407,19 @@ def test_3i(config, folder_path):
     # test functions get_total() and get_full_ts()
     check_get_total_get_full_ts(res)
 
+def test_3j(config, folder_path):
+    # run the test
+    data_set_name = "test_3j"
+    config.solver.save_duals = True
+    main(
+        config=config, dataset_path=os.path.join(folder_path, data_set_name)
+    )
+
+    # read the results and check again
+    res = Results(os.path.join("outputs", data_set_name))
+    compare_variables_results(data_set_name, res, folder_path)
+    # test functions get_total() and get_full_ts()
+    check_get_total_get_full_ts(res)
 
 def test_4a(config, folder_path):
     # run the test
@@ -562,4 +584,4 @@ if __name__ == "__main__":
 
     config.solver.keep_files = False
     folder_path = os.path.dirname(__file__)
-    test_1h(config, folder_path)
+    test_1j(config, folder_path)

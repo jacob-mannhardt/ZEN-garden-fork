@@ -123,7 +123,7 @@ class DataInput:
             missing_index = missing_index[0]
             # check if special case of existing Technology
             if "technology_existing" in missing_index:
-                df_output = DataInput.extract_from_input_for_capacities_existing(df_input, df_output_copy, index_name_list, file_name, missing_index)
+                df_output_copy = DataInput.extract_from_input_for_capacities_existing(df_input, df_output_copy, index_name_list, file_name, missing_index)
                 if isinstance(default_value, dict):
                     df_output_copy = df_output_copy * default_value["multiplier"]
                 return df_output_copy

@@ -47,6 +47,7 @@ Documentation
    files/tutorial/03_scenario_analysis
    files/tutorial/04_handle_infeasibilities
    files/tutorial/05_operation_only
+   files/tutorial/06_add_technology_carrier
    
 .. toctree::
    :maxdepth: 1

@@ -1011,7 +1011,7 @@ class TechnologyRules(GenericRule):
         lhs = self.variables["capacity_addition_derisking"]
         derisking_technologies = self.system.derisking_technologies
         derisking_countries = self.system.derisking_countries
-        mask = ~lhs.coords["set_technologies"].isin(derisking_technologies) & ~lhs.coords["set_location"].isin(derisking_countries)
+        mask = ~lhs.coords["set_technologies"].isin(derisking_technologies) | ~lhs.coords["set_location"].isin(derisking_countries)
         mask = mask.broadcast_like(lhs.lower)
         lhs = lhs.where(mask)
         rhs = 0

@@ -186,6 +186,7 @@ class Solver(Subscriptable):
     use_scaling: bool = True
     scaling_include_rhs: bool = True
     scaling_algorithm: Union[list[str], str] = ["geom", "geom", "geom"]
+    write_mps_file: bool = False
 
 
 class TimeSeriesAggregation(Subscriptable):
@@ -216,7 +217,6 @@ class Analysis(Subscriptable):
     output_format: str = "h5"
     earliest_year_of_data: int = 1900
     zen_garden_version: str = None
-
 
 
 class Config(Subscriptable):

@@ -10,6 +10,7 @@ import copy
 import logging
 import os
 from collections import defaultdict
+from pathlib import Path
 
 import linopy as lp
 import numpy as np
@@ -506,26 +507,33 @@ class OptimizationSetup(object):
         solver_options = {key: self.solver.solver_options[key] for key in self.solver.solver_options if self.solver.solver_options[key] is not None}
 
         logging.info(f"\n--- Solve model instance using {solver_name} ---\n")
-        # disable logger temporarily
-        logging.disable(logging.WARNING)
 
-        if solver_name == "gurobi":
-            self.model.solve(solver_name=solver_name, io_api=self.solver.io_api,
-                             keep_files=self.solver.keep_files, sanitize_zeros=True,
-                             # remaining kwargs are passed to the solver
-                             **solver_options)
-        else:
-            self.model.solve(solver_name=solver_name, io_api=self.solver.io_api,
-                             keep_files=self.solver.keep_files, sanitize_zeros=True)
-        # enable logger
-        logging.disable(logging.NOTSET)
-        if self.model.termination_condition == 'optimal':
-            self.optimality = True
-        elif self.model.termination_condition == "suboptimal":
-            logging.warning("The optimization is suboptimal")
-            self.optimality = True
-        else:
+        # write MPS file
+        if self.solver.write_mps_file:
+            path = os.path.join(StringUtils.get_output_folder(self.analysis),f"{Path(self.analysis['dataset']).name}.mps")
+            logging.info(f"Writing MPS file to {path}")
+            self.model.to_file(path)
             self.optimality = False
+        else:
+            # disable logger temporarily
+            logging.disable(logging.WARNING)
+            if solver_name == "gurobi":
+                self.model.solve(solver_name=solver_name, io_api=self.solver.io_api,
+                                 keep_files=self.solver.keep_files, sanitize_zeros=True,
+                                 # remaining kwargs are passed to the solver
+                                 **solver_options)
+            else:
+                self.model.solve(solver_name=solver_name, io_api=self.solver.io_api,
+                                 keep_files=self.solver.keep_files, sanitize_zeros=True)
+            # enable logger
+            logging.disable(logging.NOTSET)
+            if self.model.termination_condition == 'optimal':
+                self.optimality = True
+            elif self.model.termination_condition == "suboptimal":
+                logging.warning("The optimization is suboptimal")
+                self.optimality = True
+            else:
+                self.optimality = False
 
     def write_IIS(self,scenario=""):
         """ write an ILP file to print the IIS if infeasible. Only possible for gurobi

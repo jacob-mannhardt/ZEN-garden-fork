@@ -313,7 +313,9 @@ class Postprocess:
 
         # dataframe serialization
         data_frames = {}
-        for name, arr in self.model.dual.items():
+        for name in self.model.constraints:
+
+            arr = self.model.constraints[name].dual
             if self.solver.selected_saved_duals and name not in self.solver.selected_saved_duals:
                 continue
             if name in self.constraints.docs:

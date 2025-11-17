@@ -15,6 +15,7 @@
    
    .. rubric:: Classes
 
+   .. autosummary::
    
       Carrier
       CarrierRules

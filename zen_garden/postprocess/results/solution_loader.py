@@ -43,6 +43,7 @@ class TimestepType(Enum):
     storage_inter: str = "time_storage_level_inter"
     storage_intra: str = "time_storage_level_intra"
     storage_periods: str = "set_time_steps_storage_periods"
+    storage_transitions: str = "time_storage_level_transitions"
 
     @classmethod
     def get_time_steps_names(cls) -> list[str]:
@@ -586,6 +587,8 @@ class SolutionLoader():
             sequence_timesteps_name = "intra"
         elif timestep_type is TimestepType.storage_periods:
             sequence_timesteps_name = "periods"
+        elif timestep_type is TimestepType.storage_transitions:
+            sequence_timesteps_name = "transitions"
         else:
             sequence_timesteps_name = "yearly"
         version = get_solution_version(scenario)

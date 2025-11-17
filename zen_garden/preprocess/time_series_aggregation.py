@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import logging
 import tsam.timeseriesaggregation as tsam
+from collections import Counter
 from zen_garden.model.objects.energy_system import EnergySystem
 from zen_garden.model.objects.element import Element
 from zen_garden.model.objects.technology.technology import Technology
@@ -472,6 +473,26 @@ class TimeSeriesAggregation(object):
         self.time_steps.time_steps_storage = time_steps_storage
         self.time_steps.time_steps_storage_duration = time_steps_storage_duration
         self.time_steps.sequence_time_steps_storage = sequence_time_steps_storage
+        # for wogrin: count the transitions
+        if self.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
+            assert self.system.optimized_years == 1, f"Storage representation method {self.analysis.time_series_aggregation.storageRepresentationMethod} is only implemented for single year optimizations"
+            pairs = list(zip(sequence_time_steps[:-1].astype(int), sequence_time_steps[1:].astype(int)))
+            # add last transition to first time step to close the loop
+            pairs.append((sequence_time_steps[-1].astype(int), sequence_time_steps[0].astype(int)))
+            storage_level_transitions_matrix = dict(Counter(pairs))
+            self.time_steps.storage_level_transitions_matrix = {i:v for i,v in enumerate(storage_level_transitions_matrix.values())}
+            self.time_steps.storage_level_transitions_map = {i:k for i,k in enumerate(storage_level_transitions_matrix.keys())}
+            self.time_steps.storage_level_transitions = list(self.time_steps.storage_level_transitions_map.keys())
+            transition_to_id = {v:k for k,v in self.time_steps.storage_level_transitions_map.items()}
+            self.time_steps.sequence_time_steps_transitions = [transition_to_id[pair] for pair in pairs]
+            all_counts = {}
+            for k in time_steps_storage:
+                pos_seq = np.where(sequence_time_steps_storage == k)[0].max()
+                sel_pairs = pairs[:pos_seq]
+                sel_count = dict(Counter(sel_pairs))
+                sel_count = {(k,list(self.time_steps.storage_level_transitions_map.values()).index(key)): v for key, v in sel_count.items()}
+                all_counts.update(sel_count)
+            self.time_steps.storage_level_transition_counts = all_counts
         # set the storage2year
         self.time_steps.set_time_steps_storage2year_both_dir()
         if self.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":

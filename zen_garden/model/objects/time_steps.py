@@ -45,6 +45,13 @@ class TimeStepsDicts(object):
             self.time_steps_storage_level_startend_year = None
             self.time_steps_storage_level_inter_startend_year = None
 
+            # wogrin storage transitions
+            self.storage_level_transitions_matrix = None
+            self.storage_level_transitions_map = None
+            self.storage_level_transitions = None
+            self.time_steps_storage_level_transition_counts = None
+            self.sequence_time_steps_transitions = None
+
         # set the params if provided
         else:
             el_op = [el for el in dict_all_sequence_time_steps["operation"].keys() if "storage_level" not in el][0]
@@ -96,6 +103,8 @@ class TimeStepsDicts(object):
             dict_all_sequence_time_steps["inter"] = self.sequence_time_steps_inter
             if analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
                 dict_all_sequence_time_steps["periods"] = self.sequence_time_steps_periods
+        elif analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
+            dict_all_sequence_time_steps["transitions"] = self.sequence_time_steps_transitions 
         return dict_all_sequence_time_steps
 
     def encode_time_step(self, base_time_steps: int, time_step_type: str = None):

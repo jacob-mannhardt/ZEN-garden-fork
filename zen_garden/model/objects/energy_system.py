@@ -229,6 +229,8 @@ class EnergySystem:
             self.optimization_setup.sets.add_set(name="set_time_steps_storage_inter", data=self.time_steps.time_steps_storage_inter, doc="Set of inter storage level time steps")
             if self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "minmax":
                 self.optimization_setup.sets.add_set(name="set_time_steps_storage_periods", data=self.time_steps.time_steps_storage_periods, doc="Set of inter storage level time steps")
+        elif self.optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
+            self.optimization_setup.sets.add_set(name="set_time_steps_storage_transitions", data=self.time_steps.storage_level_transitions, doc="Set of storage level transitions between system states")
 
     def construct_params(self):
         """ constructs the pe.Params of the class <EnergySystem> """

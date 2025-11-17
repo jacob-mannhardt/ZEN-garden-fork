@@ -176,7 +176,11 @@ class Results:
                 )
                 series[time_steps_year] = series[time_steps_year] / annuity[year_temp]
         try:
-            if component.timestep_type is TimestepType.operational or component.timestep_type is TimestepType.storage_inter or component.timestep_type is TimestepType.storage_intra or component.timestep_type is TimestepType.storage_periods:
+            if (component.timestep_type is TimestepType.operational or 
+                component.timestep_type is TimestepType.storage_inter or 
+                component.timestep_type is TimestepType.storage_intra or 
+                component.timestep_type is TimestepType.storage_periods or 
+                component.timestep_type is TimestepType.storage_transitions):
                 if select_year_time_steps:
                     sequence_timesteps = sequence_timesteps[sequence_timesteps.isin(time_steps)]
                 output_df = series[sequence_timesteps]

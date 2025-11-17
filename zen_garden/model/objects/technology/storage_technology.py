@@ -172,11 +172,18 @@ class StorageTechnology(Technology):
                                        doc="minimum storage level of Kotzur's intra states of storage technology on node in each storage period",
                                        unit_category={"energy_quantity": 1})
 
-        #elif not optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
+        elif optimization_setup.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":  
+            # storage level difference
+            variables.add_variable(model, name="storage_level_difference", 
+                                   index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage_transitions"],optimization_setup), 
+                                   doc='change in storage level of storage technology on node between system states', unit_category={"energy_quantity": 1, "time": -1})
+            variables.add_variable(model, name="initial_storage_level",
+                                   index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes"],optimization_setup), 
+                                   bounds=(0, np.inf), doc='initial storage level of storage technology on node at start of optimization horizon', unit_category={"energy_quantity": 1})
         else:
             # storage level
             variables.add_variable(model, name="storage_level", index_sets=cls.create_custom_set(["set_storage_technologies", "set_nodes", "set_time_steps_storage"], optimization_setup),
-                                       bounds=(0, np.inf), doc='storage level of storage technology ón node in each storage time step', unit_category={"energy_quantity": 1})
+                                       bounds=(0, np.inf), doc='storage level of storage technology on node in each storage time step', unit_category={"energy_quantity": 1})
         # energy spillage
         variables.add_variable(model, name="flow_storage_spillage", index_sets=(index_values, index_names), bounds=(0, np.inf), doc='storage spillage of storage technology on node i in each storage time step', unit_category={"energy_quantity": 1, "time": -1})
 
@@ -374,13 +381,20 @@ class StorageTechnologyRules(GenericRule):
             self.constraints.add_constraint("constraint_storage_level_min", constraints)
         # wogrin
         else:
-            times_power2energy = self.get_power2energy_time_step_array()
-            flow_storage_charge = self.map_and_expand(self.variables["flow_storage_charge"], times_power2energy)
-            flow_storage_discharge = self.map_and_expand(self.variables["flow_storage_discharge"], times_power2energy)
-            times_coupling, mask = self.get_previous_storage_time_step_array()
-            storage_level_difference = 0.5 * (flow_storage_charge + flow_storage_charge.sel({"set_time_steps_storage": times_coupling})
-                                                - (flow_storage_discharge + flow_storage_discharge.sel({"set_time_steps_storage": times_coupling})))
-
+            transition_count = self.time_steps.storage_level_transition_counts
+            transition_count = pd.Series(transition_count)
+            transition_count.name = "transition_count"
+            transition_count.index.names = ["set_time_steps_storage","set_time_steps_storage_transitions"]
+            transition_count = transition_count.to_xarray().fillna(0)
+            term_storage_level_change = (transition_count*self.variables.storage_level_difference).sum("set_time_steps_storage_transitions")
+            lhs = (self.variables.initial_storage_level + term_storage_level_change)
+            lhs_upper = lhs - capacity
+            rhs = 0
+            constraints_upper = lhs_upper <= rhs
+            lhs_lower = -lhs
+            constraints_lower = lhs_lower <= rhs
+            self.constraints.add_constraint("constraint_storage_level_max", constraints_upper)
+            self.constraints.add_constraint("constraint_storage_level_min", constraints_lower)
 
     def constraint_capacity_energy_to_power_ratio(self):
         """limit capacity power to energy ratio
@@ -514,8 +528,31 @@ class StorageTechnologyRules(GenericRule):
             self.constraints.add_constraint("constraint_storage_level_inter_coupling", constraint_inter)
 
         elif self.analysis.time_series_aggregation.storageRepresentationMethod == "wogrin":
-            raise ValueError("Storage representation method 'wogrin' is not implemented in StorageTechnologyRules.constraint_couple_storage_level(). Please use another representation method or implement the constraint.")
-
+            storage_level_transitions_map = pd.DataFrame(self.time_steps.storage_level_transitions_map).T
+            storage_level_transitions_map.index.name = "set_time_steps_storage_transitions"
+            storage_level_transitions_0 = storage_level_transitions_map[0]
+            storage_level_transitions_1 = storage_level_transitions_map[1]
+            storage_level_transitions_0.name = "set_time_steps_operation"
+            storage_level_transitions_1.name = "set_time_steps_operation"
+            term_flow_charge_discharge = (
+                    self.variables["flow_storage_charge"] * efficiency_charge -
+                    self.variables["flow_storage_discharge"] / efficiency_discharge +
+                    flow_storage_inflow -
+                    flow_storage_spillage)
+            term_flow_charge_discharge_0 = self.map_and_expand(term_flow_charge_discharge, storage_level_transitions_0)
+            term_flow_charge_discharge_1 = self.map_and_expand(term_flow_charge_discharge, storage_level_transitions_1)
+            storage_level_difference = 0.5 * (term_flow_charge_discharge_0 + term_flow_charge_discharge_1)
+            lhs = (self.variables["storage_level_difference"] - storage_level_difference)
+            rhs = 0
+            constraints = lhs == rhs
+            self.constraints.add_constraint("constraint_difference_storage_level", constraints)
+            # add constraint that sum of all storage level changes over the horizon is zero (cyclic condition)
+            transition_matrix = pd.Series(self.time_steps.storage_level_transitions_matrix)
+            transition_matrix.index.name = "set_time_steps_storage_transitions"
+            lhs = (transition_matrix*self.variables.storage_level_difference).sum("set_time_steps_storage_transitions")
+            rhs = 0
+            constraints = lhs == rhs
+            self.constraints.add_constraint("constraint_cyclic_storage_level_wogrin", constraints)
 
     def constraint_flow_storage_spillage(self):
         """Impose that the flow_energy_spillage cannot be greater than the flow_storage_inflow.

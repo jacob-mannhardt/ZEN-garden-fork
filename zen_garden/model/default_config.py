@@ -74,6 +74,7 @@ class HeaderDataInputs(Subscriptable):
     set_time_steps_storage: str = "time_storage_level"
     set_time_steps_storage_intra: str = "time_storage_level_intra"
     set_time_steps_storage_inter: str = "time_storage_level_inter"
+    set_time_steps_storage_transitions: str = "time_storage_level_transitions"
     set_dependent_carriers: str = "carrier"
     set_elements: str = "element"
     set_conversion_technologies: str = "technology"

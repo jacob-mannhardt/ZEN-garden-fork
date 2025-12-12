@@ -1080,7 +1080,7 @@ class TechnologyRules(GenericRule):
         if self.optimization_setup.system.variable_CoC:
             lending_share = self.parameters.lending_share
             # lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share.item()).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"]) + self.variables["budget_derisking_used"]
-            lhs = (cost_capex_overnight_derisking * lending_share.item()).sum(["set_technologies","set_capacity_types","set_location"]) - self.variables["budget_derisking_used"]
+            lhs = (self.variables["cost_capex_overnight_derisking"] * lending_share.item()).sum(["set_technologies","set_capacity_types","set_location"]) - self.variables["budget_derisking_used"]
             rhs = 0
             constraints_derisking = lhs == rhs
             self.constraints.add_constraint("constraint_used_derisking_budget",constraints_derisking)

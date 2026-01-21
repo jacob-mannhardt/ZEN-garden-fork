@@ -187,6 +187,7 @@ class Solver(Subscriptable):
     scaling_include_rhs: bool = True
     scaling_algorithm: Union[list[str], str] = ["geom", "geom", "geom"]
     write_mps_file: bool = False
+    write_netcdf: bool = False
 
 
 class TimeSeriesAggregation(Subscriptable):

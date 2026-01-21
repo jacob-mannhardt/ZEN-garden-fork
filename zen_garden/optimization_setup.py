@@ -514,6 +514,11 @@ class OptimizationSetup(object):
             logging.info(f"Writing MPS file to {path}")
             self.model.to_file(path)
             self.optimality = False
+        elif self.solver.write_netcdf:
+            path = os.path.join(StringUtils.get_output_folder(self.analysis),f"{Path(self.analysis['dataset']).name}.nc")
+            logging.info(f"Writing NetCDF file to {path}")
+            self.model.to_netcdf(path)
+            self.optimality = False
         else:
             # disable logger temporarily
             logging.disable(logging.WARNING)

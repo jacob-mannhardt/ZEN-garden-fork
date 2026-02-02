@@ -225,6 +225,8 @@ class Scenario():
         if any of the defined time steps name is in the index of the dataframe.
         """
         ans: dict[str, Component] = {}
+        if not self._exists:
+            return ans
 
         if self.has_rh:
             mf_name = [i for i in os.listdir(self.path) if "MF_" in i][0]

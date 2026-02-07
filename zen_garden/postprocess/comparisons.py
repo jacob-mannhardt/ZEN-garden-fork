@@ -34,7 +34,7 @@ def compare_model_values(
         f"Comparing the model parameters of {results[0].solution_loader.name, results[1].solution_loader.name} and scenarios {scenarios[0], scenarios[1]}"
     )
 
-    diff_components = get_component_diff(results, component_type)
+    diff_components = get_component_diff(results, component_type,scenarios)
 
     diff_dict = {}
     # initialize progress bar
@@ -57,29 +57,29 @@ def compare_model_values(
 
 def compare_configs(
     results: list[Results],
-    scenario_name: str,
+    scenarios: list[str] = [],
 ) -> dict[str, Any]:
     """
     Compares the configs of two results, namely the Analysis-Config and the System-config.
 
     :param results: List of results
-    :param scenario_name: List of scenarios to filter by
+    :param scenarios: List of scenarios to filter by
     :return: dictionary with diverging configs
     """
     ans: dict[str, Any] = {}
 
-    scenario_names = [scenario_name, scenario_name]
+    scenarios = check_and_fill_scenario_list(results, scenarios)
 
     for i in range(2):
-        if scenario_names[i] not in results[i].solution_loader.scenarios:
+        if scenarios[i] not in results[i].solution_loader.scenarios:
             random_scenario = next(iter(results[i].solution_loader.scenarios.keys()))
             logging.info(
-                f"{scenario_name} not in {results[i].solution_loader.name}, choosing {random_scenario}."
+                f"{scenarios[i]} not in {results[i].solution_loader.name}, choosing {random_scenario}."
             )
-            scenario_names[i] = random_scenario
+            scenarios[i] = random_scenario
 
     results_1, results_2 = results
-    scenario_name_1, scenario_name_2 = scenario_names
+    scenario_name_1, scenario_name_2 = scenarios
 
     scenario_1 = results_1.solution_loader.scenarios[scenario_name_1]
     scenario_2 = results_2.solution_loader.scenarios[scenario_name_2]
@@ -110,7 +110,7 @@ def compare_configs(
     return ans
 
 def get_component_diff(
-    results: list[Results], component_type: ComponentType
+    results: list[Results], component_type: ComponentType, scenarios: list[str]
 ) -> list[str]:
     """returns a list with the differences in component names
 
@@ -124,7 +124,7 @@ def get_component_diff(
     component_names_0 = set(
         [
             name
-            for name, component in results_0.solution_loader.components.items()
+            for name, component in results_0.solution_loader.scenarios[scenarios[0]].components.items()
             if component.component_type is component_type
         ]
     )
@@ -132,7 +132,7 @@ def get_component_diff(
     component_names_1 = set(
         [
             name
-            for name, component in results_1.solution_loader.components.items()
+            for name, component in results_1.solution_loader.scenarios[scenarios[1]].components.items()
             if component.component_type is component_type
         ]
     )

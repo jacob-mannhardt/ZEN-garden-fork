@@ -11,8 +11,8 @@ module load python/3.11.6
 
 # backend for the solvers
 module load glpk
-module load gurobi/11.0.2
+module load gurobi/10.0.3
 
 # activate the env from anywhere
 # $BASH_SOURCE contains the path that was sourced
-source $(realpath $BASH_SOURCE | xargs dirname)/zen_garden_env/bin/activate
+source $(realpath $BASH_SOURCE | xargs dirname)/zen_garden_env_main/bin/activate

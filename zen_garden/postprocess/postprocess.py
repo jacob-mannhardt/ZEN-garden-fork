@@ -18,7 +18,7 @@ from filelock import FileLock
 import yaml
 from pydantic import BaseModel
 
-from ..model.optimization_setup import OptimizationSetup
+from ..optimization_setup import OptimizationSetup
 
 
 # Warnings
@@ -92,21 +92,33 @@ class Postprocess:
         if self.solver.run_diagnostics:
             self.save_benchmarking_data()
 
-    def write_file(self, name, dictionary, format=None):
+    def write_file(self, name, dictionary, format=None, mode = 'w'):
         """Writes the dictionary to file as json, if compression attribute is True, the serialized json is compressed
             and saved as binary file
 
         :param name: Filename without extension
         :param dictionary: The dictionary to save
         :param format: Force the format to use, if None use output_format attribute of instance
+        :param mode: Writting mode for python file. The two options are 'w' and
+            'a'. The former create a new file while the latter will append to an
+            existing file. Appending files is currently only supported for h5 
+            files. 
         """
 
         if isinstance(dictionary, BaseModel):
             dictionary = dictionary.model_dump()
 
+        # check whether valid mode
+        if not mode in ["a", "w"]:
+            ValueError(f"Invalid file write mode {mode} (valid options are 'a' or 'w').")
+
         # set the format
         if format is None:
             format = self.output_format
+
+        # only allow append mode for h5 files
+        if mode == 'a' and format != "h5":
+            raise ValueError(f"Write mode {mode} not available for output format {format}. If include_operation_only_phase = true, outputs must be saved in h5 files.")
 
         if format == "yml":
             # serialize to string
@@ -140,7 +152,7 @@ class Postprocess:
         elif format == "h5":
             f_name = f"{name}.h5"
             with FileLock(f_name + ".lock").acquire(timeout=300):
-                self._write_h5_file(f_name, dictionary)
+                self._write_h5_file(f_name, dictionary, mode)
 
         elif format == "txt":
             f_name = f"{name}.txt"
@@ -164,10 +176,11 @@ class Postprocess:
         benchmarking_data["objective_value"] = self.model.objective.value
         if self.solver.name == "gurobi":
             benchmarking_data["solving_time"] = self.model.solver_model.Runtime
-            if self.solver.solver_options["Method"] == 2:
-                benchmarking_data["number_iterations"] = self.model.solver_model.BarIterCount
-            else:
-                benchmarking_data["number_iterations"] = self.model.solver_model.IterCount
+            if "Method" in self.solver.solver_options:
+                if self.solver.solver_options["Method"] == 2:
+                    benchmarking_data["number_iterations"] = self.model.solver_model.BarIterCount
+                else:
+                    benchmarking_data["number_iterations"] = self.model.solver_model.IterCount
             benchmarking_data["solver_status"] = self.model.solver_model.Status
             benchmarking_data["number_constraints"] = self.model.solver_model.NumConstrs
             benchmarking_data["number_variables"] = self.model.solver_model.NumVars
@@ -279,8 +292,15 @@ class Postprocess:
         # dataframe serialization
         data_frames = {}
         for name, arr in self.model.solution.items():
-            if self.solver.selected_saved_variables and name not in self.solver.selected_saved_variables:
+
+            # skip variables not selected to be saved
+            if (
+                self.solver.selected_saved_variables 
+                and name not in self.solver.selected_saved_variables
+            ):
                 continue
+            
+            # extract doc information
             if name in self.vars.docs:
                 doc = self.vars.docs[name]
                 units = self.vars.units[name]
@@ -294,15 +314,22 @@ class Postprocess:
 
             # create dataframe
             df = arr.to_dataframe("value").dropna()
+
             # rename the index
             if len(df.index.names) == len(index_list):
                 df.index.names = index_list
 
             units = self._unit_df(units,df.index)
-            # we transform the dataframe to a json string and load it into the dictionary as dict
-            data_frames[name] = self._transform_df(df,doc,units)
 
-        self.write_file(self.name_dir.joinpath('var_dict'), data_frames)
+            # transform the dataframe to a json string and load it into the dictionary as dict
+            data_frames[name] = self._transform_df(df,doc,units)
+        
+        # write file
+        self.write_file(
+            self.name_dir.joinpath('var_dict'), 
+            data_frames, 
+            mode = 'w'
+        )
 
     def save_duals(self):
         """ Saves the dual variable values to a json file which can then be
@@ -313,7 +340,18 @@ class Postprocess:
 
         # dataframe serialization
         data_frames = {}
-        for name, arr in self.model.dual.items():
+        for name in self.model.constraints:
+
+            arr = self.model.constraints[name].dual
+
+            # skip variables not selected to be saved
+            if (
+                self.solver.selected_saved_duals 
+                and name not in self.solver.selected_saved_duals
+            ):
+                continue
+            
+            # extract doc information
             if name in self.constraints.docs:
                 doc = self.constraints.docs[name]
                 index_list = self.get_index_list(doc)
@@ -321,6 +359,11 @@ class Postprocess:
                 index_list = []
                 doc = None
 
+            # rescale
+            if self.solver.use_scaling:
+                cons_labels = self.model.constraints[name].labels.data
+                scaling_factor = self.optimization_setup.scaling.D_r_inv[cons_labels]
+                arr = arr * scaling_factor
             # create dataframe
             if len(arr.shape) > 0:
                 df = arr.to_series().dropna()
@@ -334,16 +377,17 @@ class Postprocess:
             # we transform the dataframe to a json string and load it into the dictionary as dict
             data_frames[name] = self._transform_df(df,doc)
 
-        self.write_file(self.name_dir.joinpath('dual_dict'), data_frames)
+        # write file
+        self.write_file(
+            self.name_dir.joinpath('dual_dict'), 
+            data_frames, 
+            mode = 'w'
+        )
 
     def save_system(self):
         """
         Saves the system dict as json
         """
-        if hasattr(self.system,"fix_keys"):
-            del self.system.fix_keys
-        if hasattr(self.system,"i"):
-            del self.system.i
         if self.system.use_rolling_horizon:
             fname = self.name_dir.parent.joinpath('system')
         else:
@@ -354,33 +398,32 @@ class Postprocess:
         """
         Saves the analysis dict as json
         """
-        if hasattr(self.analysis,"fix_keys"):
-            del self.analysis.fix_keys
-        if hasattr(self.analysis,"i"):
-            del self.analysis.i
         if self.system.use_rolling_horizon:
             fname = self.name_dir.parent.joinpath('analysis')
         else:
             fname = self.name_dir.joinpath('analysis')
         # remove cwd path part to avoid saving the absolute path
         if os.path.isabs(self.analysis.dataset):
-            self.analysis.dataset = str(Path(self.analysis.dataset).relative_to(os.getcwd()))
-            self.analysis.folder_output = str(Path(self.analysis.folder_output).relative_to(os.getcwd()))
+            cwd = os.getcwd()
+            self.analysis.dataset = os.path.relpath(self.analysis.dataset,cwd)
+            self.analysis.folder_output = os.path.relpath(self.analysis.folder_output, cwd)
         self.write_file(fname, self.analysis, format="json")
 
     def save_solver(self):
         """
         Saves the solver dict as json
         """
-        if hasattr(self.solver,"fix_keys"):
-            del self.solver.fix_keys
-        if hasattr(self.solver,"i"):
-            del self.solver.i
         # This we only need to save once
         if self.system.use_rolling_horizon:
             fname = self.name_dir.parent.joinpath('solver')
         else:
             fname = self.name_dir.joinpath('solver')
+        
+        # remove cwd path part to avoid saving the absolute path
+        if os.path.isabs(self.solver.solver_dir):
+            cwd = os.getcwd()
+            self.solver.solver_dir = os.path.relpath(self.solver.solver_dir,cwd)
+        # save    
         self.write_file(fname, self.solver, format="json")
 
     def save_scenarios(self):
@@ -388,8 +431,8 @@ class Postprocess:
         Saves the scenario dict as json
         """
         # only save the scenarios at the highest level
-        root_path = Path(self.analysis.folder_output).joinpath(self.model_name)
-        fname = root_path.joinpath('scenarios')
+        root_dir = Path(self.analysis.folder_output).joinpath(self.model_name)
+        fname = root_dir.joinpath('scenarios')
         self.write_file(fname, self.scenarios, format="json")
 
     def save_unit_definitions(self):
@@ -573,32 +616,39 @@ class Postprocess:
         else:
             return None
 
-    def _write_h5_file(self, file_name, dictionary,complevel=4,complib="blosc"):
+    def _write_h5_file(self, file_name, dictionary, mode = 'w', complevel=4,complib="blosc"):
         """Writes the dictionary to a hdf5 file
 
         :param file_name: The name of the file
         :param dictionary: The dictionary to save
+        :param mode: Writting mode for python file. The two options are 'w' and
+            'a'. The former create a new file while the latter will append to an
+            existing file.
         """
-        if not self.overwrite and os.path.exists(file_name):
+        if mode == 'w' and not self.overwrite and os.path.exists(file_name):
             raise FileExistsError("File already exists. Please set overwrite=True to overwrite the file.")
-        with pd.HDFStore(file_name, mode='w', complevel=complevel, complib=complib) as store:
+        with pd.HDFStore(file_name, mode=mode, complevel=complevel, complib=complib) as store:
             for key, value in dictionary.items():
                 if not isinstance(key, str):
                     raise TypeError("All dictionary keys must be strings!")
                 if isinstance(value, dict):
-                    input_dict, docstring, has_units = self._format_dict(value)
+                    input_dict, units, docstring, has_units = self._format_dict(value)
                     if not input_dict["dataframe"].empty:
-                        store.put(key, input_dict["dataframe"], format='table')
+                        df = input_dict["dataframe"]
+                        store.put(key, df, format='table')
                         # add additional attributes
-                        index_names = input_dict["dataframe"].index.names
+                        index_names = df.index.names
                         index_names = ",".join([str(name) for name in index_names])
                         store.get_storer(key).attrs.docstring = docstring
                         store.get_storer(key).attrs["name"] = key
                         store.get_storer(key).attrs["has_units"] = has_units
                         store.get_storer(key).attrs["index_names"] = index_names
+                        if has_units:
+                            store.put(key + "_units", units, format='table')
                         # remove "_i_table" to reduce file size
                         try:
                             store.remove(key + "/_i_table")
+                            store.remove(key + "_units/_i_table")
                         except KeyError:
                             pass
                 else:
@@ -627,12 +677,11 @@ class Postprocess:
             assert units.index.intersection(df.index).equals(
                 units.index), f"Units index {units.index} does not match dataframe index {df.index}"
             units.name = "units"
-            df = pd.concat([df, units], axis=1)
-            input_dict["dataframe"] = df
             has_units = True
         else:
             has_units = False
+            units = None
         if not (set(input_dict.keys()) == set(expected_keys) or set(input_dict.keys()) == set(expected_keys).union(
                 ["units"])):
             raise ValueError(f"Expected keys are {expected_keys}, but got {input_dict.keys()}")
-        return input_dict, docstring, has_units
+        return input_dict, units, docstring, has_units

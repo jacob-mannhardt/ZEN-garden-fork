@@ -1,6 +1,7 @@
 """
 This module contains the Results class, which is used to extract and process the results of a model run.
 """
+import numpy as np
 from pandas import Series
 
 from zen_garden.postprocess.results.solution_loader import (
@@ -10,11 +11,10 @@ from zen_garden.postprocess.results.solution_loader import (
     TimestepType,
     ComponentType,
 )
-from zen_garden.model.default_config import Config, Analysis, Solver, System
+from zen_garden.default_config import Config, Analysis, Solver, System
+from zen_garden.utils import reformat_slicing_index
 import pandas as pd
 from typing import Optional, Any, Literal, Union
-from zen_garden.utils import reformat_slicing_index
-from functools import cache
 import importlib
 import os
 import logging
@@ -28,13 +28,15 @@ class Results:
     """
     The Results class is used to extract and process the results of a model run.
     """
-    def __init__(self, path: str):
+    def __init__(self, path: str, enable_cache: bool = True):
         """
         Initializes the Results class.
 
         :param path: Path to the results folder
         """
-        self.solution_loader = SolutionLoader(path)
+        assert os.path.exists(path), f"The output folder {Path(path).absolute()} does not exist."
+        assert len(os.listdir(path)) > 0, f"The output folder {Path(path).absolute()} is empty."
+        self.solution_loader = SolutionLoader(path, enable_cache=enable_cache)
         self.has_scenarios = len(self.solution_loader.scenarios) > 1
         first_scenario = next(iter(self.solution_loader.scenarios.values()))
         self.name = Path(first_scenario.analysis.dataset).name
@@ -52,6 +54,7 @@ class Results:
         index: Optional[Union[NestedTuple, NestedDict, list[str], str, float, int]] = None,
     ) -> Optional[Union[dict[str, "pd.DataFrame | pd.Series[Any]"],pd.Series]]:
         """
+        Returns the raw results without any further processing.
         Transforms a parameter or variable dataframe (compressed) string into an actual pandas dataframe
 
         :component_name string: The string to decode
@@ -67,34 +70,35 @@ class Results:
             else [scenario_name]
         )
 
-        if component_name not in self.solution_loader.components:
-            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
-            if len(scenario_names) == 1:
-                return pd.Series()
-            else:
-                return {s:pd.Series() for s in scenario_names}
-
-        component = self.solution_loader.components[component_name]
-
-        index = reformat_slicing_index(index,component)
-
-        if data_type == "units" and not component.has_units:
-            return None
-
         if len(scenario_names) == 1:
             scenario_name = scenario_names[0]
             scenario = self.solution_loader.scenarios[scenario_name]
+            if component_name not in scenario.components:
+                logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+                return pd.Series()
+            component = scenario.get_component(component_name)
+            if data_type == "units" and not component.has_units:
+                return None
+            idx = reformat_slicing_index(index,component)
             ans = self.solution_loader.get_component_data(
-                scenario, component, data_type=data_type, index=index
+                scenario, component, data_type=data_type, index=idx
             )
         else:
             ans = {}
             for scenario_name in scenario_names:
                 scenario = self.solution_loader.scenarios[scenario_name]
+                if component_name not in scenario.components:
+                    continue
+                component = scenario.get_component(component_name)
+                if data_type == "units" and not component.has_units:
+                    return None
+                idx = reformat_slicing_index(index, component)
                 ans[scenario_name] = self.solution_loader.get_component_data(
-                    scenario, component, data_type=data_type, index=index
+                    scenario, component, data_type=data_type, index=idx
                 )
-
+            if len(ans) == 0:
+                logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+                return {}
         return ans
 
     def get_full_ts_per_scenario(
@@ -127,6 +131,7 @@ class Results:
         if year is None:
             years = [i for i in range(0, scenario.system.optimized_years)]
         else:
+            year = scenario.convert_year2ts(year)
             years = [year]
 
         # slice index with time steps of year
@@ -143,10 +148,7 @@ class Results:
             series = series.unstack(component.timestep_name)
 
         if component.timestep_type is TimestepType.yearly:
-            if component.component_type not in [
-                ComponentType.parameter,
-                ComponentType.variable,
-            ]:
+            if component.component_type is ComponentType.dual:
                 annuity = self._get_annuity(scenario, discount_to_first_step)
                 ans = series / annuity
             else:
@@ -156,7 +158,7 @@ class Results:
                 ans = ans[years]
             except KeyError:
                 pass
-
+            ans = scenario.convert_ts2year(ans)
             return ans
 
         if (
@@ -182,21 +184,25 @@ class Results:
                 output_df = series[sequence_timesteps]
             elif component.timestep_type is TimestepType.storage:
                 # for storage components, the last timestep is the final state, linear interpolation is used
-                last_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[-1])
-                first_occurrences = sequence_timesteps.groupby(sequence_timesteps).apply(lambda x: x.index[0])
+                last_occurrences = sequence_timesteps.drop_duplicates(keep="last")
+                first_occurrences = sequence_timesteps.drop_duplicates(keep="first")
+                last_occurrences = pd.Series(last_occurrences.index, index=last_occurrences.values)
+                first_occurrences = pd.Series(first_occurrences.index, index=first_occurrences.values)
+                last_occurrences = last_occurrences[last_occurrences.index.intersection(series.columns)]
                 output_df = series[last_occurrences.index].rename(last_occurrences,axis=1)
+                output_df = output_df.apply(lambda row: np.interp(sequence_timesteps.index,row.index,row.values,left=np.nan,right=np.nan),axis=1,result_type="expand")
                 # fill missing ts with nan
-                output_df = output_df.reindex(columns=sequence_timesteps.index)
                 time_steps_start_end = self.solution_loader.get_time_steps_storage_level_startend_year(scenario)
+                time_steps_start_end = {k:v for k,v in time_steps_start_end.items() if k in first_occurrences and v in last_occurrences}
                 for tstart,tend in time_steps_start_end.items():
                     tstart_reconstructed = first_occurrences[tstart]
-                    first_valid_timestep = output_df.loc[:,tstart_reconstructed:].T.first_valid_index()
+                    _output_df_recon = output_df.iloc[0][tstart_reconstructed:]
+                    first_valid_timestep = _output_df_recon.index[np.isnan(_output_df_recon).argmin()]
                     df_temp = pd.DataFrame(index=series.index,columns=range(tstart_reconstructed-1,first_valid_timestep+1),dtype=float)
                     df_temp.loc[:,tstart_reconstructed-1] = series.loc[:,tend]
                     df_temp.loc[:,first_valid_timestep] = series.loc[:,sequence_timesteps[first_valid_timestep]]
-                    df_temp = df_temp.interpolate(method='index',axis=1)
+                    df_temp = df_temp.interpolate(method='linear',axis=1)
                     output_df.loc[:,first_occurrences[tstart]:last_occurrences[tstart]] = df_temp.loc[:,tstart_reconstructed:first_valid_timestep]
-                output_df = output_df.interpolate(method='index',axis=1)
                 if select_year_time_steps:
                     sequence_timesteps = sequence_timesteps[sequence_timesteps.isin(time_steps)]
                 output_df = output_df[sequence_timesteps.index]
@@ -208,6 +214,8 @@ class Results:
         output_df = output_df.T.reset_index(drop=True).T
 
         return output_df
+
+
 
     def get_full_ts(
         self,
@@ -233,29 +241,27 @@ class Results:
         else:
             scenario_names = [scenario_name]
 
-        if component_name not in self.solution_loader.components:
-            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
-            return pd.Series()
-
-        component = self.solution_loader.components[component_name]
-
         scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"] = {}
-
-        index = reformat_slicing_index(index,component)
 
         for scenario_name in scenario_names:
             scenario = self.solution_loader.scenarios[scenario_name]
-
+            if component_name not in scenario.components:
+                continue
+            component = scenario.get_component(component_name)
+            idx = reformat_slicing_index(index,component)
             scenarios_dict[scenario_name] = self.get_full_ts_per_scenario(
                 scenario,
                 component,
                 discount_to_first_step=discount_to_first_step,
                 year=year,
                 keep_raw=keep_raw,
-                index=index
+                index=idx
             )
+        if len(scenarios_dict) == 0:
+            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+            return pd.Series()
 
-        return self._concat_scenarios_dict(scenarios_dict)
+        return self._concat_scenarios_dict(scenarios_dict,scenario_names)
 
     def get_total_per_scenario(
         self,
@@ -282,14 +288,19 @@ class Results:
         if year is None:
             years = [i for i in range(0, scenario.system.optimized_years)]
         else:
+            year = scenario.convert_year2ts(year)
             years = [year]
 
         if component.timestep_type is None or type(series.index) is not pd.MultiIndex:
+            if component.timestep_type is TimestepType.yearly:
+                series = scenario.convert_ts2year(series)
             return series
 
         if component.timestep_type is TimestepType.yearly:
             ans = series.unstack(component.timestep_name)
-            return ans[years]
+            ans = ans[years]
+            ans = scenario.convert_ts2year(ans)
+            return ans
 
         timestep_duration = self.solution_loader.get_timestep_duration(
             scenario, component
@@ -312,7 +323,7 @@ class Results:
             ans = ans.reorder_levels(
                 [i for i in ans.index.names if i != "mf"] + ["mf"]
             ).sort_index(axis=0)
-
+        ans = scenario.convert_ts2year(ans)
         return ans
 
     def get_total(
@@ -326,32 +337,36 @@ class Results:
         """
         Calculates the total values of a component for a all scenarios.
 
-        :param component_name: Name of the component
+        :param component_name: Name of the component. Should not be used for dual variables!
         :param year: Filter the results by a given year
         :param scenario_name: Filter the results by a given scenario
         :param keep_raw: Keep the raw values of the rolling horizon optimization
         :param index: slicing index of the resulting dataframe
         :return: Total values of the component
         """
+
+        # Throw error if used for a dual variable
+        if component_name in self.get_component_names("dual"):
+            raise ValueError(
+                "This method does not support the extraction of " \
+                "dual variables. Please use the methods " \
+                "`get_dual()` or `get_full_ts()` instead.")
+
         if scenario_name is None:
             scenario_names = list(self.solution_loader.scenarios)
         else:
             scenario_names = [scenario_name]
 
-        if component_name not in self.solution_loader.components:
-            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
-            return pd.Series()
-
-        component = self.solution_loader.components[component_name]
-
         scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"] = {}
 
-        index = reformat_slicing_index(index, component)
-        
         for scenario_name in scenario_names:
             scenario = self.solution_loader.scenarios[scenario_name]
+            if component_name not in scenario.components:
+                continue
+            component = scenario.get_component(component_name)
+            idx = reformat_slicing_index(index, component)
             current_total = self.get_total_per_scenario(
-                scenario, component, year, keep_raw, index = index
+                scenario, component, year, keep_raw, index = idx
             )
 
             if type(current_total) is pd.Series:
@@ -359,10 +374,14 @@ class Results:
 
             scenarios_dict[scenario_name] = current_total
 
-        return self._concat_scenarios_dict(scenarios_dict)
+        if len(scenarios_dict) == 0:
+            logging.warning(f"Component {component_name} not found. If you expected this component to be present, the solution is probably empty and therefore skipped.")
+            return pd.Series()
+
+        return self._concat_scenarios_dict(scenarios_dict,scenario_names)
 
     def _concat_scenarios_dict(
-        self, scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"]
+        self, scenarios_dict: dict[str, "pd.DataFrame | pd.Series[Any]"],scenario_names: list[str]
     ) -> pd.DataFrame:
         """
         Concatenates a dict of the form str: Data to one dataframe.
@@ -370,12 +389,10 @@ class Results:
         :param scenarios_dict: Dict containing the scenario names as key and the values as values.
         :return: Concatenated dataframe
         """
-        scenario_names = list(scenarios_dict.keys())
-
         if len(scenario_names) == 1:
             ans = scenarios_dict[scenario_names[0]]
             return ans
-
+        scenario_names = list(scenarios_dict.keys())
         if isinstance(scenarios_dict[scenario_names[0]], pd.Series):
             total_value = pd.concat(
                 scenarios_dict, keys=scenarios_dict.keys(), axis=1
@@ -399,7 +416,7 @@ class Results:
         :return: annuity of the duals
         """
         system = scenario.system
-        discount_rate_component = self.solution_loader.components["discount_rate"]
+        discount_rate_component = scenario.get_component("discount_rate")
         # calculate annuity
         discount_rate = self.solution_loader.get_component_data(
             scenario, discount_rate_component
@@ -447,7 +464,7 @@ class Results:
     ) -> Optional["pd.DataFrame | pd.Series[Any]"]:
         """extracts the dual variables of a component
 
-        :param component: Name of dal
+        :param component_name: Name of dual
         :param scenario_name: Scenario Name
         :param year: Year
         :param discount_to_first_step: apply annuity to first year of interval or entire interval
@@ -458,11 +475,6 @@ class Results:
         if not self.get_solver(scenario_name=scenario_name).save_duals:
             logging.warning("Duals are not calculated. Skip.")
             return None
-
-        component = self.solution_loader.components[component_name]
-        assert (
-            component.component_type is ComponentType.dual
-        ), f"Given component {component} is not of type Dual."
 
         duals = self.get_full_ts(
             component_name=component_name,
@@ -478,22 +490,34 @@ class Results:
         self,
         component_name: str,
         scenario_name: Optional[str] = None,
+        index: Optional[Union[NestedTuple, NestedDict, list[str], str, float, int]] = None,
         droplevel: bool = True,
-        is_total: bool = True,
+        convert_to_yearly_unit: bool = False,
     ) -> None | Series | str:
         """
         Extracts the unit of a given Component. If no scenario is given, a random one is taken.
 
         :param component_name: Name of the component
         :param scenario_name: Name of the scenario
+        :param index: slicing index of the resulting dataframe
         :param droplevel: Drop the location and time levels of the multiindex
+        :param convert_to_yearly_unit: If True, the unit is converted to a yearly unit, i.e., for components with an operational time step type, the unit is multiplied by hours.
         :return: The corresponding unit
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
+        if component_name == "objective":
+            if self.get_analysis(scenario_name=scenario_name).objective == "total_cost":
+                component_name = "net_present_cost"
+            elif self.get_analysis(scenario_name=scenario_name).objective == "total_carbon_emissions":
+                component_name = "carbon_emissions_annual"
+            else:
+                raise ValueError(f"Invalid objective function {self.get_analysis(scenario_name=scenario_name).objective}")
+            if component_name not in self.get_component_names("variable"):
+                logging.warning(f"Component {component_name} not found in {self.get_analysis(scenario_name=scenario_name)}")
         units = self.get_df(
-            component_name, scenario_name=scenario_name, data_type="units"
-        )
+                component_name, scenario_name=scenario_name, data_type="units", index=index
+            )
         if units is None:
             return None
         if droplevel:
@@ -514,26 +538,35 @@ class Results:
         # convert to pint units
         if isinstance(units, pd.Series):
             for i in units.index:
-                units[i] = self._convert_to_pint_units(units[i], is_total, component_name)
+                units[i] = self._convert_to_pint_units(units[i], convert_to_yearly_unit, component_name)
         elif isinstance(units, str):
-            units = self._convert_to_pint_units(units, is_total, component_name)
+            units = self._convert_to_pint_units(units, convert_to_yearly_unit, component_name)
         else:
             raise TypeError(f"Invalid units type: {type(units)}")
 
         return units
 
-    def _convert_to_pint_units(self,u: str,is_total: bool, component_name: str) -> str:
+    def _convert_to_pint_units(self,u: str,convert_to_yearly_unit: bool, component_name: str) -> str:
         """
         Converts a string to a pint unit.
         """
+        component = None
+        for s in self.solution_loader.scenarios:
+            if component_name in self.solution_loader.scenarios[s].components:
+                component = self.solution_loader.scenarios[s].get_component(component_name)
+                break
+        if component is None:
+            return u
+        timestep_type = component.timestep_type
+
         try:
             u = self.ureg.parse_expression(u)
-            if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+            if convert_to_yearly_unit and timestep_type is TimestepType.operational:
                 u = u * self.ureg.h
             u_return = f"{u.u:~D}"
-        # if the unit is not in the pint registry, change the string manually (normally, when the unit_definition.txt is not saved)
+        # if the unit is not in the pint registry, change the string manually (normally when the unit_definition.txt is not saved)
         except Exception:
-            if is_total and self.solution_loader.components[component_name].timestep_type is TimestepType.operational:
+            if convert_to_yearly_unit and timestep_type is TimestepType.operational:
                 if u.endswith(" / hour"):
                     u_return = u.replace(" / hour", "")
                 else:
@@ -544,10 +577,28 @@ class Results:
 
     def get_system(self, scenario_name: Optional[str] = None) -> System:
         """
-        Extracts the System config of a given Scenario. If no scenario is given, a random one is taken.
+        Extract system configurations from a scenario.
 
-        :param scenario_name: Name of the scenario
-        :return: The corresponding System config
+        Extracts system configurations from the results of a scenario. This 
+        ensures the tractability of model configurations. System configurations
+        are those specified in the ``system.json`` file of a given model.
+
+        Args:
+            scenario_name (str, optional): The name of the scenario for which
+                to extract the system configuration. If no value is given, then
+                the first scenario is used. Default value: ``None``.
+
+        Returns:
+            System: System configuration.
+
+        Examples:
+            Basic usage example:
+
+            >>> from zen_garden.postprocess.results.results import Results
+            >>> r = Results(path='<result_folder>')
+            >>> r.get_system() # system configurations of first scenario
+            >>> r.get_system('scenario_name') # system configuration of "scenario_name"
+
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -555,10 +606,29 @@ class Results:
 
     def get_analysis(self, scenario_name: Optional[str] = None) -> Analysis:
         """
-        Extracts the Analysis config of a given Scenario. If no scenario is given, a random one is taken.
+        Extract analysis configurations from a scenario.
 
-        :param scenario_name: Name of the scenario
-        :return: The corresponding Analysis config
+        Extracts analysis configurations from the results of a scenario. This 
+        ensures the tractability of model configurations. Analysis configurations 
+        are those specified under the ``analysis`` object in the ``config.json``
+        file.
+
+        Args:
+            scenario_name (str, optional): The name of the scenario for which
+                to extract the system configuration. If no value is given, then
+                the first scenario is used. Default value: ``None``.
+
+        Returns:
+            Analysis: Analysis configuration.
+
+        Examples:
+            Basic usage example:
+
+            >>> from zen_garden.postprocess.results.results import Results
+            >>> r = Results(path='<result_folder>')
+            >>> r.get_analysis() # analysis configurations of first scenario
+            >>> r.get_analysis('scenario_name') # analysis configuration of "scenario_name"
+
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
@@ -566,23 +636,71 @@ class Results:
 
     def get_solver(self, scenario_name: Optional[str] = None) -> Solver:
         """
-        Extracts the Solver config of a given Scenario. If no scenario is given, a random one is taken.
+        Extract solver configurations from a scenario.
 
-        :param scenario_name: Name of the scenario
-        :return: The corresponding Solver config
+        Extracts solver configurations from the results of a scenario. This 
+        ensures the tractability of model configurations. Solver configurations 
+        are those specified under the ``solver`` object in the ``config.json``
+        file.
+
+        Args:
+            scenario_name (str, optional): The name of the scenario for which
+                to extract the system configuration. If no value is given, then
+                the first scenario is used. Default value: ``None``.
+
+        Returns:
+            Solver: Solver configuration.
+
+        Examples:
+            Basic usage example:
+
+            >>> from zen_garden.postprocess.results.results import Results
+            >>> r = Results(path='<result_folder>')
+            >>> r.get_solver() # solver configurations of first scenario
+            >>> r.get_solver('scenario_name') # solver configuration of "scenario_name"
+
         """
         if scenario_name is None:
             scenario_name = next(iter(self.solution_loader.scenarios.keys()))
         return self.solution_loader.scenarios[scenario_name].solver
 
-    def get_doc(self, component: str) -> str:
+    def get_doc(self, component_name: str) -> str:
         """
         Extracts the documentation of a given Component.
 
-        :param component: Name of the component
+        :param component_name: Name of the component
         :return: The corresponding documentation
         """
-        return self.solution_loader.components[component].doc
+        component = None
+        for scenario in self.solution_loader.scenarios.values():
+            if component_name in scenario.components:
+                component = scenario.get_component(component_name)
+                break
+        if component is None:
+            logging.warning(f"Component {component_name} not found and the documentation cannot be returned.")
+            return ""
+        return component.doc
+
+    def get_index_names(self, component_name: str, scenario_name: Optional[str] = None) -> list[str]:
+        """
+        Docstring for get_index_names
+        
+        :param self: Description
+        :param component_name: Description
+        :type component_name: str
+        :param scenario_name: Description
+        :type scenario_name: Optional[str]
+        :return: Description
+        :rtype: list[str]
+        """
+        if scenario_name is None:
+            scenario_name = next(iter(self.solution_loader.scenarios.keys()))
+        scenario = self.solution_loader.scenarios[scenario_name]
+        if component_name not in scenario.components:
+            logging.warning(f"Component {component_name} not found and the index names cannot be returned.")
+            return []
+        component = scenario.get_component(component_name)
+        return component.index_names
 
     def get_years(self, scenario_name: Optional[str] = None) -> list[int]:
         """
@@ -683,7 +801,7 @@ class Results:
 
         # check if desired carrier isn't contained in data (otherwise .loc raises an error)
         if carrier not in dataframe.index.get_level_values("carrier"):
-            return None
+            return pd.DataFrame()
 
         return dataframe.query(f"carrier == '{carrier}'")
 
@@ -694,7 +812,6 @@ class Results:
 
         :param data: pd.DataFrame containing data to extract
         :param node: node of interest
-        :param carrier: carrier of interest
         :param direction: flow direction with respect to node
         :param scenario: scenario of interest
         :return: pd.DataFrame containing carrier_flow data desired
@@ -790,7 +907,12 @@ class Results:
         :return: List of component names
         """
         assert component_type in ComponentType.get_component_type_names(), f"Invalid component type: {component_type}. Valid types are: {ComponentType.get_component_type_names()}"
-        return [component for component in self.solution_loader.components if self.solution_loader.components[component].component_type.name == component_type]
+        list_names = []
+        for scenario in self.solution_loader.scenarios:
+            for cn in self.solution_loader.scenarios[scenario].component_types[component_type]:
+                if cn not in list_names:
+                    list_names.append(cn)
+        return list_names
 
 
 if __name__ == "__main__":

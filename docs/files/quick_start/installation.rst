@@ -20,37 +20,48 @@ We recommend working from a conda environment for the installation. If you have
 not installed Anaconda, you can download it from the 
 `Anaconda website <https://docs.anaconda.com/anaconda/install/>`_. You can check 
 if you have Anaconda installed by running the following command in  a terminal 
-(MacOS)/command prompt (Windows)::
+(MacOS)/command prompt (Windows)
+
+.. code:: shell
 
     conda --version
 
-You can quickly create an environment with the following command::
+You can quickly create an environment with the command below. Here, 
+"zen-garden-env" is the name of the newly created environment:
 
-  conda create -n <your_env_name> python==3.12
+.. code:: shell
 
-Replace ``<your_env_name>`` with the name of your environment.
+  conda create -n zen-garden-env python==3.13
+ 
+Activate the environment with the following command
 
-.. warning::
-    Gurobi currently does not support Python version 3.13. We therefore 
-    recommend using Python 3.12.
+.. code:: shell
 
-Activate the environment with the following command::
+  conda activate zen-garden-env
 
-  conda activate <your_env_name>
+Now you can install the zen-garden package with the following command
 
-Now you can install the zen-garden package with the following command::
+.. code:: shell
 
     pip install zen-garden
 
 To test whether the installation was successful, type:
 
-.. code::
+.. code:: shell
 
     conda list
     
 into the command prompt. This will print a list of all installed packages. You 
 should see ``zen_garden`` in the list.
 
+
+.. warning::
+    ZEN-garden currently only supports Python versions 3.11 through 3.13.
+
+.. warning::
+    The directory in which you install Anaconda should not contain any blank 
+    spaces in its file path. Otherwise, the installation of ZEN-garden might 
+    fail.
 
 .. _installation.activate:
 
@@ -60,14 +71,14 @@ Activate Conda environment
 After installing ZEN-garden, you need to activate the ZEN-garden environment 
 each time you open a new terminal. To activate the environment, type
 
-.. code::
+.. code:: shell
 
-    conda activate <your_environment_name>  
+    conda activate zen-garden-env  
 
 into the terminal in which you would like to run ZEN-garden. At any time, you 
 can deactivate the environment by typing: 
 
-.. code::
+.. code:: shell
 
     conda deactivate
 

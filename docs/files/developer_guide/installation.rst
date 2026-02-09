@@ -14,7 +14,7 @@ Navigate to `<https://github.com/ZEN-universe/ZEN-garden>`_ on Github and click
 on the "Fork" button at the top right corner of the page to create a copy of the 
 repository under your account and select yourself as the owner.
 
-.. image:: images/create_fork.png
+.. image:: ../figures/developer_guide/create_fork.png
     :alt: creating a fork
 
 |
@@ -41,6 +41,11 @@ repository.
 
 **Track the upstream repository:**
 
+In your terminal window, navigate to the folder in which ZEN-garden was
+installed (i.e. the folder where the file ``zen_garden_env.yml`` is located)::
+
+    cd <path_to_zen_garden_repo>
+
 Track the upstream repository by running the following lines in Git-Bash::
 
     git remote add upstream git@github.com:ZEN-universe/ZEN-garden.git
@@ -48,8 +53,12 @@ Track the upstream repository by running the following lines in Git-Bash::
 
 **Create the ZEN-garden conda environment:**
 
-Open the Anaconda prompt. Change the directory to the root directory of your 
-local ZEN-garden repository where the file ``zen_garden_env.yml`` is located::
+Open the Anaconda Prompt application. This is a terminal window provided by
+Anaconda which allows you to run Anaconda commands.
+
+In the Anaconda Prompt, change the directory to the root directory of your 
+local ZEN-garden repository i.e. the folder where the file 
+``zen_garden_env.yml`` is located::
 
   cd <path_to_zen_garden_repo>
 
@@ -71,3 +80,10 @@ successful, you can see the environment at
     We strongly recommend working with conda environments. When installing the 
     zen-garden conda environment via the ``zen_garden_env.yml``, the zen-garden 
     package, as well as all other dependencies, are installed automatically. 
+
+**Next steps**
+
+You have now successfully installed ZEN-garden as a developer. To familiarize 
+yourself with the model, you may now follow the quick start guide on 
+:ref:`building a model <building.building>` and :ref:`running a model 
+<running.running>`.

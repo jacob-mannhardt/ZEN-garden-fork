@@ -35,6 +35,7 @@ Documentation
    files/quick_start/installation
    files/quick_start/building_models
    files/quick_start/running_models
+   files/quick_start/summary
 
 
 .. toctree::
@@ -44,29 +45,34 @@ Documentation
    files/tutorial/00_tutorial_overview 
    files/tutorial/01_analyze_outputs
    files/tutorial/02_change_configuration
-   files/tutorial/03_scenario_analysis
-   files/tutorial/04_handle_infeasibilities
+   files/tutorial/03_add_technologies_carrier
+   files/tutorial/04_scenario_analysis
+   files/tutorial/05_time_series_aggregation
+   files/tutorial/06_unit_handling
+   files/tutorial/07_scaling
+   files/tutorial/08_operation_only
+   files/tutorial/09_handle_infeasibilities
+   files/tutorial/10_troubleshooting
 
+   
 .. toctree::
    :maxdepth: 1
    :caption: ZEN-garden in detail
 
    files/zen_garden_in_detail/input_structure
-   files/zen_garden_in_detail/dataset_examples
-   files/zen_garden_in_detail/input_handling
+   files/zen_garden_in_detail/configurations
    files/zen_garden_in_detail/sets_params_constraints
    files/zen_garden_in_detail/mathematical_formulation
-   files/zen_garden_in_detail/configurations
-   files/zen_garden_in_detail/time_series_aggregation
    files/zen_garden_in_detail/additional_features
-   files/zen_garden_in_detail/troubleshooting
+   files/zen_garden_in_detail/dataset_examples
 
 .. toctree::
    :maxdepth: 1
    :caption: References
 
    files/references/api_reference
-
+   files/references/class_structure
+   files/api/generated/changelog.md
 
 
 .. toctree::
@@ -76,8 +82,11 @@ Documentation
    files/developer_guide/installation
    files/developer_guide/running_and_debugging
    files/developer_guide/contributing
+   files/developer_guide/documentation
    files/developer_guide/adding_param_variable_constraint
    files/developer_guide/constraint_guide
+   files/developer_guide/github_actions
+   files/developer_guide/tips_and_tricks
 
 
 

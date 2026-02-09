@@ -16,7 +16,7 @@ At the highest level, two components are necessary in a ZEN-garden model:
 
 1. A 'config.json' file which names dataset to be used, specifies solver 
    configuration, and sets high-level analysis options. 
-2. A folder (henceforth referred to as the ``dataset``) which contains detailed 
+2. A folder (henceforth referred to as the ``<dataset>``) which contains detailed 
    information about the desired model's network topology, conversion 
    technologies, and transport technologies. The name of this folder determines 
    the name of the dataset.
@@ -44,14 +44,14 @@ Broadly speaking, ``.json`` files within the dataset define the default values
 of an element, which can be overwritten by the ``.csv`` files to specify data in 
 more detail. The ``.csv`` files are optional and can be omitted if the default 
 values are sufficient. More detail on the use of default values and overwriting 
-them can be found in :ref:`input_handling.attribute_files` and :ref:`input_handling.overwrite_defaults`.
+them can be found in :ref:`input_structure.attribute_files` and :ref:`input_structure.overwrite_defaults`.
+
 
 .. tip::
-    If you create the ``data`` folder in the ZEN-garden root folder, it will not 
-    be uploaded to Github (it is in the ``.gitignore`` file). That said, we 
-    recommend keeping the data folder in a different location from the source 
-    code to ensure continued separation between the model and input data.
-
+  Notation: this guide uses angle brackets ``<>`` whenever to denote places 
+  that contain user-specific information. For example, the file path ``<data>``
+  indicates that users should replace this text with the file path to their 
+  own dataset directory. 
 
 .. _building.first_model:
 
@@ -83,28 +83,35 @@ Using dataset examples
 
 The dataset examples provide small test datasets which are particularly useful 
 for first-time model users. The dataset examples are described and documented in 
-detail in :ref:`dataset_examples.dataset_examples`. To download one of the example datasets (e.g. 
-"1_base_case"), use the following steps:
+detail in :ref:`dataset_examples.dataset_examples`. To download one of the example
+datasets (e.g. "1_base_case"), use the following steps:
 
 1. Create a new folder where to store the data (i.e. the ``data`` folder).
 2. In a terminal or the command prompt, navigate to the newly created folder.
+
+   .. code-block:: shell
+
+       cd <data>
+
 3. Activate the ZEN-garden python environment (see :ref:`instructions 
    <installation.activate>`).
 4. Download the desired example data set using the command: 
 
-   .. code-block::
+   .. code-block:: shell
 
-       python -m zen_garden --download_example="<example name>"
+       zen-example --dataset="1_base_case"
 
 
-   The desired example data set will be downloaded to the current working 
-   directory. A full list of example data sets can be found in :ref:`dataset_examples.dataset_examples`. 
+   The example dataset "1_base_case" will then be downloaded to the current
+   working directory. Other datasets can also be downloaded by changing the 
+   ``--dataset`` argument.  A full list of example datasets can be found 
+   in :ref:`dataset_examples.dataset_examples`. 
 
 .. note::
-    If done correctly, you should now see a new directory in the ``data`` folder
-    whose name matches the ``<example_name>`` that you entered. This directory
-    should have a file structure that matches the  :ref:`basic ZEN-garden input 
-    structure <building.file_structure_basic>`
+    If done correctly, you should now see a new directory in the ``<data>`` 
+    called ``1_base_case``. This directory should have a file structure that 
+    matches the  :ref:`basic ZEN-garden input structure 
+    <building.file_structure_basic>`
 
 .. tip::
     The dataset examples, once downloaded, include a Jupyter notebook called 
@@ -147,9 +154,9 @@ The following sections describe the necessary steps to build a new model.
    - Fill the energy system folder (`Energy System 
      <https://zen-garden.readthedocs.io/en/latest/files/zen_garden_in_detail/input_structure.html#energy-system>`_)
    - Create the ``attributes.json`` file for each element (energy system, 
-     technology, carrier; :ref:`input_handling.attribute_files`). The ``attributes.json`` 
+     technology, carrier; :ref:`input_structure.attribute_files`). The ``attributes.json`` 
      files must contain a default value for all parameters of this element type 
      (:ref:`notation.notation`)
    - If necessary, create the ``.csv`` files to specify the data in more detail 
-     (:ref:`input_handling.overwrite_defaults`)
+     (:ref:`input_structure.overwrite_defaults`)
    - Create the ``system.json`` files (:ref:`configuration.configuration`)

@@ -1,107 +1,107 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This file gets automatically updated in ZEN-garden's continuous integration 
+procedures. Do not edit the file manually.
 
-## [v1.2.0] - 2024-05-08
-### Added
-- new dataset creation tutorials and updated `dataset_creation_tutorial.md`
+## [v2.9.5] - 2026-02-06 
 
-### Fixed
-- IIS calculation and printing
-- Fix technology diffusion constraints 
-  
-### Changed
-- Upgraded to `linopy>=0.3.8`
-- Vectorized all continuous constraints
-- ´carbon_intensity_carrier´ is split in´carbon_intensity_carrier_import´ and ´carbon_intensity_carrier_export´
-- attributes of retrofitting technologies are combined in one
-- test 3a and 3b are replaced by test 1e
-- test 5a and 5b were combined 
+### Bug Fixes 🐛
+- fix result extraction from hdf files when there is a single column. [[🔀 PR #1216](https://github.com/ZEN-universe/ZEN-garden/pull/1216) @csfunke]
 
-### Removed
-- `return_constraints` statement for all continuous constraints
-- rule-based and block-based constraint distinction
-- `breakpoints_pwa_capex.csv` file no longer used
-  
-## [v1.1.0] - 2024-02-28
-### Added
-- Exponential transport loss factor
-  - added test 
-- Saving units of parameters and variables and accessing them in results
+## [v2.9.4] - 2026-02-06 
 
-### Fixed
-- Docstring reading in results
-- Minor bug fixes
-  
-### Changed
-- Result handling
-- Parameter names:
-  - `set_carriers`:
-    - `carbon_intensity` to `carbon_intensity_carrier`
-  - `set_technologies`:
-    - `carbon_intensity` to `carbon_intensity_technology`
-  - `set_storage_technologies`:
-    - `capex_specific` to `capex_specific_storage`
-    - `capex_specific_energy` to `capex_specific_storage_energy`
-  - `set_transport_technologies`:
-    - `transport_loss_factor` to `transport_loss_factor_linear`
-- Move `use_capacities_existing` to `system`
-      
-### Removed
-- "linopy" name in environment
-- Solver options from default config
-  
-## [v1.0.3] - 2024-02-14 ❤️
-### Added
-- Flexible `results.py` structure with abstract solution loader
-- `comparison` module
+### Bug Fixes 🐛
+- fix version check from  `2.9.1` to `2.9.2` for new results. [[🔀 PR #1213](https://github.com/ZEN-universe/ZEN-garden/pull/1213) @jacob-mannhardt]
 
-### Removed
-- standard plots
-  
-## [v1.0.2] - 2024-01-29
-### Added
-- compare parameters with different shapes in `r.compare_model_parameters()`
-  
-### Fixed
-- Writing IIS to file
-- set expansion of `set_technologies` in scenario routine
+## [v2.9.3] - 2026-02-06 
 
-### Changed
-- convert `how_to_zen-garden.pdf` and `dataset_creation_tutorial.pdf` into `.md`
+### Bug Fixes 🐛
+- add error catch for when extracting the units in the new format without updating the environment before. [[🔀 PR #1211](https://github.com/ZEN-universe/ZEN-garden/pull/1211) @jacob-mannhardt]
 
-## [v1.0.1] - 2024-01-02
-### Added
-- Unit consistency checks: Check that all units are internally consistent across parameters
-  
-### Fixed
-- Bug fix of numerical values regarding construction time:
-1. Sometimes forced the capacity additions in the last and the second last time step to be equal
-2. construction time was one period too short
-- Bug fix of the lifetime of existing capacities (existed one period longer than desired)
-- Adapted the tests accordingly
+## [v2.9.2] - 2026-02-06 
 
-### Changed
-- Simplified calculation of lifetime and construction time (Issue [#257])
-- Sped up parameter and constraint construction by removing time step encoder-decoder (Issue [#362])
+### Bug Fixes 🐛
+- Make result reading faster by splitting the `value` and `unit` columns into two keys in the `.h5` file. [[🔀 PR #1209](https://github.com/ZEN-universe/ZEN-garden/pull/1209) @jacob-mannhardt]
 
-## [v1.0.0] - 2023-12-11
+## [v2.9.1] - 2026-02-05 
 
-Beginning of versioning.
+### Bug Fixes 🐛
+- Set `macos` version to `latest` instead of `macos13` because deprecated [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Skip `read_components` when the scenario does not exist [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Create `ureg` (including reading in the user units) only for one scenario, not for all [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Move the components construction outside the initialization of the scenarios. The components are only created upon requests when the data is actually read. [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
 
-### Added
-- Internal calculation of haversine distance (Issue [#310])
-- Retrofitting
+## [v2.9.0] - 2026-01-22 
 
-### Fixed
-- Fix unit handling for singular dimensionality matrices
-- Smaller fixes
-  
-### Changed
-- `attributes.json` instead of `attributes.csv` (Issue [#339])
-- `energy_system` instead of `system_specification`
+### New Features ✨
+- implement ``zen-operation`` wrapper. This wrapper allows users to seamlessly run operation-only scenarios using the capacity values of a previous simulation. Users may provide a new ``scenarios_op`` file that specifies the operational scenarios to run. This new feature replaces the old configuration ``include_operation_only_phase``, which has now been removed. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
 
-### Removed
-- PWA of conversion factor (Issue [#343])
-- Technology-dependent time steps (Issue [#290])
-- Don't show plots in tests anymore
+### Documentation Changes 📝
+- implement detailed Google-style docstrings for the ``UnitHandling`` class. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+- improve tutorial of operation-only simulations and update the tutorial to include the new ``zen-operation`` wrapper. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+
+### Maintenance Tasks 🧹
+- create test cases for the new ``zen-operation`` wrapper. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+- suppress ``Pint`` package output on redefining units. This output was previously printed to the terminal whenever a new ``Results`` object was initialized. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+
+## [v2.8.13] - 2026-01-19 
+
+### Bug Fixes 🐛
+- return empty series when there are no series to concatenate in `_combine_dataseries` in `solution_loader.py`. [[🔀 PR #1201](https://github.com/ZEN-universe/ZEN-garden/pull/1201) @manud99]
+
+### Documentation Changes 📝
+- fix broken links in the README file. Some of the documentation links were outdated and not longer worked. [[🔀 PR #1196](https://github.com/ZEN-universe/ZEN-garden/pull/1196) @csfunke]
+
+### Maintenance Tasks 🧹
+- add continuous integration workflow that checks code formatting, linting, and type checking. Uses the packages `black` for formatting, `ruff` for linting, and `mypy` for type checking. Errors are reported but not enforced initially, allowing developers time to clean up the existing codebase. Enforcement will be enabled once all errors are resolved. [[🔀 PR #1199](https://github.com/ZEN-universe/ZEN-garden/pull/1199) @csfunke]
+
+## [v2.8.12] - 2026-01-14 
+
+### Bug Fixes 🐛
+- fix overwriting the values for a specific year when only one year is selected [[🔀 PR #1193](https://github.com/ZEN-universe/ZEN-garden/pull/1193) @jacob-mannhardt]
+
+### Maintenance Tasks 🧹
+- delete ``.bumpversion.cfg`` file. It is now obsolete, as version bumping is performed via a custom Python script rather than the bump2version package. [[🔀 PR #1190](https://github.com/ZEN-universe/ZEN-garden/pull/1190) @csfunke]
+- correct spelling in changelog. In previous changelog versions, the header "Maintenance Tasks" was spelled wrong. [[🔀 PR #1190](https://github.com/ZEN-universe/ZEN-garden/pull/1190) @csfunke]
+- skip release in CI workflow when no version bump occurs. [[🔀 PR #1188](https://github.com/ZEN-universe/ZEN-garden/pull/1188) @csfunke]
+
+## [v2.8.11] - 2026-01-06 
+
+### Bug Fixes 🐛
+- fix bug when extracting `get_full_ts("storage_level",year=2022)` for a solution with rolling horizon. [[🔀 PR #1186](https://github.com/ZEN-universe/ZEN-garden/pull/1186) @jacob-mannhardt]
+
+### Documentation Changes 📝
+- clean changelog. [[🔀 PR #1184](https://github.com/ZEN-universe/ZEN-garden/pull/1184) @csfunke]
+
+## [v2.8.10] - 2026-01-05 
+
+### Bug Fixes 🐛
+- fix PyPi release by adding env variable in `create_tag` [[🔀 PR #1182](https://github.com/ZEN-universe/ZEN-garden/pull/1182) @jacob-mannhardt]
+
+## [v2.8.9] - 2026-01-05 
+
+### Bug Fixes 🐛
+- fix PyPi release by making the NEW_VERSION string accessible across jobs [[🔀 PR #1180](https://github.com/ZEN-universe/ZEN-garden/pull/1180) @jacob-mannhardt]
+
+## [v2.8.8] - 2026-01-05 
+
+### Maintenance Tasks 🧹
+- test release to PyPi [[🔀 PR #1177](https://github.com/ZEN-universe/ZEN-garden/pull/1177) @jacob-mannhardt]
+
+## [v2.8.7] - 2026-01-05 
+
+### Bug Fixes 🐛
+- fix bug in or myopic foresight results when yearly series is empty (index returns empty results). Returns empty Series. [[🔀 PR #1172](https://github.com/ZEN-universe/ZEN-garden/pull/1172) @jacob-mannhardt]
+
+### Documentation Changes 📝
+- add changelog to documentation. The changelog now gets copied to the ``docs/files/api/generated`` folder when the documentation is built. This allows it to be shown in the "References" section of the documentation. [[🔀 PR #1169](https://github.com/ZEN-universe/ZEN-garden/pull/1169) @csfunke]
+
+### Maintenance Tasks 🧹
+- fix branch deletion in continuous integration pipeline. The previous pipeline attempted to delete a branch which is no longer in use. [[🔀 PR #1173](https://github.com/ZEN-universe/ZEN-garden/pull/1173) @csfunke]
+- update pull request template to match changelog automation. [[🔀 PR #1169](https://github.com/ZEN-universe/ZEN-garden/pull/1169) @csfunke]
+- implement semantic version bumping. Major version bumps are now triggered upon breaking changes; minor version bumps are triggered by new features; patch version bumps are triggered by bug fixes. [[🔀 PR #1169](https://github.com/ZEN-universe/ZEN-garden/pull/1169) @csfunke]
+- automate change log. Information for the change log is now taken from the ``Detailed list of changes`` section of the pull request body. [[🔀 PR #1169](https://github.com/ZEN-universe/ZEN-garden/pull/1169) @csfunke]
+
+## [v0.1.0] - [v2.8.4]
+
+No release notes exist for ZEN garden versions 0.1.0 -> 2.8.4 are unavailable.

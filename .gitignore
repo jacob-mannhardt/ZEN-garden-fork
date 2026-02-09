@@ -4,6 +4,7 @@
 /.vscode
 /data/*/
 /data/*
+/docs/files/api/generated/*
 !/data/.gitkeep
 outputs*/
 zen_garden_env/
@@ -12,6 +13,10 @@ zen_garden_env/
 *.pyc
 *.DS_Store
 .coverage
+*runscript.py
+*test.py
+/tests/testcases/test_1k__operation/*
+/tests/testcases/test_7b__operation/*
 
 # pytest monitor
 .pymon

@@ -1,44 +1,160 @@
+.. _contributing.contributing:
+
 ########################
-Contribution guidelines 
+Contribution Guide 
 ########################
-We welcome any contribution to the ZEN-garden package. Many thanks for contributing to the project and helping to maintain our ZEN-garden!
+
+We welcome any contribution to the ZEN-garden package. Many thanks for 
+contributing to the project and helping to maintain our ZEN-garden!
 This document provides guidelines on how to contribute to the project.
+There are multiple ways to contribute:
 
-**How to contribute**
+* :ref:`Reporting bugs or suggesting new features <contributing.issues>`
+* :ref:`Modifying the code <contributing.code>`
+* :ref:`Improving the documentation <documentation.documentation>`
+* :ref:`Writing tests <contributing.tests>`
 
-* Reporting bugs
-* Suggesting new features
-* Improving the documentation
-* Writing tests
-* Fixing bugs/solving issues
-* Implementing new features
 
-**Contribution workflow**
+.. _contributing.issues:
 
-1. Fork and clone the repository
-2. Get started with ZEN-garden
-3. Write your code
-4. Add and run tests
-5. Add documentation
-6. Push your changes to your fork and create a pull request on GitHub
+Reporting bugs or suggesting new features
+=========================================
 
-Creating Issues
-=================
-If you find a bug, have a feature request or want to suggest an improvement, please create an issue in the `GitHub repository <https://github.com/ZEN-universe/ZEN-garden/issues>`_.
+If you find a bug, have a feature request or want to suggest an improvement, 
+please create an issue in the `GitHub repository 
+<https://github.com/ZEN-universe/ZEN-garden/issues>`_.
 
 When creating an issue, please follow these guidelines:
 
 * The title should be short and descriptive.
-* The description should contain all the necessary information to understand the issue.
-* If it is a bug, please provide a minimal working example that reproduces the bug.
-* Classify the issue according to the typology of issue (e.g. documentation, enhancement, bug).
+* The description should contain all the necessary information to understand the 
+  issue.
+* If it is a bug, please provide a minimal working example that reproduces the 
+  bug.
+* Classify the issue according to the typology of issue (e.g. documentation, 
+  enhancement, bug).
+
+
+.. _contributing.code:
+
+Editing Code in ZEN-garden 
+==========================
+
+
+GitHub Workflow
+------------------
+
+The following steps should be followed to contribute to ZEN-garden:
+
+1. Fork and clone the repository, as described in the section on
+   :ref:`installation for developers <dev_install.dev_install>`.
+
+2. Familiarize yourself with ZEN-garden using the qick-start documentation 
+   and the :ref:`tutorials <tutorials_intro.intro>`.
+
+3. In your ZEN-garden fork, create a new branch for your feature:
+
+   .. code::
+
+       git checkout -b <feature_name>   
+
+4. Make the desired code changes in this new branch.
+
+5. Add documentation about your feature. See the :ref:`documentation 
+   guide <documentation.documentation>` for instructions on how to 
+   add documentation.
+
+6. Test the code changes locally using the ZEN-garden tests. All tests must 
+   pass.
+
+7. Push your code changes to your personal ZEN-garden fork:
+
+   .. code::
+
+       git push --set-upstream <feature_name>    
+
+8. Sign in to your online GitHub repository and go to your feature branch. You 
+   should now see a button titled  ``Compare & pull request``. Click on this button 
+   and follow the instructions to create a pull request.  
+
+
+.. _contributing.coding_rules:
+
+Coding rules
+------------
+
+We follow the `PEP-8 <https://peps.python.org/pep-0008/>`_ coding style:
+
+* The name of the classes should always be with the first capital letter. The 
+  classes must all have a well written docstring, as described in the :ref:`documentation 
+  guide <documentation.docstring>`.
+
+* The name of the methods should always be in lower case letters. The name can 
+  be composed by multiple words, separated by underscores. The main methods
+  should all have a proper docstrings, as described in the :ref:`documentation 
+  guide <documentation.docstring>`.
+
+* Comments are located above the line of code they refer to.
+
+* All files contain a header which the information about the file, e.g., what 
+  the class does.
+
+* All variable names should lowercase. Variable names can be composed of
+  multiple words, separated by underscores.
+
+* The files name should always be lowercase. The file names can be composed 
+  of multiple words, separated by underscores.
+
+* The name of the folders should always be lowercase. The folder names can 
+  be composed by multiple words, separated by underscores.
+
+
+.. _contributing.branch_protections:
+
+ZEN-garden Branch Protections
+-----------------------------
+
+The main branch of ZEN-garden is protected to prevent unauthorized 
+changes to the model code. The following requirements must be 
+in order to contribute code: 
+
+1. All changes must be submitted through a pull-request.
+   Direct pushes to the main branch of ZEN-garden are not allowed. Pull-requests
+   can only be merged by ZEN-garden administrators.
+
+2. The pull request must be up-to-date with the current main branch of 
+   ZEN-garden before it is merged. If the feature is based on an older 
+   version of ZEN-garden, it must be merged or rebased with the latest 
+   version before the pull request is submitted.
+
+3. Upon submission of a pull request, GitHub automatically runs the ZEN-garden
+   tests (see :ref:`Github Actions <github_actions.github_actions>`). All defined 
+   test cases must pass before the the new feature can be merged into the main
+   branch of ZEN-garden. The status of these tests will appear in the pull
+   request under the status check titled ``linux-64``.
+
+
+.. _contributing.merge:
+
+Merging Pull Requests (Administrators only)
+-------------------------------------------
+
+Once a pull request has been submitted, administrators can merge the pull 
+request into the main branch of ZEN-garden. By the :ref:`branch protection 
+rules <contributing.branch_protections>`, a merge is only possible if all the 
+ZEN-garden tests have passed. 
+
+
+.. _contributing.tests:
 
 Running tests
 =================
 
-After implementing a new feature or fixing a bug, it is important to run the tests to ensure that the changes do not break the existing code.
-The tests are located in the ``tests`` folder and are written using the `pytest <https://docs.pytest.org/en/stable/>`_ framework.
-If you add new functionalities, make sure to add a new test that covers the new code.
+After implementing a new feature or fixing a bug, it is important to run the 
+tests to ensure that the changes do not break the existing code. The tests are \
+located in the ``tests`` folder and are written using the `pytest 
+<https://docs.pytest.org/en/stable/>`_ framework. If you add new functionalities, 
+make sure to add a new test that covers the new code.
 
 You can execute the tests by running::
 
@@ -50,119 +166,33 @@ To run the tests, add another Python configuration. The important settings are:
 
 - Change "script" to "module" and set it to "pytest"
 - Set the "Parameters" to: ``--cov="zen_garden" -n auto tests/ -v``
-- Set the python interpreter to the Conda environment that was used to install the requirements and also has the package installed. **Important**: This setup will only work for Conda environments that were also declared as such in PyCharm; if you set the path to the Python executable yourself, you should create a new proper PyCharm interpreter.
+- Set the python interpreter to the Conda environment that was used to install 
+  the requirements and also has the package installed. **Important**: 
+  This setup will only work for Conda environments that were also declared as 
+  such in PyCharm; if you set the path to the Python executable yourself, you 
+  should create a new proper PyCharm interpreter.
 - Set the "Working directory" to the root directory of the repo.
 
 In the end, your configuration to run the tests should look similar to this:
 
-.. image:: images/pycharm_run_tests.png
+.. image:: ../figures/developer_guide/pycharm_run_tests.png
     :alt: run tests
 
-To run the test and also get the coverage report, we use the pipeline settings of the configuration. Add another Python configuration and use the following settings:
+To run the test and also get the coverage report, we use the pipeline settings 
+of the configuration. Add another Python configuration and use the following 
+settings:
 
 - Add a new configuration "Python tests/pytest"
 - Change "script" to "module" and set it to "run_test"
-- Set the python interpreter to the Conda environment that was used to install the requirements and also has the package installed. **Important**: This setup will only work for Conda environments that were also declared as such in PyCharm; if you set the path to the Python executable yourself, you should create a new proper PyCharm interpreter.
+- Set the python interpreter to the Conda environment that was used to install 
+  the requirements and also has the package installed. **Important**: This setup 
+  will only work for Conda environments that were also declared as such in 
+  PyCharm; if you set the path to the Python executable yourself, you should 
+  create a new proper PyCharm interpreter.
 - Set the "Working directory" to the directory ``tests/testcases`` of the repo.
 
 In the end, your configuration to run the coverage should look similar to this:
 
-.. image:: images/pycharm_coverage.png
+.. image:: ../figures/developer_guide/pycharm_coverage.png
     :alt: run coverage
 
-Adding documentation
-=====================
-
-The documentation, located in the ``docs`` folder, is written in `reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_ and is built using `Sphinx <https://www.sphinx-doc.org/en/master/>`_. All necessary packages are installed when installing the requirements for the developer environment (:ref:`Install for developers`).
-You can build a local version of the documentation by running the following command in the ``docs`` directory of the repository::
-
-  make html
-
-The documentation is then available in the ``docs/build/html`` folder. Open the ``index.html`` file in your browser to view the documentation.
-
-When adding new features or fixing bugs, make sure to update the documentation accordingly. The documentation should be clear and concise and should contain all the necessary information to understand the new feature or bug fix.
-
-Coding rules
-=================
-
-We follow the `PEP-8 <https://peps.python.org/pep-0008/>`_ coding style:
-
-**Classes**
-
-* the name of the classes should always be with the first capital letter
-* classes must all have a short description of what they do (right beneath the class name) and a second docstring describing the constructor along with its parameters (blank line between description and parameters is mandatory), e.g.:
-
-.. code-block::
-
-    class Results(object):
-        """
-        This class reads in the results after the pipeline has run
-        """
-
-        def __init__(self, path, scenarios=None, load_opt=False):
-            """
-            Initializes the Results class with a given path
-
-            :param path: Path to the output of the optimization problem
-            :param scenarios: A None, str or tuple of scenarios to load, defaults to all scenarios
-            :param load_opt: Optionally load the opt dictionary as well
-            """
-
-**Methods**
-
-* the name of the methods should always be in lower case letters
-* the name can be composed by multiple words, seprated by underscores
-* main methods should all have a short desciption of what they do (again, the blank line is mandatory), e.g.:
-
-.. code-block::
-
-    """
-    This method creates a dictionary with the paths of the data split
-    by carriers, networks, technologies
-
-    :param analysis: dictionary defining the analysis framework
-    :return: dictionary all the paths for reading data
-    """
-
-**Comments**
-
-* comments are located above the line of code they refer to
-
-**File header**
-
-* all files contain a header which the information about the file, e.g., what the class does.
-
-**Variables name**
-
-* the variable name should always be lower case
-* the name can be composed by multiple words, separated by underscores
-
-**Files name**
-
-* the files name should always be lower case
-* the name can be composed by multiple words, separated by underscores
-
-**Folders name**
-
-* the name of the folders should always be lower case
-* the name can be composed by multiple words, separated by underscores
-
-
-Defining the unit dimensions when adding a new parameter/variable to the framework
-====================================================================================
-
-Parameters
-----------
-The argument ``unit_category`` specifies the unit dimensions of the parameter and must be passed to the ``extract_input_data`` function, e.g., for ``capacity_addition_min`` the ``unit_category`` is defined as ``{"energy_quantity": 1, "time": -1}`` since a technology capacity is per definition given as energy_quantity (e.g. MWh) per time (hour), i.e., MW.
-
-.. code-block::
-
-    self.capacity_addition_min = self.data_input.extract_input_data("capacity_addition_min", index_sets=[], unit_category={"energy_quantity": 1, "time": -1})
-
-Variables
----------
-Since the units of variables are not defined by the user but are a consequence of the parameter units as explained above, their unit dimensions are specified in the ``add_variable`` functions of the class ``Variable``. Again, the argument ``unit_category`` is used to define the unit dimensionality.
-
-.. code-block::
-
-    variables.add_variable(model, name="capacity", index_sets=cls.create_custom_set(["set_technologies", "set_capacity_types", "set_location", "set_time_steps_yearly"], optimization_setup), bounds=capacity_bounds, doc='size of installed technology at location l and time t', unit_category={"energy_quantity": 1, "time": -1})

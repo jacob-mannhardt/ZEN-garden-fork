@@ -12,11 +12,16 @@ import re
 from ordered_set import OrderedSet
 import linopy as lp
 import numpy as np
-import pandas as pd
 import xarray as xr
 import shutil
 from copy import deepcopy
 from pathlib import Path
+from zen_garden.default_config import Subscriptable
+import requests
+from importlib.metadata import metadata
+import zipfile
+import io
+import pandas as pd
 
 def setup_logger(level=logging.INFO):
     """ set up logger
@@ -45,73 +50,135 @@ def get_inheritors(klass):
                 work.append(child)
     return subclasses
 
+def download_example_dataset(dataset):
+    """ 
+    Downloads a dataset example to the current working directory. The function 
+    downloads the ZEN-garden dataset examples from the ZEN-garden Zenodo 
+    repository. It then extracts the dataset specified by the user and saves
+    it to the current working directory. In addition, it also downloads a 
+    ``config.json`` file and a Jupyter notebook demonstrating how to analyze
+    the results of a model. 
 
-def copy_dataset_example(example):
-    """ copies a dataset example to the current working directory
+    Args:
+        dataset (str): Name of the dataset to be downloaded. The following
+            options are currently available: "1_base_case", 
+            "2_multi_year_optimization", "3_reduced_import_availability", 
+            "4_PWA_nonlinear_capex", "5_multiple_time_steps_per_year",
+            "6_reduced_import_availability_yearly", "7_time_series_aggregation",
+            "8_yearly_variation", "9_myopic_foresight", "10_brown_field",
+            "11_multi_scenario", "12_multiple_in_output_carriers_conversion",
+            "13_yearly_interpolation", "14_retrofitting_and_fuel_substitution",
+            "15_unit_consistency_expected_error"
 
-    :param example: The name of the example to copy
-    :return: The local path of the copied example
-    :return: The local path of the copied config.json
+    Returns:
+        tuple: 
+            str: The local path of the copied example
+            str: The local path of the copied config.json
+
+    Raises:
+        FileNotFoundError: If either the dataset or the config file could not 
+            be found in the Zenodo repository. 
+
+    Examples:
+        Basic usage example:
+
+        >>> from zen_garden.dataset_examples import download_dataset_example
+        >>> download_dataset_example("1_base_case")
+
     """
-    import requests
-    from importlib.metadata import metadata
-    import zipfile
-    import io
+
+    # retrieve Zenodo metadata
     url = metadata("zen_garden").get_all("Project-URL")
     url = [u.split(", ")[1] for u in url if u.split(", ")[0] == "Zenodo"][0]
-    zenodo_meta = requests.get(url,allow_redirects=True)
+
+    # fetch Zenodo metadata
+    zenodo_meta = requests.get(url, allow_redirects=True)
     zenodo_meta.raise_for_status()
     zenodo_data = zenodo_meta.json()
     zenodo_zip_url = zenodo_data["files"][0]["links"]["self"]
+
+    # download ZIP file from Zenodo
     zenodo_zip = requests.get(zenodo_zip_url)
     zenodo_zip = zipfile.ZipFile(io.BytesIO(zenodo_zip.content))
+
+    # define relevant paths
     base_path = zenodo_zip.filelist[0].filename
-    example_path = f"{base_path}docs/dataset_examples/{example}/"
+    example_path = f"{base_path}docs/dataset_examples/{dataset}/"
     config_path = f"{base_path}docs/dataset_examples/config.json"
     notebook_path = f"{base_path}docs/dataset_examples/example_notebook.ipynb"
-    local_dataset_path = os.path.join(os.getcwd(), "dataset_examples")
+
+    # create local directories
+    local_dataset_path = os.getcwd()
     if not os.path.exists(local_dataset_path):
         os.mkdir(local_dataset_path)
-    local_example_path = os.path.join(local_dataset_path, example)
+    local_example_path = os.path.join(local_dataset_path, dataset)
     if not os.path.exists(local_example_path):
         os.mkdir(local_example_path)
+
+    # initialize flags for extracting files
     example_found = False
     config_found = False
     notebook_found = False
+
+    # search for example within ZIP file
     for file in zenodo_zip.filelist:
+
+        # download all files in dataset example
         if file.filename.startswith(example_path):
             filename_ending = file.filename.split(example_path)[1]
-            local_folder_path = os.path.join(local_example_path, filename_ending)
+            local_folder_path = os.path.join(
+                local_example_path, filename_ending)
             if file.is_dir():
                 if not os.path.exists(local_folder_path):
                     os.mkdir(os.path.join(local_example_path, filename_ending))
             else:
-                local_file_path = os.path.join(local_example_path, filename_ending)
+                local_file_path = os.path.join(
+                    local_example_path, filename_ending)
                 with open(local_file_path, "wb") as f:
                     f.write(zenodo_zip.read(file))
             example_found = True
+
+        # download config.json
         elif file.filename == config_path:
             with open(os.path.join(local_dataset_path, "config.json"), "wb") as f:
                 f.write(zenodo_zip.read(file))
             config_found = True
+
+        # download jupyter notebook
         elif file.filename == notebook_path:
-            notebook_path_local = os.path.join(local_dataset_path, "example_notebook.ipynb")
+            notebook_path_local = os.path.join(
+                local_dataset_path, "example_notebook.ipynb")
             notebook = json.loads(zenodo_zip.read(file))
             for cell in notebook['cells']:
                 if cell['cell_type'] == 'code':  # Check only code cells
                     for i, line in enumerate(cell['source']):
                         if "<dataset_name>" in line:
-                            cell['source'][i] = line.replace("<dataset_name>", example)
+                            cell['source'][i] = line.replace(
+                                "<dataset_name>", dataset)
             with open(notebook_path_local, "w") as f:
                 json.dump(notebook, f)
             notebook_found = True
-    assert example_found, f"Example {example} could not be downloaded from the dataset examples!"
-    assert config_found, f"Config.json file could not be downloaded from the dataset examples!"
-    if not notebook_found:
-        logging.warning("Example jupyter notebook could not be downloaded from the dataset examples!")
-    logging.info(f"Example dataset {example} downloaded to {local_example_path}")
-    return local_example_path, os.path.join(local_dataset_path, "config.json")
 
+    # display status, errors, and warnings
+    if not example_found:
+        raise FileNotFoundError(
+            f"Example {dataset} could not be found in the dataset examples!"
+        )
+    if not config_found:
+        raise FileNotFoundError(
+            "Config.json file could not be downloaded from the dataset "
+            "examples!"
+        )
+    if not notebook_found:
+        warnings.warn(
+            "Example jupyter notebook could not be downloaded from the "
+            "dataset examples!")
+
+    # print output
+    print(f"Example dataset {dataset} downloaded to {local_example_path}")
+
+    # return
+    return local_example_path, os.path.join(local_dataset_path, "config.json")
 
 # linopy helpers
 # --------------
@@ -214,50 +281,81 @@ def xr_like(fill_value, dtype, other, dims):
     return da
 
 def reformat_slicing_index(index, component) -> tuple[str]:
-        """ reformats the slicing index to a tuple of strings that is readable by pytables
-        :param index: slicing index of the resulting dataframe
-        :param component: component for which the index is reformatted
-        :return: reformatted index
-        """
-        if index is None:
-            return tuple()
-        index_names = component.index_names
-        if isinstance(index, str) or isinstance(index, float) or isinstance(index, int):
-            index_name = index_names[0]
-            ref_index = (f"{index_name} == {index}",)
-        elif isinstance(index, list):
-            index_name = index_names[0]
-            ref_index = (f"{index_name} in {index}",)
-        elif isinstance(index, dict):
-            ref_index = []
-            for key, value in index.items():
-                if key not in index_names:
-                    logging.warning(f"Invalid index name '{key}' in index. Skipping.")
-                    continue
-                if isinstance(value, list):
-                    ref_index.append(f"{key} in {value}")
-                else:
-                    ref_index.append(f"{key} == {value}")
-            ref_index = tuple(ref_index)
-        elif isinstance(index, tuple):
-            ref_index = []
-            if len(index) > len(index_names):
-                logging.warning(f"Index length {len(index)} is longer than the number of index dimensions {len(index_names)}. Check selected index.")
-            for i, index_name in enumerate(index_names):
-                if i >= len(index):
-                    break
-                if index[i] is None:
-                    continue
-                elif isinstance(index[i], list):
-                    ref_index.append(f"{index_name} in {index[i]}")
-                else:
-                    ref_index.append(f"{index_name} == {index[i]}")
-            ref_index = tuple(ref_index)
-        else:
-            logging.warning(f"Invalid index type {type(index)}. Skipping.")
-            ref_index = tuple()
+    """ reformats the slicing index to a tuple of strings that is readable by pytables
+    :param index: slicing index of the resulting dataframe
+    :param component: component for which the index is reformatted
+    :return: reformatted index
+    """
+    if index is None:
+        return tuple()
+    index_names = component.index_names
+    if isinstance(index, str) or isinstance(index, float) or isinstance(index, int):
+        index_name = index_names[0]
+        ref_index = (f"'{index_name}' == '{index}'",)
+        if len(index_names) == 1:
+            ref_index = (f"index == '{index}'",)
+    elif isinstance(index, list):
+        index_name = index_names[0]
+        ref_index = (f"'{index_name}' in {index}",)
+    elif isinstance(index, dict):
+        ref_index = []
+        for key, value in index.items():
+            if key not in index_names:
+                warnings.warn(f"Invalid index name '{key}' in index. Skipping.", Warning)
+                continue
+            if isinstance(value, list):
+                ref_index.append(f"'{key}' in {value}")
+            else:
+                ref_index.append(f"'{key}' == '{value}'")
+        ref_index = tuple(ref_index)
+    elif isinstance(index, tuple):
+        ref_index = []
+        if len(index) > len(index_names):
+            warnings.warn(f"Index length {len(index)} is longer than the number of index dimensions {len(index_names)}. Check selected index.", Warning)
+        for i, index_name in enumerate(index_names):
+            if i >= len(index):
+                break
+            if index[i] is None:
+                continue
+            elif isinstance(index[i], list):
+                ref_index.append(f"'{index_name}' in {index[i]}")
+            else:
+                ref_index.append(f"'{index_name}' == '{index[i]}'")
+        ref_index = tuple(ref_index)
+    else:
+        warnings.warn(f"Invalid index type {type(index)}. Skipping.", Warning)
+        ref_index = tuple()
 
-        return ref_index
+    return ref_index
+
+def slice_df_by_index(df,index_tuple) -> dict:
+    """ recreates the slicing index from a tuple of strings and slices the dataframe accordingly
+    :param df: dataframe to be sliced
+    :param index_tuple: tuple of strings representing the slicing index
+    :return: sliced dataframe
+    """
+    index = {}
+    for index_str in index_tuple:
+        if " in " in index_str:
+            key, value_str = index_str.split(" in ")
+            key = key.strip("'")
+            value = eval(value_str)
+        elif " == " in index_str:
+            key, value_str = index_str.split(" == ")
+            key = key.strip("'")
+            value = eval(value_str)
+        else:
+            continue
+        index[key] = value
+    for key in index:
+        if key in df.index.names:
+            if isinstance(index[key], list):
+                df = df.loc[df.index.get_level_values(key).isin(index[key])]
+            elif index[key] in df.index.get_level_values(key):
+                df = df.xs(index[key], level=key, drop_level=False)
+            else:
+                df = pd.DataFrame(columns=df.columns)  # return empty dataframe if value not in index
+    return df
 
 def get_label_position(obj,label:int):
     """ Get dict of index and coordinate for variable or constraint labels."""
@@ -419,7 +517,7 @@ class IISConstraintParser(object):
 
         name = constraints.get_name_by_label(value)
         con = constraints[name]
-        indices = [i[0] for i in np.where(con.values == value)]
+        indices = [i[0] for i in np.where(con.labels.values == value)]
 
         # Extract the coordinates from the indices
         coord = {
@@ -509,7 +607,7 @@ class ScenarioDict(dict):
         for key, value in config_parts.items():
             if key in self.dict:
                 for sub_key, sub_value in self.dict[key].items():
-                    assert sub_key in value, f"Trying to update {key} with key {sub_key} and value {sub_value}, but the {key} does not have this key!"
+                    assert sub_key in value.keys(), f"Trying to update {key} with key {sub_key} and value {sub_value}, but the {key} does not have this key!"
                     if type(value[sub_key]) == type(sub_value):
                         value[sub_key] = sub_value
                     elif isinstance(sub_value, dict): #ToDO check this and make more general -> here only for SolverOptions
@@ -686,6 +784,7 @@ class ScenarioDict(dict):
                                 new_dict[element][param] = base_dict.copy()
                 # delete the old set
                 del new_dict[current_set]
+
         return new_dict
 
     def validate_dict(self, vali_dict):
@@ -705,6 +804,22 @@ class ScenarioDict(dict):
                 if len(diff := (set(param_dict.keys()) - self._param_dict_keys)) > 0:
                     raise ValueError(
                         f"The entry for element {element} and param {param} contains invalid entries: {diff}!")
+
+    @staticmethod
+    def check_if_all_elements_in_model(scenario_dict,element_dict):
+        """
+        Checks if all elements in the scenario_dict are present in the element_dict
+        This is used to ensure that all elements in the scenario are defined in the model.
+
+        :param scenario_dict: Dictionary containing the scenario elements
+        :param element_dict: Dictionary containing the element definitions
+        """
+        ignored_elements = ScenarioDict._setting_elements + ScenarioDict._special_elements + list(ScenarioDict._param_dict_keys) + ["EnergySystem"]
+        relevant_elements = set(scenario_dict.keys()) - set(ignored_elements)
+        existing_elements = [e.name for e in element_dict["Element"]]
+        for element in relevant_elements:
+            if element not in existing_elements:
+                raise KeyError(f"The element '{element}', defined in the scenario file, is not defined in the model.")
 
     @staticmethod
     def validate_file_name(fname):
@@ -808,12 +923,12 @@ class InputDataChecks:
         Checks selection of different technologies in system.py file
         """
         # Checks if at least one technology is selected in the system.py file
-        assert len(self.system.set_conversion_technologies + self.system.set_transport_technologies + self.system.set_storage_technologies) > 0, f"No technology selected in system.py"
+        assert len(self.system.set_conversion_technologies + self.system.set_transport_technologies + self.system.set_storage_technologies) > 0, f"No technology selected in system"
         # Checks if identical technologies are selected multiple times in system.py file and removes possible duplicates
         for tech_list in ["set_conversion_technologies", "set_transport_technologies", "set_storage_technologies"]:
-            techs_selected = self.system[tech_list]
+            techs_selected = getattr(self.system,tech_list)
             unique_elements = list(np.unique(techs_selected))
-            self.system[tech_list] = unique_elements
+            self.system = self.system.model_copy(update={tech_list: unique_elements})
 
     def check_year_definitions(self):
         """
@@ -833,7 +948,7 @@ class InputDataChecks:
         Checks if the primary folder structure (set_conversion_technology, set_transport_technology, ..., energy_system) is provided correctly
         """
 
-        for set_name, subsets in self.analysis.subsets.items():
+        for set_name, subsets in self.analysis.subsets.model_dump().items():
             if not os.path.exists(os.path.join(self.analysis.dataset, set_name)):
                 raise AssertionError(f"Folder {set_name} does not exist!")
             if isinstance(subsets, dict):
@@ -914,6 +1029,37 @@ class InputDataChecks:
             if reversed_edge not in [edge_string[0] for edge_string in set_edges_input.values] and edge[1] in self.system.set_nodes and edge[2] in self.system.set_nodes:
                 warnings.warn(f"The edge {edge[0]} is single-directed, i.e., the edge {reversed_edge} doesn't exist!")
 
+    def read_system_file(self,config):
+        """
+        Reads the system file and returns the system dictionary
+
+        :param config: config object
+        """
+        # check if system.json file exists
+        if os.path.exists(os.path.join(config.analysis.dataset, "system.json")):
+            with open(os.path.join(config.analysis.dataset, "system.json"), "r") as file:
+                system = json.load(file)
+        # otherwise read system.py file
+        else:
+            system_path = os.path.join(config.analysis.dataset, "system.py")
+            spec = importlib.util.spec_from_file_location("module", system_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            system = module.system
+        new_system = config.system.model_copy(update=system)
+        config.system = new_system
+        self.system = new_system
+        self.check_no_extra_config_fields(config)
+
+    def check_no_extra_config_fields(self,config,config_name="config"):
+        """ Checks if the config object has no extra fields that are not defined in the default_config """
+        assert len(config.model_extra) == 0, f"The config object '{config_name}' has extra fields that are not defined in the default_config: {config.model_extra}."
+        for name in config.__class__.model_fields:
+            subconfig = getattr(config, name)
+            # Detect if the subconfig is a subclass of Subscriptable
+            if isinstance(subconfig.__class__, type) and issubclass(subconfig.__class__, Subscriptable):
+                self.check_no_extra_config_fields(subconfig,config_name = config_name+"/"+name)
+
     @staticmethod
     def check_carrier_configuration(input_carrier, output_carrier, reference_carrier, name):
         """
@@ -960,26 +1106,6 @@ class InputDataChecks:
             df_input = df_input[~duplicate_mask]
 
         return df_input
-
-    @staticmethod
-    def read_system_file(config):
-        """
-        Reads the system file and returns the system dictionary
-
-        :param config: config object
-        """
-        # check if system.json file exists
-        if os.path.exists(os.path.join(config.analysis.dataset, "system.json")):
-            with open(os.path.join(config.analysis.dataset, "system.json"), "r") as file:
-                system = json.load(file)
-        # otherwise read system.py file
-        else:
-            system_path = os.path.join(config.analysis.dataset, "system.py")
-            spec = importlib.util.spec_from_file_location("module", system_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            system = module.system
-        config.system.update(system)
 
 
 class StringUtils:

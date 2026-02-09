@@ -3,6 +3,58 @@
 This file gets automatically updated in ZEN-garden's continuous integration 
 procedures. Do not edit the file manually.
 
+## [v2.9.5] - 2026-02-06 
+
+### Bug Fixes 🐛
+- fix result extraction from hdf files when there is a single column. [[🔀 PR #1216](https://github.com/ZEN-universe/ZEN-garden/pull/1216) @csfunke]
+
+## [v2.9.4] - 2026-02-06 
+
+### Bug Fixes 🐛
+- fix version check from  `2.9.1` to `2.9.2` for new results. [[🔀 PR #1213](https://github.com/ZEN-universe/ZEN-garden/pull/1213) @jacob-mannhardt]
+
+## [v2.9.3] - 2026-02-06 
+
+### Bug Fixes 🐛
+- add error catch for when extracting the units in the new format without updating the environment before. [[🔀 PR #1211](https://github.com/ZEN-universe/ZEN-garden/pull/1211) @jacob-mannhardt]
+
+## [v2.9.2] - 2026-02-06 
+
+### Bug Fixes 🐛
+- Make result reading faster by splitting the `value` and `unit` columns into two keys in the `.h5` file. [[🔀 PR #1209](https://github.com/ZEN-universe/ZEN-garden/pull/1209) @jacob-mannhardt]
+
+## [v2.9.1] - 2026-02-05 
+
+### Bug Fixes 🐛
+- Set `macos` version to `latest` instead of `macos13` because deprecated [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Skip `read_components` when the scenario does not exist [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Create `ureg` (including reading in the user units) only for one scenario, not for all [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+- Move the components construction outside the initialization of the scenarios. The components are only created upon requests when the data is actually read. [[🔀 PR #1207](https://github.com/ZEN-universe/ZEN-garden/pull/1207) @jacob-mannhardt]
+
+## [v2.9.0] - 2026-01-22 
+
+### New Features ✨
+- implement ``zen-operation`` wrapper. This wrapper allows users to seamlessly run operation-only scenarios using the capacity values of a previous simulation. Users may provide a new ``scenarios_op`` file that specifies the operational scenarios to run. This new feature replaces the old configuration ``include_operation_only_phase``, which has now been removed. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+
+### Documentation Changes 📝
+- implement detailed Google-style docstrings for the ``UnitHandling`` class. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+- improve tutorial of operation-only simulations and update the tutorial to include the new ``zen-operation`` wrapper. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+
+### Maintenance Tasks 🧹
+- create test cases for the new ``zen-operation`` wrapper. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+- suppress ``Pint`` package output on redefining units. This output was previously printed to the terminal whenever a new ``Results`` object was initialized. [[🔀 PR #1204](https://github.com/ZEN-universe/ZEN-garden/pull/1204) @csfunke]
+
+## [v2.8.13] - 2026-01-19 
+
+### Bug Fixes 🐛
+- return empty series when there are no series to concatenate in `_combine_dataseries` in `solution_loader.py`. [[🔀 PR #1201](https://github.com/ZEN-universe/ZEN-garden/pull/1201) @manud99]
+
+### Documentation Changes 📝
+- fix broken links in the README file. Some of the documentation links were outdated and not longer worked. [[🔀 PR #1196](https://github.com/ZEN-universe/ZEN-garden/pull/1196) @csfunke]
+
+### Maintenance Tasks 🧹
+- add continuous integration workflow that checks code formatting, linting, and type checking. Uses the packages `black` for formatting, `ruff` for linting, and `mypy` for type checking. Errors are reported but not enforced initially, allowing developers time to clean up the existing codebase. Enforcement will be enabled once all errors are resolved. [[🔀 PR #1199](https://github.com/ZEN-universe/ZEN-garden/pull/1199) @csfunke]
+
 ## [v2.8.12] - 2026-01-14 
 
 ### Bug Fixes 🐛

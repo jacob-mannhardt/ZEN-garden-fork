@@ -129,7 +129,7 @@ class Scenario():
     folder.
     """
 
-    def __init__(self, path: str, name: str, base_scenario: str, default_ureg: pint.UnitRegistry) -> None:
+    def __init__(self, path: str, name: str, base_scenario: str) -> None:
         self.name = name
         self.base_name = base_scenario
         self._exists = True
@@ -138,8 +138,9 @@ class Scenario():
         self._system: System = self._read_system()
         self._solver: Solver = self._read_solver()
         self._benchmarking: dict[str,Any] = self._read_benchmarking()
-        self._ureg = self._read_ureg(default_ureg)
-        self._components: dict[str, Component] = self._read_components()
+        self._component_types: dict[str, list[str]] = None
+        self._components: dict[str, Component] = None
+        self._read_components()
 
     def _read_analysis(self) -> Analysis:
         analysis_path = os.path.join(self.path, "analysis.json")
@@ -177,8 +178,12 @@ class Scenario():
         else:
             return {}
 
-    def _read_ureg(self,default_ureg) -> pint.UnitRegistry:
-        ureg = copy.copy(default_ureg)
+    def _read_ureg(self) -> pint.UnitRegistry:
+        
+        # suppress pint output about redefining units
+        logging.getLogger('pint').setLevel(logging.ERROR)
+        # load ureg
+        ureg = copy.copy(pint.UnitRegistry())
         unit_path = os.path.join(self.path, "unit_definitions.txt")
         if os.path.exists(unit_path):
             ureg.load_definitions(unit_path)
@@ -216,7 +221,7 @@ class Scenario():
             raise KeyError(f"Year {year} not in optimized years {all_years}.")
         return ts
 
-    def _read_components(self) -> dict[str, Component]:
+    def _read_components(self) -> dict[str, list[str]]:
         """
         Create the component instances.
 
@@ -224,10 +229,12 @@ class Scenario():
         the component. Furthermore, the timestep name and type are derived by checking
         if any of the defined time steps name is in the index of the dataframe.
         """
-        ans: dict[str, Component] = {}
+        component_types: dict[str,list[str]] = {t: [] for t in ComponentType.get_component_type_names()}
+        components:dict[str,dict] = {}
+        
         if not self._exists:
-            return ans
-
+            return component_types
+        
         if self.has_rh:
             mf_name = [i for i in os.listdir(self.path) if "MF_" in i][0]
             component_folder = os.path.join(self.path, mf_name)
@@ -239,36 +246,22 @@ class Scenario():
 
             if not os.path.exists(file_path):
                 continue
-
+            
             h5_file = h5py.File(file_path)
-            version = get_solution_version(self)
-            for component_name in h5_file.keys():
-                index_names = get_index_names(h5_file,component_name,version)
-                time_index = set(index_names).intersection(set(TimestepType.get_time_steps_names()))
-                timestep_name = time_index.pop() if len(time_index) > 0 else None
-                timestep_type = TimestepType.get_time_step_type(timestep_name)
+            component_types[component_type.value] = list(h5_file.keys())
+            components.update({cn: {"component_type": component_type, "file_name": file_name, "file_path": file_path} for cn in h5_file.keys()})
 
-                doc = get_doc(h5_file,component_name,version)
-
-                has_units = get_has_units(h5_file,component_name,version)
-
-                ans[component_name] = Component(
-                    component_name,
-                    component_type,
-                    index_names,
-                    timestep_type,
-                    timestep_name,
-                    file_name,
-                    doc,
-                    has_units
-                )
-
-        return ans
+        self._component_types = component_types
+        self._components = components
 
     @property
-    def components(self) -> dict[str, Component]:
+    def components(self) -> dict[str, dict]:
         return self._components
 
+    @property
+    def component_types(self) -> dict[str, list[str]]:
+        return self._component_types
+    
     @property
     def analysis(self) -> Analysis:
         return self._analysis
@@ -295,11 +288,48 @@ class Scenario():
 
     @property
     def ureg(self) -> pint.UnitRegistry:
-        return self._ureg
+        return self._read_ureg()
 
     @property
     def exists(self) -> bool:
         return self._exists
+    
+    def get_component(self, component_name: str) -> Component:
+        """
+        Method that returns a component given its name.
+        :param component_name: The name of the component.
+        :return: The component.
+        """
+        if component_name not in self.components:
+            raise KeyError(f"Component {component_name} not found in scenario {self.name}. Available components: {list(self.components.keys())}")
+        
+        component_info = self.components[component_name]
+        component_type = component_info["component_type"]
+        file_name = component_info["file_name"]
+
+        h5_file = h5py.File(component_info["file_path"])
+        version = get_solution_version(self)
+        index_names = get_index_names(h5_file,component_name,version)
+        time_index = set(index_names).intersection(set(TimestepType.get_time_steps_names()))
+        timestep_name = time_index.pop() if len(time_index) > 0 else None
+        timestep_type = TimestepType.get_time_step_type(timestep_name)
+
+        doc = get_doc(h5_file,component_name,version)
+
+        has_units = get_has_units(h5_file,component_name,version)
+
+        ans = Component(
+            component_name,
+            component_type,
+            index_names,
+            timestep_type,
+            timestep_name,
+            file_name,
+            doc,
+            has_units
+        )
+        return ans
+
 
 class SolutionLoader():
     """
@@ -310,6 +340,7 @@ class SolutionLoader():
         self.path = path
         assert len(os.listdir(path)) > 0, f"Path {path} is empty."
         self._scenarios: dict[str, Scenario] = self._read_scenarios()
+        self._ureg = get_first_scenario(self._scenarios).ureg
         self._series_cache: dict[str, "pd.Series[Any]"] = {}
         self.enable_cache = enable_cache
 
@@ -380,6 +411,9 @@ class SolutionLoader():
             else:
                 series_to_concat.append(current_mf)
                 break
+
+        if len(series_to_concat) == 0:
+            return pd.Series(dtype=float)
 
         return pd.concat(series_to_concat)
 
@@ -462,14 +496,13 @@ class SolutionLoader():
         """
         scenarios_json_path = os.path.join(self.path, "scenarios.json")
         ans: dict[str, Scenario] = {}
-        default_ureg = pint.UnitRegistry()
         with open(scenarios_json_path, "r") as f:
             scenario_configs = json.load(f)
 
         if len(scenario_configs) == 1:
             scenario_name = "none"
             scenario_path = self.path
-            ans[scenario_name] = Scenario(scenario_path, scenario_name, "",default_ureg)
+            ans[scenario_name] = Scenario(scenario_path, scenario_name, "")
         else:
             for scenario_id, scenario_config in scenario_configs.items():
                 scenario_name = f"scenario_{scenario_id}"
@@ -489,7 +522,7 @@ class SolutionLoader():
                     )
 
                 scenario = Scenario(
-                    scenario_path, scenario_name, base_scenario, default_ureg
+                    scenario_path, scenario_name, base_scenario
                 )
 
                 if scenario.exists:
@@ -512,7 +545,7 @@ class SolutionLoader():
         version = get_solution_version(scenario)
         if check_if_v1_leq_v2(version,"v0"):
             time_step_duration = self.get_component_data(
-                scenario, scenario.components[timestep_duration_name]
+                scenario, scenario.get_component(timestep_duration_name)
             )
         else:
             time_steps_file_name = _get_time_steps_file(scenario)
@@ -706,7 +739,7 @@ def get_solution_version(scenario: Scenario) -> str:
 
     :return: The version of the solution.
     """
-    versions = {"v1":"2.0.14","v2":"2.2.15"}
+    versions = {"v1":"2.0.14","v2":"2.2.15","v3":"2.9.2"}
     version = "v0"
     if hasattr(scenario.analysis,"zen_garden_version"):
         for k,v in versions.items():
@@ -798,9 +831,11 @@ def get_df_from_path(path: str, component_name: str, version: str, data_type: Li
 
     if check_if_v1_leq_v2(version,"v0"):
         pd_read = pd.read_hdf(path, component_name + f"/{data_type}")
+        with h5py.File(path,'r') as h5_file:
+            data = h5_file[component_name + f"/{data_type}"][:]
         if len(index) > 0:
             pd_read = slice_df_by_index(pd_read,index)
-    else:
+    elif check_if_v1_leq_v2(version,"v2"):
         if data_type == "dataframe":
             try:
                 pd_read = pd.read_hdf(path, component_name,where=index)
@@ -810,9 +845,26 @@ def get_df_from_path(path: str, component_name: str, version: str, data_type: Li
                 pd_read = pd_read["value"]
         elif data_type == "units":
             try:
-                pd_read = pd.read_hdf(path, component_name,where=index)["units"]
+                pd_read = pd.read_hdf(path, component_name,where=index,columns=["units"])
             except:
-                pd_read = pd.read_hdf(path, component_name)["units"]
+                try:
+                    pd_read = pd.read_hdf(path, component_name,columns=["units"])
+                except IndexError:
+                    logging.warning(f"Cannot retrieve units. Make sure you have updated the environment to the latest version.")
+                    return pd.Series([])
+        else:
+            raise ValueError(f"Data type {data_type} not supported.")
+    else:
+        if data_type == "dataframe":
+            try:
+                pd_read = pd.read_hdf(path, component_name,where=index)
+            except:
+                pd_read = pd.read_hdf(path, component_name)
+        elif data_type == "units":
+            try:
+                pd_read = pd.read_hdf(path, component_name + "_units",where=index)
+            except:
+                pd_read = pd.read_hdf(path, component_name + "_units")
         else:
             raise ValueError(f"Data type {data_type} not supported.")
 
@@ -826,7 +878,7 @@ def get_df_from_path(path: str, component_name: str, version: str, data_type: Li
     if isinstance(ans, (np.float64, str)):
         ans = pd.Series([ans], index=pd_read.index)
 
-    assert type(ans) is pd.Series
+    assert type(ans) is pd.Series, f"Type {type(ans)} not supported."
 
     return ans
 

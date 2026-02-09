@@ -295,13 +295,8 @@ class Postprocess:
 
             # skip variables not selected to be saved
             if (
-                not self.optimization_setup.operation_only_phase 
-                and self.solver.selected_saved_variables 
+                self.solver.selected_saved_variables 
                 and name not in self.solver.selected_saved_variables
-            ) or (
-                self.optimization_setup.operation_only_phase
-                and self.solver.selected_saved_variables_operation
-                and name not in self.solver.selected_saved_variables_operation
             ):
                 continue
             
@@ -326,24 +321,14 @@ class Postprocess:
 
             units = self._unit_df(units,df.index)
 
-            # rename for operations-only duals
-            if self.optimization_setup.operation_only_phase:
-                name = name + '_operation'
-
             # transform the dataframe to a json string and load it into the dictionary as dict
             data_frames[name] = self._transform_df(df,doc,units)
         
-        # choose whether to write new file or append to existing file
-        if self.optimization_setup.operation_only_phase:
-            mode = 'a'
-        else: 
-            mode = 'w'
-
         # write file
         self.write_file(
             self.name_dir.joinpath('var_dict'), 
             data_frames, 
-            mode = mode
+            mode = 'w'
         )
 
     def save_duals(self):
@@ -361,13 +346,8 @@ class Postprocess:
 
             # skip variables not selected to be saved
             if (
-                not self.optimization_setup.operation_only_phase 
-                and self.solver.selected_saved_duals
+                self.solver.selected_saved_duals 
                 and name not in self.solver.selected_saved_duals
-            ) or (
-                self.optimization_setup.operation_only_phase
-                and self.solver.selected_saved_duals_operation
-                and name not in self.solver.selected_saved_duals_operation
             ):
                 continue
             
@@ -394,24 +374,14 @@ class Postprocess:
             if len(df.index.names) == len(index_list):
                 df.index.names = index_list
 
-            # rename for operations-only duals
-            if self.optimization_setup.operation_only_phase:
-                name = name + '_operation'
-
             # we transform the dataframe to a json string and load it into the dictionary as dict
             data_frames[name] = self._transform_df(df,doc)
-
-        # choose whether to write new file or append to existing file
-        if self.optimization_setup.operation_only_phase:
-            mode = 'a'
-        else: 
-            mode = 'w'
 
         # write file
         self.write_file(
             self.name_dir.joinpath('dual_dict'), 
             data_frames, 
-            mode = mode
+            mode = 'w'
         )
 
     def save_system(self):
@@ -662,19 +632,23 @@ class Postprocess:
                 if not isinstance(key, str):
                     raise TypeError("All dictionary keys must be strings!")
                 if isinstance(value, dict):
-                    input_dict, docstring, has_units = self._format_dict(value)
+                    input_dict, units, docstring, has_units = self._format_dict(value)
                     if not input_dict["dataframe"].empty:
-                        store.put(key, input_dict["dataframe"], format='table')
+                        df = input_dict["dataframe"]
+                        store.put(key, df, format='table')
                         # add additional attributes
-                        index_names = input_dict["dataframe"].index.names
+                        index_names = df.index.names
                         index_names = ",".join([str(name) for name in index_names])
                         store.get_storer(key).attrs.docstring = docstring
                         store.get_storer(key).attrs["name"] = key
                         store.get_storer(key).attrs["has_units"] = has_units
                         store.get_storer(key).attrs["index_names"] = index_names
+                        if has_units:
+                            store.put(key + "_units", units, format='table')
                         # remove "_i_table" to reduce file size
                         try:
                             store.remove(key + "/_i_table")
+                            store.remove(key + "_units/_i_table")
                         except KeyError:
                             pass
                 else:
@@ -703,12 +677,11 @@ class Postprocess:
             assert units.index.intersection(df.index).equals(
                 units.index), f"Units index {units.index} does not match dataframe index {df.index}"
             units.name = "units"
-            df = pd.concat([df, units], axis=1)
-            input_dict["dataframe"] = df
             has_units = True
         else:
             has_units = False
+            units = None
         if not (set(input_dict.keys()) == set(expected_keys) or set(input_dict.keys()) == set(expected_keys).union(
                 ["units"])):
             raise ValueError(f"Expected keys are {expected_keys}, but got {input_dict.keys()}")
-        return input_dict, docstring, has_units
+        return input_dict, units, docstring, has_units

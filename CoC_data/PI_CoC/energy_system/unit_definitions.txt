@@ -1,2 +1,0 @@
-Euro = [currency] = EURO = Eur 
-tCO2eq = [massCO2eq] = tonCO2eq = tCO2 = tonne_carbon

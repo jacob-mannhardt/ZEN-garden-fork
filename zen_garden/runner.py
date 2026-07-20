@@ -85,6 +85,9 @@ def run(config = "./config.json", dataset=None, job_index=None,
     if folder_output is not None:
         config.analysis.folder_output = os.path.abspath(folder_output)
         config.solver.solver_dir = os.path.abspath(folder_output)
+    else:
+        config.analysis.folder_output = Path(config_path, config.analysis.folder_output)
+        config.solver.solver_dir = Path(config_path, config.solver.solver_dir)
     logging.info(f"Optimizing for dataset {config.analysis.dataset}")
     # get the abs path to avoid working dir stuff
     config.analysis.dataset = os.path.abspath(config.analysis.dataset)

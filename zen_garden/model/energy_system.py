@@ -1,4 +1,4 @@
-"""
+﻿"""
 Class defining a standard EnergySystem.
 Contains methods to construct the energy system from the given input data and that defines the variables, parameters and constraints which apply to the Energy System. The class takes the abstract
 optimization model as an input.
@@ -110,8 +110,6 @@ class EnergySystem:
         self.knowledge_spillover_rate = self.data_input.extract_input_data("knowledge_spillover_rate", index_sets=[], unit_category={})
         # set the lending_share and the budget_derisking
         if self.optimization_setup.system.variable_CoC:
-            # what share of the derisked investment cost is financed by lending
-            self.lending_share = self.data_input.extract_input_data("lending_share", index_sets=[], unit_category={})
             # budget for derisking of central institution
             self.budget_derisking = self.data_input.extract_input_data("budget_derisking", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={"money": 1})
 
@@ -291,10 +289,8 @@ class EnergySystem:
         parameters.add_parameter(name="knowledge_depreciation_rate", doc='Parameter which specifies the knowledge depreciation rate', calling_class=cls)
         # knowledge spillover rate
         parameters.add_parameter(name="knowledge_spillover_rate", doc='Parameter which specifies the knowledge spillover rate', calling_class=cls)
-        # lending share and budget derisking
+        # budget derisking
         if self.optimization_setup.system.variable_CoC:
-            # lending share
-            parameters.add_parameter(name="lending_share", doc='Parameter which specifies the lending share of the derisked investment cost', calling_class=cls)
             # budget derisking
             parameters.add_parameter(name="budget_derisking", set_time_steps="set_time_steps_yearly", doc='Parameter which specifies the budget for derisking of central institution', calling_class=cls)
 

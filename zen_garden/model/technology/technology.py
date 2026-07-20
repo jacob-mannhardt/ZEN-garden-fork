@@ -1,4 +1,4 @@
-"""
+﻿"""
 Class defining the parameters, variables and constraints that hold for all technologies.
 The class takes the abstract optimization model as an input, and returns the parameters, variables and
 constraints that hold for all technologies.
@@ -55,6 +55,10 @@ class Technology(Element):
         self.construction_time = self.data_input.extract_input_data("construction_time", index_sets=[], unit_category={})
         # maximum diffusion rate
         self.max_diffusion_rate = self.data_input.extract_input_data("max_diffusion_rate", index_sets=["set_time_steps_yearly"], time_steps="set_time_steps_yearly", unit_category={})
+        # set the lending_share and the budget_derisking
+        if self.optimization_setup.system.variable_CoC:
+            # what share of the derisked investment cost is financed by lending
+            self.lending_share = self.data_input.extract_input_data("lending_share", index_sets=[], unit_category={})
 
         # add all raw time series to dict
         self.raw_time_series = {}
@@ -363,6 +367,9 @@ class Technology(Element):
         optimization_setup.parameters.add_parameter(name="existing_capex", data=cls.get_existing_quantity(optimization_setup,type_existing_quantity="cost_capex_overnight"),
                                                     doc="Parameter which specifies the total capex of existing technologies at the beginning of the optimization", calling_class=cls)
         if optimization_setup.system.variable_CoC:
+            # lending share
+            optimization_setup.parameters.add_parameter(name="lending_share", index_names=["set_technologies"], doc='Parameter which specifies the lending share of the derisked investment cost', calling_class=cls)
+            # normal WACC
             optimization_setup.parameters.add_parameter(name="WACC", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the weighted average cost of capital', calling_class=cls)
             # derisking WACC
             optimization_setup.parameters.add_parameter(name="WACC_derisked", index_names=["set_technologies", "set_location", "set_time_steps_yearly"], doc='Parameter which specifies the derisking WACC', calling_class=cls)
@@ -1100,9 +1107,9 @@ class TechnologyRules(GenericRule):
 
         # add constraint for derisking budget
         if self.optimization_setup.system.variable_CoC:
-            lending_share = self.parameters.lending_share
+            # lending_share = self.parameters.lending_share
             # lhs = (lt_range * a_derisking * cost_capex_overnight_derisking * lending_share.item()).sum(["set_time_steps_yearly_prev","set_technologies","set_capacity_types","set_location"]) + self.variables["budget_derisking_used"]
-            lhs = (self.variables["cost_capex_overnight_derisking"] * lending_share.item()).sum(["set_technologies","set_capacity_types","set_location"]) - self.variables["budget_derisking_used"]
+            lhs = (self.variables["cost_capex_overnight_derisking"] * self.parameters.lending_share).sum(["set_technologies","set_capacity_types","set_location"]) - self.variables["budget_derisking_used"]
             rhs = 0
             constraints_derisking = lhs == rhs
             self.constraints.add_constraint("constraint_used_derisking_budget",constraints_derisking)

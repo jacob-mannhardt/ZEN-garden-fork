@@ -850,7 +850,7 @@ def get_df_from_path(path: str, component_name: str, version: str, data_type: Li
                 try:
                     pd_read = pd.read_hdf(path, component_name,columns=["units"])
                 except IndexError:
-                    logging.warning(f"Cannot retrieve units. Make sure you have updated the environment to the latest version.")
+                    logging.warning(f"Cannot retrieve units. Make sure you have updated the environment of the results to the latest version.")
                     return pd.Series([])
         else:
             raise ValueError(f"Data type {data_type} not supported.")

@@ -3,6 +3,20 @@
 This file gets automatically updated in ZEN-garden's continuous integration 
 procedures. Do not edit the file manually.
 
+## [Unversioned Changes] - 2026-09-10 
+
+### Documentation Changes 📝
+- allow issue references to be included in the changelog. Issue references in the detailed list of changes of the pull request description will be automatically processed and linked. [[📋 Issue #1198](https://github.com/ZEN-universe/ZEN-garden/issues/1198)] [[🔀 PR #1330](https://github.com/ZEN-universe/ZEN-garden/pull/1330) @csfunke]
+
+## [v3.0.1] - 2026-09-08 
+
+### Bug Fixes 🐛
+- allow json config [[🔀 PR #1328](https://github.com/ZEN-universe/ZEN-garden/pull/1328) @jacob-mannhardt]
+- storage level reconstruction to avoid returning nans for first time steps. [[🔀 PR #1328](https://github.com/ZEN-universe/ZEN-garden/pull/1328) @jacob-mannhardt]
+
+### Maintenance Tasks 🧹
+- improve readme [[🔀 PR #1328](https://github.com/ZEN-universe/ZEN-garden/pull/1328) @jacob-mannhardt]
+
 ## [v3.0.0] - 2026-09-03 
 
 ### New Features ✨

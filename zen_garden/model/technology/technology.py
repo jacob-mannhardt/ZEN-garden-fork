@@ -959,10 +959,25 @@ class TechnologyRules(GenericRule):
             derisking_boost = self.parameters.boost_capacity_addition_share_derisking
             term_derisking_boost = self.variables["capacity_addition_derisking"] * derisking_boost
         # existing capacities
-        delta_years = interval_between_years * (capacity_addition.coords["set_time_steps_yearly"] - 1 - self.energy_system.set_time_steps_yearly[0])
+        # delta_years = interval_between_years * (capacity_addition.coords["set_time_steps_yearly"] - 1 - self.energy_system.set_time_steps_yearly[0])
+        # lifetime_existing = self.parameters.lifetime_existing
+        # lifetime = self.parameters.lifetime
+        # kdr_existing = (1 - knowledge_depreciation_rate) ** (delta_years + lifetime - lifetime_existing)
+        
+        years_from_start = interval_between_years * (
+            capacity_addition.coords["set_time_steps_yearly"] 
+            - self.energy_system.set_time_steps_yearly[0]
+        )
         lifetime_existing = self.parameters.lifetime_existing
         lifetime = self.parameters.lifetime
-        kdr_existing = (1 - knowledge_depreciation_rate) ** (delta_years + lifetime - lifetime_existing)
+        kdr_existing = (1 - knowledge_depreciation_rate) ** (
+            years_from_start - 1 + lifetime - lifetime_existing
+        )
+        # remove knowledge from existing technologies built in the future
+        kdr_existing = kdr_existing.where(
+            lifetime >= lifetime_existing - years_from_start, 0
+            )
+
         capacity_existing_total_nosr = capacity_existing
         # capacity addition unbounded
         capacity_addition_unbounded = self.parameters.capacity_addition_unbounded

@@ -17,6 +17,7 @@ from .existing_capacities import ExistingCapacities
 from .existing_capex import ExistingCapex
 from .lifetime import Lifetime
 from .lifetime_existing import LifetimeExisting
+from .market_share_unbounded import MarketShareUnbounded
 from .max_diffusion_rate import MaxDiffusionRate
 from .max_load import MaxLoad
 from .min_load import MinLoad
@@ -37,6 +38,7 @@ TECHNOLOGY_PARAMETERS: list[type[GenericParameter]] = [
     DepreciationTime,
     ConstructionTime,
     MaxDiffusionRate,
+    MarketShareUnbounded,
     CapacityLimit,
     CapacityLowerLimit,
     MinLoad,
@@ -62,6 +64,7 @@ __all__ = [
     "DepreciationTime",
     "ConstructionTime",
     "MaxDiffusionRate",
+    "MarketShareUnbounded",
     "CapacityLimit",
     "CapacityLowerLimit",
     "MinLoad",

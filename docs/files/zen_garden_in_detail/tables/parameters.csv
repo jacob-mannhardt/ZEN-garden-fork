@@ -3,7 +3,7 @@ Parameter Name;Symbol;Time Step Type;Description;Unit Category
 ``availability_export_yearly``;:math:`a^{\mathrm{exp,yr}}_{c,n,y}`;``set_years``;Parameter which specifies the maximum energy that can be exported to outside the system boundaries for the entire year;"{""energy_quantity"": 1}"
 ``availability_import``;:math:`a^{\mathrm{imp}}_{c,n,t}`;``set_time_steps_operation``;Parameter which specifies the maximum energy that can be imported from outside the system boundaries;"{""energy_quantity"": 1, ""time"": -1}"
 ``availability_import_yearly``;:math:`a^{\mathrm{imp,yr}}_{c,n,y}`;``set_years``;Parameter which specifies the maximum energy that can be imported from outside the system boundaries for the entire year;"{""energy_quantity"": 1}"
-``market_share_unbounded``;:math:`\chi`;temporal immutable;Parameter which specifies the unbounded market share;{}
+``market_share_unbounded``;:math:`\chi_h`;temporal immutable;Parameter which specifies the unbounded market share of each technology;{}
 ``demand``;:math:`d_{c,n,t}`;``set_time_steps_operation``;Parameter which specifies the carrier demand;"{""energy_quantity"": 1, ""time"": -1}"
 ``distance``;:math:`d^{\mathrm{dist}}_{h,e}`;temporal immutable;distance between two nodes for transport technologies;"{""distance"": 1}"
 ``capacity_addition_min``;:math:`\underline{\Delta k}_{h,p,y}`;temporal immutable;Parameter which specifies the minimum capacity addition that can be installed;"{""energy_quantity"": 1, ""time"": -1}"

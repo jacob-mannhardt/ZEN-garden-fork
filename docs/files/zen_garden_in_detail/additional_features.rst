@@ -164,13 +164,17 @@ The knowledge spillover rate allows for learning effects from other nodes. A val
 5% of the knowledge from other nodes is added to the local knowledge stock. If setting the spillover rate to ``inf``,
 perfect spillover is assumed and only the global capacity additions are constrained by the global knowledge stock.
 
-3. The ``market_share_unbounded`` (:math:`\chi`):
+3. The ``market_share_unbounded`` (:math:`\chi_h`, indexed by each technology):
 The unbounded market share provides an additional capacity-addition allowance
 based on the capacity available before the current addition for technologies in
 the same technology class (excluding the considered technology) with the same
 reference carrier. For example, a value of 0.01 allows an addition equal to 1%
 of that capacity, even if the considered technology has no previous capacity
-of its own.
+of its own. The value of the considered technology :math:`h` is used.
+For backward compatibility, a technology that does not define
+``market_share_unbounded`` in its ``attributes.yaml`` uses the value from
+``energy_system/attributes.yaml``. This fallback is deprecated and raises a
+``DeprecationWarning``.
 
 4. The ``capacity_addition_unbounded`` (:math:`k^{\mathrm{add,free}}_h`, indexed by each technology):
 The unbounded capacity addition allows for a fixed amount of capacity addition each investment step,

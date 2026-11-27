@@ -26,19 +26,19 @@ class TechnologyDiffusionLimitConstraint(GenericConstraint):
         .. math::
             \\Delta K_{h,p,y}\\leq
             d_{h,y}K^\\omega_{h,p,y}
-            +\\chi\\sum_{\\tilde h\\in\\tilde{\\mathcal H}}
+            +\\chi_h\\sum_{\\tilde h\\in\\tilde{\\mathcal H}}
             K^{\\mathrm{prev}}_{\\tilde h,p,y}
             +k^{\\mathrm{add,free}}_h.
 
         where :math:`d_{h,y}=(1+r^{\\mathrm{diff}}_{h,y})^{\\Delta y}-1`.
-        The unbounded market share term :math:`\\chi` is separate from
+        The unbounded market share term :math:`\\chi_h` is separate from
         knowledge spillover. It uses :math:`K^{\\mathrm{prev}}` for other
         technologies in the target technology's class (excluding the target
         itself: :math:`\\tilde{
         \\mathcal H}}=\\{\\tilde h\\in\\mathcal H\\mid \\tilde h\\ne h\\}`) 
         whose reference carrier matches the target. The term is
         calculated at the target location; ``market_share_unbounded`` supplies
-        the coefficient :math:`\\chi`.
+        the technology-specific coefficient :math:`\\chi_h`.
 
         Define the no-spillover knowledge stock as
 
@@ -67,7 +67,7 @@ class TechnologyDiffusionLimitConstraint(GenericConstraint):
             \\sum_p\\Delta K_{h,p,y}\\leq
             \\sum_p\\left[
             d_{h,y}K^0_{h,p,y}
-            +\\chi\\sum_{\\tilde h\\in\\tilde{\\mathcal H}}
+            +\\chi_h\\sum_{\\tilde h\\in\\tilde{\\mathcal H}}
             K^{\\mathrm{prev}}_{\\tilde h,p,y}
             +k^{\\mathrm{add,free}}_h\\right].
 
@@ -90,7 +90,8 @@ class TechnologyDiffusionLimitConstraint(GenericConstraint):
         at location :math:`p`, including applicable knowledge spillover
         :math:`K^0_{h,p,y}`: depreciated installation-knowledge stock at
         location :math:`p` without node-to-node knowledge spillover
-        :math:`\\chi`: parameter which specifies the unbounded market share
+        :math:`\\chi_h`: parameter which specifies the unbounded market share of
+        technology :math:`h`
         :math:`K^{\\mathrm{prev}}_{h,p,y}`: capacity available before the
         current year's addition
         :math:`\\tilde{\\mathcal H}`: other technologies in the target
@@ -213,9 +214,10 @@ class TechnologyDiffusionLimitConstraint(GenericConstraint):
                 term_knowledge = tdr * (term_knowledge * kdr).sum("set_years_prev")
         # unbounded market share --> only for same technology class
         capacity_previous = optimization_model.variables["capacity_previous"]
+        msu = optimization_model.parameters.market_share_unbounded
         market_share_unbounded = {
             (t, ot): (
-                optimization_model.parameters.market_share_unbounded
+                float(msu.loc[t])
                 if ot != t
                 and optimization_model.sets["set_reference_carriers"][t][0]
                 == optimization_model.sets["set_reference_carriers"][ot][0]

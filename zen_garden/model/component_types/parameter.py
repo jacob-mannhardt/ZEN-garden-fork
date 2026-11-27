@@ -187,6 +187,13 @@ class GenericParameter(ABC):
             cls._store_value(element, f"{cls.name}_energy", energy_value)
 
     @classmethod
+    def after_store_input_data(cls, elements: list[Any]) -> None:
+        """Hook called once after :meth:`store_input_data` ran for all elements.
+
+        :param elements: all elements that declare this parameter
+        """
+
+    @classmethod
     def _store_value(cls, element: Any, name: str, value: Any) -> None:
         """Store a loaded value in its time-series or scalar destination."""
         if cls.time_series:

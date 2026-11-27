@@ -34,9 +34,12 @@ class DataLoadingService:
 
         for parameter in self._parameter_order():
             logging.info(f"Loading parameter {parameter.name}...")
-            for element in elements:
-                if parameter in element.parameters:
-                    parameter.store_input_data(element)
+            parameter_elements = [
+                element for element in elements if parameter in element.parameters
+            ]
+            for element in parameter_elements:
+                parameter.store_input_data(element)
+            parameter.after_store_input_data(parameter_elements)
 
         for element in elements:
             element.finalize_input_data()

@@ -437,7 +437,7 @@ approach is based on
 <https://www.sciencedirect.com/science/article/pii/S0040162515001675>`_.
 
 The unbounded market share (``market_share_unbounded``), denoted by
-:math:`\chi` in the equations, is a separate mechanism. It provides an
+:math:`\chi_h` in the equations, is a separate mechanism. It provides an
 additional capacity-addition allowance based on the capacity available before
 the current addition for other technologies in the same technology class
 (excluding the target technology) with the same reference carrier. The

@@ -62,6 +62,9 @@ max_diffusion_rate:
 capacity_addition_unbounded:
   default_value: 0.0
   unit: kton/h
+market_share_unbounded:
+  default_value: 0.1
+  unit: '1'
 capacity_limit_country:
   default_value: inf
   unit: kton/h

@@ -7,6 +7,9 @@ capacity_addition_max:
 capacity_addition_unbounded:
   default_value: 0.0
   unit: GW
+market_share_unbounded:
+  default_value: 0.1
+  unit: '1'
 capacity_existing:
   default_value: 0.0
   unit: GW

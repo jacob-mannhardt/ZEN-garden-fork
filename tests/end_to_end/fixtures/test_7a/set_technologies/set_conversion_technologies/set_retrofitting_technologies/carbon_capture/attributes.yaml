@@ -62,6 +62,9 @@ max_diffusion_rate:
 capacity_addition_unbounded:
   default_value: 0.0
   unit: kilotons/hour
+market_share_unbounded:
+  default_value: 0.1
+  unit: '1'
 retrofit_flow_coupling_factor:
   base_technology: natural_gas_boiler
   default_value: 0.18

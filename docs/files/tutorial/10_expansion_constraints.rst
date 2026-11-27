@@ -34,8 +34,10 @@ technology is not deployed continuously.
 The five parameters
 ===================
 
-Four are technology parameters, in the technology's ``attributes.yaml``; the
-fifth is a system-wide parameter in ``energy_system/attributes.yaml``.
+Three are technology parameters, in the technology's ``attributes.yaml``
+(``max_diffusion_rate``, ``market_share_unbounded`` and
+``capacity_addition_unbounded``); the other two are system-wide parameters in
+``energy_system/attributes.yaml``.
 
 ``max_diffusion_rate``
     The maximum annual capacity addition as a fraction of the existing
@@ -144,8 +146,8 @@ has room to show:
    the ten years rises from 9720.0 to 11855.9 (+22%).*
 
 3. **Reproduce the trap.** Set the heat pump's ``capacity_existing`` to ``0``
-   everywhere, and set ``market_share_unbounded`` to ``0`` in
-   ``energy_system/attributes.yaml``, keeping ``max_diffusion_rate`` at 0.3.
+   everywhere, and set its ``market_share_unbounded`` to ``0`` in the same
+   ``attributes.yaml``, keeping ``max_diffusion_rate`` at 0.3.
 
    *Expected result: heat pump capacity stays at zero in every year. Its
    knowledge stock starts at zero, 30% of zero is zero, and there is no

@@ -1,5 +1,11 @@
 'unbounded_market_share':
-  EnergySystem:
+  natural_gas_boiler:
+    market_share_unbounded:
+      default: attributes_ter.yaml
+  high_efficiency_ng_boiler:
+    market_share_unbounded:
+      default: attributes_ter.yaml
+  natural_gas_pipeline:
     market_share_unbounded:
       default: attributes_ter.yaml
 'existing_capa':

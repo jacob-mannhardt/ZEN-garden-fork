@@ -127,9 +127,6 @@ of the energy system needs a default value:
     knowledge_spillover_rate:
       default_value: 0.0
       unit: "1"
-    market_share_unbounded:
-      default_value: 0.1
-      unit: "1"
     discount_rate:
       default_value: 0.06
       unit: "1"
@@ -231,6 +228,9 @@ Step 4: add a technology
     capacity_addition_unbounded:
       default_value: 0.0
       unit: GW
+    market_share_unbounded:
+      default_value: 0.1
+      unit: "1"
     max_diffusion_rate:
       default_value: inf
       unit: "1"
